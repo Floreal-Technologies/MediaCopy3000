@@ -1,0 +1,705 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://floreal.tech/schemas/mediacopy3000/plugin-protocol-1.schema.json",
+  "title": "MediaCopy 3000 plug-in protocol, API 1.0",
+  "description": "JSON-RPC 2.0 protocol for MC3K and plugins",
+  "$ref": "#/$defs/manifest",
+  "x-methods": {
+    "contribute": {
+      "params": {
+        "$ref": "#/$defs/contributeParams"
+      },
+      "result": {
+        "$ref": "#/$defs/contributeResult"
+      }
+    },
+    "initialize": {
+      "params": {
+        "$ref": "#/$defs/initializeParams"
+      },
+      "result": {
+        "$ref": "#/$defs/initializeResult"
+      }
+    },
+    "inspect/file": {
+      "params": {
+        "$ref": "#/$defs/inspectFileParams"
+      },
+      "result": {
+        "$ref": "#/$defs/inspectFileResult"
+      }
+    },
+    "inspect/plan": {
+      "params": {
+        "$ref": "#/$defs/inspectPlanParams"
+      },
+      "result": {
+        "$ref": "#/$defs/inspectPlanResult"
+      }
+    },
+    "shutdown": {
+      "params": {
+        "type": "object"
+      },
+      "result": {}
+    }
+  },
+  "x-notifications": {
+    "$/log": {
+      "$ref": "#/$defs/logLine"
+    },
+    "$/progress": {
+      "$ref": "#/$defs/progress"
+    }
+  },
+  "$defs": {
+    "annotation": {
+      "type": "object",
+      "required": [
+        "key",
+        "label",
+        "value"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "author": {
+      "description": "Each text holds only characters that XML 1.0 allows.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      }
+    },
+    "authorSlot": {
+      "description": "One author slot of a setting of kind authors. In plugins.json, name, email and phone are the defaults. In initialize.settings, they are the merged values for the job, and slots with no name are removed.",
+      "type": "object",
+      "required": [
+        "role"
+      ],
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "capability": {
+      "enum": [
+        "files.read",
+        "plan.inspect",
+        "files.inspect",
+        "block",
+        "manifest.write"
+      ]
+    },
+    "contributeParams": {
+      "type": "object",
+      "required": [
+        "job",
+        "files"
+      ],
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fileInfo"
+          }
+        },
+        "job": {
+          "$ref": "#/$defs/jobInfo"
+        }
+      }
+    },
+    "contributeResult": {
+      "type": "object",
+      "required": [
+        "authors",
+        "fileMetadata"
+      ],
+      "properties": {
+        "authors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/author"
+          }
+        },
+        "fileMetadata": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fileMetadata"
+          }
+        },
+        "manifestMetadata": {
+          "type": "string"
+        }
+      }
+    },
+    "field": {
+      "description": "A setting or a job field. The kind authors is allowed only in settings, only once, only with manifest.write, and without default. Its stored value and its value in initialize are arrays of authorSlot.",
+      "type": "object",
+      "required": [
+        "key",
+        "label",
+        "kind"
+      ],
+      "properties": {
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
+        "default": {},
+        "key": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "text",
+            "secret",
+            "bool",
+            "choice",
+            "path",
+            "authors"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "choice"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "options"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "authors"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "default"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "fileInfo": {
+      "type": "object",
+      "required": [
+        "path",
+        "size"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer"
+        }
+      }
+    },
+    "fileMetadata": {
+      "type": "object",
+      "required": [
+        "path",
+        "xml"
+      ],
+      "properties": {
+        "path": {
+          "description": "The path of one of the files of the request.",
+          "type": "string"
+        },
+        "xml": {
+          "description": "XML elements in the namespace of the plug-in, at most 32 levels deep, with only characters that XML 1.0 allows. Comments and processing instructions are removed.",
+          "type": "string"
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": [
+        "key",
+        "severity",
+        "title",
+        "detail"
+      ],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        }
+      }
+    },
+    "hashAlgo": {
+      "description": "The name of a hash format, as the element name in an ASC MHL manifest.",
+      "enum": [
+        "xxh64",
+        "md5",
+        "sha1",
+        "c4"
+      ]
+    },
+    "hashValue": {
+      "type": "object",
+      "required": [
+        "algo",
+        "value"
+      ],
+      "properties": {
+        "algo": {
+          "$ref": "#/$defs/hashAlgo"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "initializeParams": {
+      "type": "object",
+      "required": [
+        "api",
+        "minor",
+        "app",
+        "locale",
+        "job",
+        "settings",
+        "jobFields",
+        "grants",
+        "entitlement"
+      ],
+      "properties": {
+        "api": {
+          "type": "integer"
+        },
+        "app": {
+          "type": "string"
+        },
+        "entitlement": {
+          "description": "Always null in API 1.0.",
+          "type": "null"
+        },
+        "grants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/capability"
+          }
+        },
+        "job": {
+          "$ref": "#/$defs/jobKind"
+        },
+        "jobFields": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "locale": {
+          "type": "string"
+        },
+        "minor": {
+          "type": "integer"
+        },
+        "settings": {
+          "description": "One value per setting, by key. A setting of kind authors holds an array of authorSlot.",
+          "type": "object",
+          "additionalProperties": {}
+        }
+      }
+    },
+    "initializeResult": {
+      "type": "object",
+      "required": [
+        "api"
+      ],
+      "properties": {
+        "api": {
+          "const": 1
+        }
+      }
+    },
+    "inspectFileParams": {
+      "type": "object",
+      "required": [
+        "path",
+        "location",
+        "hashes",
+        "size"
+      ],
+      "properties": {
+        "hashes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/hashValue"
+          }
+        },
+        "location": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer"
+        }
+      }
+    },
+    "inspectFileResult": {
+      "type": "object",
+      "required": [
+        "annotations",
+        "warnings"
+      ],
+      "properties": {
+        "annotations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/annotation"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding"
+          }
+        }
+      }
+    },
+    "inspectPlanParams": {
+      "type": "object",
+      "required": [
+        "job",
+        "files",
+        "readBudgetBytes"
+      ],
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fileInfo"
+          }
+        },
+        "job": {
+          "$ref": "#/$defs/jobInfo"
+        },
+        "readBudgetBytes": {
+          "type": "integer"
+        }
+      }
+    },
+    "inspectPlanResult": {
+      "type": "object",
+      "required": [
+        "findings"
+      ],
+      "properties": {
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding"
+          }
+        }
+      }
+    },
+    "jobInfo": {
+      "type": "object",
+      "required": [
+        "kind",
+        "source",
+        "destinations"
+      ],
+      "properties": {
+        "destinations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "hashFormat": {
+          "$ref": "#/$defs/hashAlgo"
+        },
+        "kind": {
+          "$ref": "#/$defs/jobKind"
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    },
+    "jobKind": {
+      "enum": [
+        "offload",
+        "verify",
+        "seal"
+      ]
+    },
+    "logLine": {
+      "type": "object",
+      "required": [
+        "level",
+        "message"
+      ],
+      "properties": {
+        "level": {
+          "description": "For example debug, info, warning or error. The event log shows the level before the message.",
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "description",
+        "version",
+        "api",
+        "executable",
+        "capabilities"
+      ],
+      "properties": {
+        "description": {
+          "description": "One or two short sentences that tell what the plug-in does. The preferences page shows it under the name.",
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "api": {
+          "const": 1
+        },
+        "capabilities": {
+          "description": "At least one of plan.inspect, files.inspect and manifest.write.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/capability"
+          },
+          "contains": {
+            "enum": [
+              "plan.inspect",
+              "files.inspect",
+              "manifest.write"
+            ]
+          }
+        },
+        "executable": {
+          "description": "Keys: linux-x86_64, linux-aarch64, macos-aarch64, macos-x86_64, windows-x86_64. Values: paths relative to the plug-in folder. A path does not start with '/' or '\\', holds no ':', and has no '..' part. One bad path, for any platform, rejects the plug-in on every platform.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(?![/\\\\])(?!.*:)(?!(?:.*[/\\\\])?\\.\\.(?:[/\\\\]|$)).+$"
+          }
+        },
+        "id": {
+          "$ref": "#/$defs/pluginId"
+        },
+        "jobFields": {
+          "description": "Keys are unique. No job field has the kind authors.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field",
+            "properties": {
+              "kind": {
+                "not": {
+                  "const": "authors"
+                }
+              }
+            }
+          }
+        },
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "description": "The only XML namespace that a plug-in with manifest.write can write. It cannot be empty, a namespace of ASC MHL, or a namespace that XML reserves.",
+          "type": "string",
+          "not": {
+            "enum": [
+              "",
+              "urn:ASC:MHL:v2.0",
+              "urn:ASC:MHL:DIRECTORY:v2.0",
+              "http://www.w3.org/XML/1998/namespace",
+              "http://www.w3.org/2000/xmlns/"
+            ]
+          }
+        },
+        "settings": {
+          "description": "Keys are unique. At most one setting has the kind authors.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field"
+          },
+          "contains": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "authors"
+              }
+            }
+          },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "capabilities": {
+                "contains": {
+                  "const": "block"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "capabilities": {
+                "contains": {
+                  "const": "plan.inspect"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capabilities": {
+                "contains": {
+                  "const": "manifest.write"
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "namespace"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "settings"
+            ],
+            "properties": {
+              "settings": {
+                "contains": {
+                  "required": [
+                    "kind"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "authors"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "capabilities": {
+                "contains": {
+                  "const": "manifest.write"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "pluginId": {
+      "description": "A reverse domain name in lowercase, for example tech.floreal.c2pa-reader. It holds at least one '.', it does not start or end with '.', and it has no '..'. It is also the name of the folder of the plug-in.",
+      "type": "string",
+      "pattern": "^(?!.*\\.\\.)[a-z0-9_-][a-z0-9._-]*\\.[a-z0-9._-]*[a-z0-9_-]$"
+    },
+    "progress": {
+      "type": "object",
+      "required": [
+        "message"
+      ],
+      "properties": {
+        "fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "severity": {
+      "enum": [
+        "blocker",
+        "warning"
+      ]
+    }
+  }
+}

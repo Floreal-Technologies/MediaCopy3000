@@ -1,0 +1,500 @@
+cabal-version: 3.4
+name: mediacopy3000
+version: 0.1.0
+synopsis: Verified media offload and ASC MHL verification for videographers
+license: GPL-3.0-only
+license-file: LICENSE
+author: Feriel Choutri de Tarlé
+maintainer: feriel@choutri.eu
+category: Distribution
+build-type: Simple
+data-files:
+  assets/dark.css
+  assets/fonts/InterVariable-Italic.ttf
+  assets/fonts/InterVariable.ttf
+  assets/fonts/OFL.txt
+  assets/styles.css
+
+extra-source-files:
+  assets/floreal-tech-logo-light.svg
+  assets/floreal-tech-logo.svg
+  assets/tech.floreal.MediaCopy3000-symbolic.svg
+  assets/tech.floreal.MediaCopy3000.gresource.xml
+  assets/tech.floreal.MediaCopy3000.svg
+  locales/*.ftl
+  tests/fixtures/**/*.mhl
+  tests/fixtures/**/*.xml
+  tests/fixtures/**/*.xsd
+
+tested-with: ghc ==9.14.1
+
+common options
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wpartial-fields
+    -Wredundant-constraints
+    -fhide-source-paths
+    -Wno-unused-do-bind
+    -fshow-hole-constraints
+    -Wno-unticked-promoted-constructors
+    -fwrite-ide-info
+
+  default-extensions:
+    DuplicateRecordFields
+    NoFieldSelectors
+    NoStarIsType
+    OrPatterns
+    OverloadedLabels
+    OverloadedRecordDot
+    OverloadedStrings
+    StrictData
+    TypeFamilies
+    ViewPatterns
+
+  default-language: GHC2024
+  build-depends:
+    base,
+    floreal-prelude,
+
+  mixins:
+    base hiding (Prelude),
+    floreal-prelude (Floreal.Commons.Prelude as Prelude),
+
+library domain
+  import: options
+  hs-source-dirs: src/domain
+  -- cabal-gild: discover src/domain
+  exposed-modules:
+    MediaCopy.Domain.Contributions
+    MediaCopy.Domain.Destination
+    MediaCopy.Domain.DirectoryHash
+    MediaCopy.Domain.FieldView
+    MediaCopy.Domain.FileOutcome
+    MediaCopy.Domain.FileSize
+    MediaCopy.Domain.FileStatus
+    MediaCopy.Domain.Finding
+    MediaCopy.Domain.HashFormat
+    MediaCopy.Domain.HistoryError
+    MediaCopy.Domain.Job
+    MediaCopy.Domain.JobEvent
+    MediaCopy.Domain.JobId
+    MediaCopy.Domain.JobResult
+    MediaCopy.Domain.JobSpec
+    MediaCopy.Domain.JobState
+    MediaCopy.Domain.Offload
+    MediaCopy.Domain.Part
+    MediaCopy.Domain.Plan
+    MediaCopy.Domain.PlannedGeneration
+    MediaCopy.Domain.PlannedWrite
+    MediaCopy.Domain.PlanStep
+    MediaCopy.Domain.PluginCatalog
+    MediaCopy.Domain.PluginFinding
+    MediaCopy.Domain.PluginPlan
+    MediaCopy.Domain.PluginRef
+    MediaCopy.Domain.PluginReport
+    MediaCopy.Domain.PluginState
+    MediaCopy.Domain.Preflight
+    MediaCopy.Domain.Prose
+    MediaCopy.Domain.Severity
+    MediaCopy.Domain.Target
+    MediaCopy.Domain.Tree
+    MediaCopy.Domain.VerifiedFile
+
+  build-depends:
+    ascmhl,
+    bytestring,
+    containers,
+    effectful-core,
+    filepath,
+    plugin-protocol,
+    text,
+    text-display,
+    time,
+    vector,
+
+library application
+  import: options
+  hs-source-dirs: src/application
+  -- cabal-gild: discover src/application src/application-posix/
+  exposed-modules:
+    MediaCopy.Effects.AppDirectory
+    MediaCopy.Effects.AppStack
+    MediaCopy.Effects.Console
+    MediaCopy.Effects.DirEntry
+    MediaCopy.Effects.Emit
+    MediaCopy.Effects.FileSystem
+    MediaCopy.Effects.FileSystem.Native
+    MediaCopy.Effects.Hasher
+    MediaCopy.Effects.Plugins
+    MediaCopy.Engine
+    MediaCopy.Engine.Generation
+    MediaCopy.Engine.Planner
+    MediaCopy.Engine.PlanViolation
+    MediaCopy.EventLog
+    MediaCopy.Mhl.Store
+    MediaCopy.Plugin.Catalog
+    MediaCopy.Plugin.Connection
+    MediaCopy.Plugin.Connection.Native
+    MediaCopy.Plugin.Discovery
+    MediaCopy.Plugin.Fields
+    MediaCopy.Plugin.Grant
+    MediaCopy.Plugin.Installed
+    MediaCopy.Plugin.Ready
+    MediaCopy.Plugin.Session
+    MediaCopy.Plugin.Setup
+    MediaCopy.Plugin.Tracer
+    MediaCopy.Plugin.Wire
+
+  other-modules: Paths_mediacopy3000
+  autogen-modules: Paths_mediacopy3000
+  build-depends:
+    aeson,
+    aeson-pretty,
+    ascmhl,
+    async,
+    bytestring,
+    containers,
+    cryptohash-md5,
+    cryptohash-sha1,
+    cryptohash-sha512,
+    directory,
+    disk-free-space,
+    effectful,
+    effectful-core,
+    file-io,
+    filepath,
+    floreal-commons,
+    log-effectful ^>=1.0,
+    mediacopy3000:domain,
+    monad-time-effectful,
+    os-string,
+    plugin-protocol,
+    primitive,
+    process,
+    stm,
+    text,
+    text-display,
+    time,
+    vector,
+    xxhash-ffi ^>=0.3,
+
+  if os(windows)
+    hs-source-dirs: src/application-windows
+    build-depends: Win32
+  else
+    hs-source-dirs: src/application-posix
+    build-depends: unix
+
+library interface
+  import: options
+  hs-source-dirs: src/interface
+  -- cabal-gild: discover src/interface
+  exposed-modules:
+    MediaCopy.Interface.Command
+    MediaCopy.Interface.Palette
+    MediaCopy.Interface.Scene
+    MediaCopy.Interface.Theme
+    MediaCopy.Interface.Translation
+    MediaCopy.Interface.Translation.Coverage
+    MediaCopy.Interface.Translation.Embedded
+    MediaCopy.Interface.Translation.English
+    MediaCopy.Interface.Translation.French
+    MediaCopy.Interface.Translation.Messages
+    MediaCopy.Interface.Translation.Splice
+    MediaCopy.Interface.View.JobDetail
+    MediaCopy.Interface.View.JobRow
+    MediaCopy.Interface.View.PlanSheet
+    MediaCopy.Interface.View.Plugins
+    MediaCopy.Interface.View.Row
+    MediaCopy.Interface.Wording
+    MediaCopy.Model
+    MediaCopy.Report
+
+  build-depends:
+    aeson,
+    ascmhl,
+    containers,
+    filepath,
+    floreal-commons,
+    fluent,
+    fluent-syntax,
+    mediacopy3000:domain,
+    optics-core,
+    plugin-protocol,
+    scientific,
+    template-haskell,
+    text,
+    text-display,
+    time,
+    vector,
+
+library demo
+  import: options
+  hs-source-dirs: src/demo
+  -- cabal-gild: discover src/demo
+  exposed-modules:
+    MediaCopy.Demo
+    MediaCopy.Demo.Fixtures
+
+  build-depends:
+    ascmhl,
+    containers,
+    filepath,
+    mediacopy3000:domain,
+    mediacopy3000:interface,
+    plugin-protocol,
+    text,
+    text-display,
+    time,
+    vector,
+
+library runtime
+  import: options
+  hs-source-dirs: src/runtime
+  -- cabal-gild: discover src/runtime
+  exposed-modules: MediaCopy.Runtime
+  build-depends:
+    async,
+    containers,
+    effectful-core,
+    floreal-commons,
+    log-effectful ^>=1.0,
+    mediacopy3000:application,
+    mediacopy3000:domain,
+    mediacopy3000:interface,
+    stm,
+    text,
+    text-display,
+    vector,
+
+library resources
+  import: options
+  hs-source-dirs: src/resources
+  -- cabal-gild: discover src/resources
+  exposed-modules:
+    MediaCopy.Resources
+    MediaCopy.Resources.Splice
+
+  build-depends:
+    bytestring,
+    directory,
+    filepath,
+    process,
+    template-haskell,
+
+library
+  import: options
+  hs-source-dirs: src/gtk
+  -- cabal-gild: discover src/gtk
+  exposed-modules:
+    MediaCopy.Gtk.Actions
+    MediaCopy.Gtk.Assets
+    MediaCopy.Gtk.Environment
+    MediaCopy.Gtk.Interpret
+    MediaCopy.Gtk.Reload
+    MediaCopy.Gtk.Runtime
+    MediaCopy.Gtk.Screenshot
+    MediaCopy.Gtk.Theme
+    MediaCopy.Gtk.View
+    MediaCopy.Gtk.Widgets.Common
+    MediaCopy.Gtk.Widgets.FieldRows
+    MediaCopy.Gtk.Widgets.FileRow
+    MediaCopy.Gtk.Widgets.History
+    MediaCopy.Gtk.Widgets.JobDetail
+    MediaCopy.Gtk.Widgets.JobRow
+    MediaCopy.Gtk.Widgets.KeyCaps
+    MediaCopy.Gtk.Widgets.OffloadDialog
+    MediaCopy.Gtk.Widgets.PlanSheet
+    MediaCopy.Gtk.Widgets.PluginsPage
+    MediaCopy.Gtk.Widgets.Preferences
+
+  other-modules: Paths_mediacopy3000
+  autogen-modules: Paths_mediacopy3000
+  build-depends:
+    aeson,
+    ascmhl,
+    bytestring,
+    containers,
+    directory,
+    effectful-core,
+    extra,
+    filepath,
+    floreal-commons,
+    floreal-commons:gtk,
+    gi-adwaita ^>=1.0,
+    gi-gdk4,
+    gi-gio ^>=2.0,
+    gi-glib ^>=2.0,
+    gi-gobject ^>=2.0,
+    gi-gsk,
+    gi-gtk4 ^>=4.0.12,
+    gi-pango ^>=1.0,
+    haskell-gi-base,
+    log-base ^>=0.12,
+    log-effectful ^>=1.0,
+    mediacopy3000:application,
+    mediacopy3000:domain,
+    mediacopy3000:interface,
+    mediacopy3000:resources,
+    mediacopy3000:runtime,
+    monad-time-effectful,
+    plugin-protocol,
+    text,
+    text-display,
+    time,
+    vector,
+
+  pkgconfig-depends:
+    gtk4 >=4.20,
+    libadwaita-1 >=1.6,
+    pango >=1.56,
+
+executable mediacopy3000
+  import: options
+  ghc-options:
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N2
+
+  main-is: Main.hs
+  hs-source-dirs: app
+  build-depends:
+    aeson,
+    ascmhl,
+    containers,
+    effectful-core,
+    filepath,
+    floreal-commons,
+    mediacopy3000,
+    mediacopy3000:application,
+    mediacopy3000:demo,
+    mediacopy3000:domain,
+    mediacopy3000:interface,
+    monad-time-effectful,
+    optparse-applicative,
+    plugin-protocol,
+    text,
+    text-display,
+
+executable render-bench
+  import: options
+  ghc-options:
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N2
+
+  main-is: Main.hs
+  hs-source-dirs: bench
+  build-depends:
+    ascmhl,
+    extra,
+    filepath,
+    floreal-commons,
+    gi-adwaita ^>=1.0,
+    gi-gdk4,
+    gi-gio ^>=2.0,
+    gi-glib ^>=2.0,
+    gi-gtk4 ^>=4.0.12,
+    haskell-gi-base,
+    mediacopy3000,
+    mediacopy3000:application,
+    mediacopy3000:demo,
+    mediacopy3000:domain,
+    mediacopy3000:interface,
+    monad-time-effectful,
+    text,
+    time,
+    vector,
+
+test-suite core-test
+  import: options
+  type: exitcode-stdio-1.0
+  ghc-options: -threaded
+  hs-source-dirs: tests
+  main-is: Main.hs
+  -- cabal-gild: discover tests/ --exclude tests/Main.hs
+  other-modules:
+    MediaCopy.Domain.DirectoryHashTest
+    MediaCopy.Domain.HashFormatTest
+    MediaCopy.Domain.JobTest
+    MediaCopy.Domain.PartTest
+    MediaCopy.Domain.PluginCatalogTest
+    MediaCopy.Domain.PluginReportTest
+    MediaCopy.Effects.FileSystemTest
+    MediaCopy.FlowTest
+    MediaCopy.Interface.PaletteTest
+    MediaCopy.Interface.View.PlanSheetTest
+    MediaCopy.Interface.WordingTest
+    MediaCopy.ModelTest
+    MediaCopy.Plugin.CatalogTest
+    MediaCopy.Plugin.FieldsTest
+    MediaCopy.Plugin.SetupTest
+    MediaCopy.Plugin.WireTest
+    MediaCopy.Test.FakeWorld
+    MediaCopy.Test.Harness
+    MediaCopy.Test.InMemoryFS
+
+  build-depends:
+    aeson,
+    ascmhl,
+    bytestring,
+    containers,
+    directory,
+    effectful,
+    effectful-core,
+    file-io,
+    filepath,
+    floreal-commons,
+    hedgehog,
+    log-effectful ^>=1.0.2,
+    mediacopy3000:application,
+    mediacopy3000:demo,
+    mediacopy3000:domain,
+    mediacopy3000:interface,
+    mediacopy3000:runtime,
+    monad-time-effectful,
+    os-string,
+    plugin-protocol,
+    stm,
+    tasty,
+    tasty-hedgehog,
+    tasty-hunit,
+    text,
+    text-display,
+    time,
+    vector,
+
+test-suite conformance-test
+  import: options
+  type: exitcode-stdio-1.0
+  hs-source-dirs: tests-conformance
+  main-is: Main.hs
+  other-modules:
+    MediaCopy.Conformance.Ascmhl
+    MediaCopy.Conformance.Harness
+    MediaCopy.Conformance.OursToReferenceTest
+    MediaCopy.Conformance.ReferenceToOursTest
+
+  build-depends:
+    ascmhl,
+    bytestring,
+    containers,
+    directory,
+    effectful-core,
+    filepath,
+    floreal-commons,
+    mediacopy3000:application,
+    mediacopy3000:domain,
+    monad-time-effectful,
+    process,
+    tasty,
+    tasty-hunit,
+    temporary,
+    text,
+    text-display,
+    time,
+    vector,

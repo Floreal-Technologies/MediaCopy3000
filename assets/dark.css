@@ -1,0 +1,67 @@
+:root {
+  --window-bg-color: #303446;
+  --window-fg-color: #c6d0f5;
+  --view-bg-color: #292c3c;
+  --view-fg-color: #c6d0f5;
+
+  --headerbar-bg-color: #414559;
+  --headerbar-fg-color: #c6d0f5;
+  --headerbar-border-color: #c6d0f5;
+  --headerbar-backdrop-color: #303446;
+  --headerbar-shade-color: rgb(0 0 6 / 36%);
+  --headerbar-darker-shade-color: rgb(0 0 12 / 90%);
+
+  --sidebar-bg-color: #414559;
+  --sidebar-fg-color: #c6d0f5;
+  --sidebar-backdrop-color: #303446;
+  --sidebar-shade-color: rgb(0 0 6 / 25%);
+  --sidebar-border-color: rgb(0 0 6 / 36%);
+
+  --secondary-sidebar-bg-color: #232634;
+  --secondary-sidebar-fg-color: #c6d0f5;
+  --secondary-sidebar-backdrop-color: #303446;
+  --secondary-sidebar-shade-color: rgb(0 0 6 / 25%);
+  --secondary-sidebar-border-color: rgb(0 0 6 / 36%);
+
+  --card-bg-color: #414559;
+  --card-fg-color: #c6d0f5;
+  --card-shade-color: rgb(0 0 6 / 36%);
+
+  --dialog-bg-color: #414559;
+  --dialog-fg-color: #c6d0f5;
+
+  --popover-bg-color: #414559;
+  --popover-fg-color: #c6d0f5;
+  --popover-shade-color: rgb(0 0 6 / 25%);
+
+  --thumbnail-bg-color: #51576d;
+  --thumbnail-fg-color: #c6d0f5;
+
+  --shade-color: rgb(0 0 6 / 25%);
+  --scrollbar-outline-color: rgb(0 0 12 / 95%);
+
+  --success-bg-color: #a6d189;
+  --success-fg-color: #232634;
+  --success-color: #a6d189;
+
+  --warning-bg-color: #e5c890;
+  --warning-fg-color: #232634;
+  --warning-color: #e5c890;
+
+  --error-bg-color: #e78284;
+  --error-fg-color: #232634;
+  --error-color: #e78284;
+
+  --destructive-bg-color: #e78284;
+  --destructive-fg-color: #232634;
+  --destructive-color: #e78284;
+
+  --stripe-1: oklch(75.0% 0.108 137.0);
+  --stripe-2: oklch(70.2% 0.060 161.1);
+  --stripe-3: oklch(81.0% 0.152 73.7);
+  --stripe-4: oklch(75.4% 0.165 62.8);
+  --stripe-5: oklch(66.2% 0.192 33.7);
+  --stripe-logo: url("resource:///tech/floreal/MediaCopy3000/logo/floreal-tech-logo-light.svg");
+
+  --float-shadow-color: #232634;
+}

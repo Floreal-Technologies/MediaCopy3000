@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hashlist version="2.0" xmlns="urn:ASC:MHL:v2.0">
+  <creatorinfo>
+    <creationdate>2026-05-09T17:02:00+00:00</creationdate>
+    <hostname>dit-laptop</hostname>
+    <tool version="0.1.0">mediacopy3000</tool>
+  </creatorinfo>
+  <processinfo>
+    <process>transfer</process>
+    <roothash>
+      <content>
+        <xxh64 hashdate="2026-05-09T17:02:00+00:00">8d02114c32e28cbe</xxh64>
+      </content>
+      <structure>
+        <xxh64 hashdate="2026-05-09T17:02:00+00:00">f557f8ca8e5a88ef</xxh64>
+      </structure>
+    </roothash>
+    <ignore>
+      <pattern>.DS_Store</pattern>
+      <pattern>ascmhl</pattern>
+    </ignore>
+  </processinfo>
+  <hashes>
+    <hash>
+      <path lastmodificationdate="2026-05-09T16:58:12.123456+00:00">Sidecar/notes.txt</path>
+      <md5 action="original" hashdate="2026-05-09T17:02:00+00:00">d41d8cd98f00b204e9800998ecf8427e</md5>
+      <xxh64 action="original" hashdate="2026-05-09T17:02:00+00:00">ef46db3751d8e999</xxh64>
+    </hash>
+    <directoryhash>
+      <path lastmodificationdate="2026-05-09T16:58:12+00:00">Sidecar</path>
+      <content>
+        <xxh64 hashdate="2026-05-09T17:02:00+00:00">f1d7771e64cb3720</xxh64>
+      </content>
+      <structure>
+        <xxh64 hashdate="2026-05-09T17:02:00+00:00">6a0e2d7d1e5e0c9b</xxh64>
+      </structure>
+    </directoryhash>
+    <hash>
+      <path size="4096" lastmodificationdate="2026-05-09T16:58:12+00:00">A002C001.MXF</path>
+      <xxh64 action="original" hashdate="2026-05-09T17:02:00+00:00">fbcea83c8a378bf1</xxh64>
+    </hash>
+  </hashes>
+</hashlist>

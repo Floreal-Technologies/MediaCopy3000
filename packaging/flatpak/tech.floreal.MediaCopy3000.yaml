@@ -1,0 +1,27 @@
+app-id: tech.floreal.MediaCopy3000
+runtime: org.gnome.Platform
+runtime-version: '49'
+sdk: org.gnome.Sdk
+command: mediacopy3000
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --filesystem=host
+  - --env=mediacopy3000_datadir=/app/share/mediacopy3000
+add-extensions:
+  tech.floreal.MediaCopy3000.Plugin:
+    directory: share/mediacopy3000/plugins
+    subdirectories: true
+    no-autodownload: true
+    autodelete: true
+modules:
+  - name: mediacopy3000
+    buildsystem: simple
+    build-commands:
+      - cp -a ./. /app
+      - mkdir -p /app/share/mediacopy3000/plugins
+    sources:
+      - type: dir
+        path: ../../dist-package/root/usr

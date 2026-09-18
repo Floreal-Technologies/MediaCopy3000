@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ascmhldirectory version="2.0" xmlns="urn:ASC:MHL:DIRECTORY:v2.0">
+  <hashlist sequencenr="1">
+    <path>0001_A002R2EC_2026-05-09_170200.mhl</path>
+    <xxh64>0123456789abcdef</xxh64>
+  </hashlist>
+</ascmhldirectory>

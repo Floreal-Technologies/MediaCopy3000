@@ -1,0 +1,29 @@
+packages:
+  .
+  ascmhl/
+  plugin-protocol/
+  plugins/credits/
+
+with-compiler: ghc-9.14.1
+
+tests: True
+
+semaphore: True
+
+jobs: $ncpus
+
+write-ghc-environment-files: always
+
+build-info: True
+
+index-state: hackage.haskell.org 2026-10-22T09:13:00Z
+
+constraints: aeson-pretty +lib-only
+
+source-repository-package
+  type: git
+  location: https://github.com/Floreal-Technologies/floreal-commons
+  tag: 2026-10-20
+  subdir:
+    ./floreal-prelude
+    ./floreal-commons

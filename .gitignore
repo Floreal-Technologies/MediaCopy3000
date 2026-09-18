@@ -1,0 +1,17 @@
+dist*
+.hie
+cabal.project.local*
+.envrc
+.vscode/
+node_modules/
+manual/.vitepress/dist/
+manual/.vitepress/cache/
+.flatpak-builder/
+
+bench/results.csv
+
+packaging/windows/staged-files.wxs
+
+.ghc.environment.*
+plugin-protocol/schema/actual-*.json
+__pycache__

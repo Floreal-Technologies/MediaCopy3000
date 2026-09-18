@@ -1,0 +1,171 @@
+#Requires -Version 7
+
+param(
+    [string]$Version = '0.0.0',
+    [string]$Ucrt,
+    [string]$Stage = 'dist-package/windows',
+    [switch]$SkipMsi
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+if (-not $Ucrt) {
+    $candidates = @(
+        [Environment]::GetEnvironmentVariable('GHCUP_MSYS2')
+        'C:\ghcup\msys64'
+        'C:\msys64'
+    ) | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\', '/') + '\ucrt64' }
+    $Ucrt = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $Ucrt) { throw "no MSYS2 UCRT64 tree found; pass -Ucrt" }
+    Write-Host "using the MSYS2 UCRT64 tree at $Ucrt"
+}
+
+function Copy-Into {
+    param([Parameter(Mandatory)][string]$Source, [Parameter(Mandatory)][string]$Destination)
+    $parent = Split-Path -Parent $Destination
+    if ($parent -and -not (Test-Path $parent)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+    Copy-Item -Path $Source -Destination $Destination -Recurse -Force
+}
+
+function Assert-Tool {
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Test-Path $Path)) { throw "missing tool: $Path" }
+}
+
+if (Test-Path $Stage) { Remove-Item -Recurse -Force $Stage }
+New-Item -ItemType Directory -Path $Stage -Force | Out-Null
+
+$found = Get-ChildItem -Recurse -Filter mediacopy3000.exe dist-newstyle -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+if (-not $found) { throw 'mediacopy3000.exe not found under dist-newstyle; run cabal build first' }
+$exe = $found.FullName
+Copy-Into $exe "$Stage/mediacopy3000.exe"
+
+Assert-Tool "$Ucrt\bin\ntldd.exe"
+$dlls = & "$Ucrt\bin\ntldd.exe" -R $exe |
+    ForEach-Object { if ($_ -match '=>\s+(\S.*?)\s+\(') { $Matches[1] } } |
+    Where-Object { $_ -and $_ -notmatch '^[A-Za-z]:\\[Ww][Ii][Nn][Dd][Oo][Ww][Ss]\\' } |
+    Sort-Object -Unique
+foreach ($dll in $dlls) {
+    if (Test-Path $dll) { Copy-Into $dll "$Stage/$(Split-Path -Leaf $dll)" }
+}
+Write-Host "bundled $($dlls.Count) DLLs"
+if ($dlls.Count -lt 20) { throw "only $($dlls.Count) DLLs resolved; ntldd output was not understood" }
+
+$credits = Get-ChildItem -Recurse -Filter credits.exe dist-newstyle -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+if (-not $credits) { throw 'credits.exe not found under dist-newstyle; run cabal build first' }
+$pluginDir = "$Stage/plugins/tech.floreal.credits"
+Copy-Into $credits.FullName "$pluginDir/bin/credits.exe"
+Copy-Into plugins/credits/plugin.json "$pluginDir/plugin.json"
+$pluginDlls = & "$Ucrt\bin\ntldd.exe" -R $credits.FullName |
+    ForEach-Object { if ($_ -match '=>\s+(\S.*?)\s+\(') { $Matches[1] } } |
+    Where-Object { $_ -and $_ -notmatch '^[A-Za-z]:\\[Ww][Ii][Nn][Dd][Oo][Ww][Ss]\\' } |
+    Sort-Object -Unique
+foreach ($dll in $pluginDlls) {
+    if (Test-Path $dll) { Copy-Into $dll "$pluginDir/bin/$(Split-Path -Leaf $dll)" }
+}
+
+$loaders = "$Stage/lib/gdk-pixbuf-2.0/2.10.0/loaders"
+New-Item -ItemType Directory -Path $loaders -Force | Out-Null
+Copy-Item "$Ucrt/lib/gdk-pixbuf-2.0/2.10.0/loaders/*.dll" $loaders -Force
+Assert-Tool "$Ucrt\bin\gdk-pixbuf-query-loaders.exe"
+& "$Ucrt\bin\gdk-pixbuf-query-loaders.exe" |
+    Out-File -FilePath "$Stage/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache" -Encoding ascii
+
+Copy-Into "$Ucrt/share/glib-2.0/schemas/gschemas.compiled" `
+    "$Stage/share/glib-2.0/schemas/gschemas.compiled"
+
+foreach ($theme in 'Adwaita', 'hicolor') {
+    Copy-Into "$Ucrt/share/icons/$theme" "$Stage/share/icons/$theme"
+    & "$Ucrt\bin\gtk4-update-icon-cache.exe" --force --quiet "$Stage/share/icons/$theme"
+}
+
+Copy-Into "$Ucrt/etc/fonts" "$Stage/etc/fonts"
+
+$appAssets = "$Stage/share/mediacopy3000/assets"
+Copy-Into 'assets/styles.css' "$appAssets/styles.css"
+Copy-Into 'assets/dark.css' "$appAssets/dark.css"
+foreach ($font in 'InterVariable.ttf', 'InterVariable-Italic.ttf', 'OFL.txt') {
+    Copy-Into "assets/fonts/$font" "$appAssets/fonts/$font"
+}
+foreach ($required in "$appAssets/styles.css", "$appAssets/dark.css", "$appAssets/fonts/InterVariable.ttf", "$appAssets/fonts/InterVariable-Italic.ttf") {
+    if (-not (Test-Path $required)) { throw "staged tree broken: $required is missing" }
+}
+
+Write-Host "staged into $Stage"
+if ($SkipMsi) { return }
+
+$fragmentPath = 'packaging/windows/staged-files.wxs'
+$stageFull = (Resolve-Path $Stage).Path
+$lines = [System.Collections.Generic.List[string]]::new()
+$refs = [System.Collections.Generic.List[string]]::new()
+$script:componentIndex = 0
+
+function Write-Directory {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][int]$Depth
+    )
+    $pad = ' ' * (($Depth + 3) * 2)
+
+    foreach ($file in Get-ChildItem -LiteralPath $Path -File | Sort-Object Name) {
+        $script:componentIndex++
+        $id = "cmp$($script:componentIndex)"
+        $refs.Add($id)
+        $lines.Add("$pad<Component Id=`"$id`" Guid=`"*`">")
+        $lines.Add("$pad  <File Id=`"fil$($script:componentIndex)`" Source=`"$($file.FullName)`" KeyPath=`"yes`" />")
+        $lines.Add("$pad</Component>")
+    }
+
+    foreach ($dir in Get-ChildItem -LiteralPath $Path -Directory | Sort-Object Name) {
+        $script:componentIndex++
+        $dirId = "dir$($script:componentIndex)"
+        $lines.Add("$pad<Directory Id=`"$dirId`" Name=`"$($dir.Name)`">")
+        Write-Directory -Path $dir.FullName -Depth ($Depth + 1)
+        $lines.Add("$pad</Directory>")
+    }
+}
+
+Write-Directory -Path $stageFull -Depth 0
+
+$fragment = @()
+$fragment += '<?xml version="1.0" encoding="utf-8"?>'
+$fragment += '<!-- Generated by scripts/package.ps1. Do not edit. -->'
+$fragment += '<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">'
+$fragment += '  <Fragment>'
+$fragment += '    <DirectoryRef Id="INSTALLFOLDER">'
+$fragment += $lines
+$fragment += '    </DirectoryRef>'
+$fragment += '  </Fragment>'
+$fragment += '  <Fragment>'
+$fragment += '    <ComponentGroup Id="StagedFiles">'
+foreach ($id in $refs) { $fragment += "      <ComponentRef Id=`"$id`" />" }
+$fragment += '    </ComponentGroup>'
+$fragment += '  </Fragment>'
+$fragment += '</Wix>'
+$fragment | Out-File -FilePath $fragmentPath -Encoding utf8
+Write-Host "harvested $($refs.Count) files into $fragmentPath"
+
+dotnet tool install --global wix --version 7.0.0
+if ($LASTEXITCODE -ne 0) {
+    dotnet tool update --global wix --version 7.0.0
+    if ($LASTEXITCODE -ne 0) { throw 'could not install the wix tool' }
+}
+
+New-Item -ItemType Directory -Path 'dist-package/out' -Force | Out-Null
+$msi = "dist-package/out/mediacopy3000-$Version-x64.msi"
+
+wix build `
+    --acceptEula wix7 `
+    -d Version=$Version `
+    -arch x64 `
+    -out $msi `
+    packaging/windows/mediacopy3000.wxs `
+    $fragmentPath
+if ($LASTEXITCODE -ne 0) { throw "wix build failed with $LASTEXITCODE" }
+
+Write-Host "wrote $msi"

@@ -1,0 +1,135 @@
+.accent-swatch {
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border-radius: 9999px;
+  color: var(--accent-fg-color);
+}
+
+.accent-swatch:checked {
+  outline: 2px solid var(--window-fg-color);
+  outline-offset: 2px;
+}
+
+:root {
+  --float-shadow-color: rgb(0 0 6 / 12%);
+  --float-shadow: 0 4px 8px var(--float-shadow-color);
+  --stripe-1: oklch(65.4% 0.166 141.1);
+  --stripe-2: oklch(56.8% 0.095 174.4);
+  --stripe-3: oklch(76.7% 0.147 88.8);
+  --stripe-4: oklch(65.6% 0.155 50.8);
+  --stripe-5: oklch(56.9% 0.174 27.4);
+  --stripe-strength: 20%;
+  --stripe-tint-1: color-mix(in oklab, var(--stripe-1) var(--stripe-strength), var(--window-bg-color));
+  --stripe-tint-2: color-mix(in oklab, var(--stripe-2) var(--stripe-strength), var(--window-bg-color));
+  --stripe-tint-3: color-mix(in oklab, var(--stripe-3) var(--stripe-strength), var(--window-bg-color));
+  --stripe-tint-4: color-mix(in oklab, var(--stripe-4) var(--stripe-strength), var(--window-bg-color));
+  --stripe-tint-5: color-mix(in oklab, var(--stripe-5) var(--stripe-strength), var(--window-bg-color));
+  --stripes: linear-gradient(
+    var(--stripe-tint-1) 20%,
+    var(--stripe-tint-2) 20%,
+    var(--stripe-tint-2) 40%,
+    var(--stripe-tint-3) 40%,
+    var(--stripe-tint-3) 60%,
+    var(--stripe-tint-4) 60%,
+    var(--stripe-tint-4) 80%,
+    var(--stripe-tint-5) 80%
+  );
+  --stripe-disc-size: 176px;
+  --stripe-band-height: calc(var(--stripe-disc-size) / 2);
+  --stripe-logo-size: calc(var(--stripe-disc-size) * 0.76);
+  --stripe-logo: url("resource:///tech/floreal/MediaCopy3000/logo/floreal-tech-logo.svg");
+  --stripe-y: 83.333%;
+}
+
+navigation-split-view.stripes > .content-pane {
+  background-image: var(--stripes);
+  background-size: 100% var(--stripe-band-height);
+  background-position: center calc(var(--stripe-y) + var(--stripe-band-height) / 3);
+  background-repeat: no-repeat;
+}
+
+navigation-split-view.stripes > .sidebar-pane {
+  --stripe-disc-color: var(--sidebar-bg-color);
+  background-image:
+    cross-fade(var(--stripe-strength) var(--stripe-logo), image(transparent)),
+    radial-gradient(circle closest-side, var(--stripe-disc-color) 98%, transparent 100%),
+    var(--stripes);
+  background-size:
+    var(--stripe-logo-size) var(--stripe-logo-size),
+    var(--stripe-disc-size) var(--stripe-disc-size),
+    50% var(--stripe-band-height);
+  background-position:
+    center calc(var(--stripe-y) + var(--stripe-logo-size) / 3),
+    center calc(var(--stripe-y) + var(--stripe-disc-size) / 3),
+    right calc(var(--stripe-y) + var(--stripe-band-height) / 3);
+  background-repeat: no-repeat;
+}
+
+navigation-split-view.stripes > .sidebar-pane:backdrop {
+  --stripe-disc-color: var(--sidebar-backdrop-color);
+}
+
+.keycap {
+  min-width: 20px;
+  min-height: 25px;
+  padding: 2px 6px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  box-shadow: inset 0 -2px var(--card-shade-color);
+  border-radius: 6px;
+  font-size: smaller;
+}
+
+@media (prefers-contrast: more) {
+  .keycap {
+    box-shadow: inset 0 -2px var(--card-shade-color), 0 0 0 1px var(--border-color);
+  }
+}
+
+window {
+  font-family: "Inter Variable";
+  font-feature-settings: "ss01" 1, "ss02" 1, "ss03" 1, "cv09" 1, "cv10" 1;
+}
+
+*:focus:focus-visible,
+entry:focus-within,
+row.entry.focused {
+  outline-color: var(--accent-color);
+}
+
+popover > contents {
+  box-shadow: var(--float-shadow);
+}
+
+floating-sheet > sheet,
+bottom-sheet > sheet {
+  box-shadow: 0 0 0 1px var(--border-color), var(--float-shadow);
+}
+
+link {
+  text-decoration-color: color-mix(in srgb, var(--accent-color) 45%, transparent);
+}
+
+link:hover {
+  color: var(--window-fg-color);
+  text-decoration-color: var(--accent-color);
+}
+
+label.monospace {
+  margin-left: -5px;
+  padding: 2px 5px;
+  background-color: color-mix(in srgb, currentColor 10%, transparent);
+  font-variant-numeric: slashed-zero;
+}
+
+row.success {
+  --tone: var(--success-color);
+}
+
+row.warning {
+  --tone: var(--warning-color);
+}
+
+row.error {
+  --tone: var(--error-color);
+}

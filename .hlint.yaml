@@ -1,0 +1,17 @@
+- arguments: [-XOverloadedRecordDot, -XExplicitNamespaces]
+
+# Delete it once HLint can parse the `ExplicitLevelImports` extension.
+- ignore: {name: "Parse error"}
+- ignore: {name: "Redundant ^."}
+- ignore: {name: "Eta reduce"}
+- ignore: {name: "Avoid lambda using `infix`"}
+- ignore: {name: "Use newtype instead of data"}
+- ignore: {name: "Use tuple-section"}
+- ignore: {name: "Use uncurry"}
+- ignore: {name: "Monad law, left identity"}
+- ignore: {name: "Replace case with maybe"}
+- ignore: {name: "Functor law"}
+- ignore: {name: "Use >=>"}
+
+- warn: {lhs: mapM_ f x, rhs: forM_ x f, name: Use forM_}
+- warn: {lhs: mapM f x, rhs: forM x f, name: Use forM}

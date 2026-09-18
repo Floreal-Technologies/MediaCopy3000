@@ -1,0 +1,20 @@
+{
+  "id": "tech.floreal.credits",
+  "name": "Credits",
+  "description": "Puts the names of the crew into each manifest that a job writes.",
+  "version": "1.0.0",
+  "api": 1,
+  "namespace": "https://floreal.tech/ns/credits/1",
+  "executable": {
+    "linux-x86_64": "bin/credits",
+    "linux-aarch64": "bin/credits",
+    "macos-aarch64": "bin/credits",
+    "macos-x86_64": "bin/credits",
+    "windows-x86_64": "bin/credits.exe"
+  },
+  "capabilities": ["manifest.write"],
+  "settings": [
+    {"key": "authors", "label": "Authors", "kind": "authors", "required": true}
+  ],
+  "jobFields": []
+}

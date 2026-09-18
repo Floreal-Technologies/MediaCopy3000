@@ -1,0 +1,16 @@
+{
+  "name": "mediacopy3000-manual",
+  "private": true,
+  "type": "module",
+  "description": "Build for the MediaCopy 3000 manual under manual/",
+  "scripts": {
+    "docs:dev": "vitepress dev manual",
+    "docs:build": "vitepress build manual",
+    "docs:preview": "vitepress preview manual"
+  },
+  "devDependencies": {
+    "mermaid": "^11.17.2",
+    "vitepress": "^1.6.3",
+    "vitepress-plugin-mermaid": "^2.0.17"
+  }
+}
