@@ -1,0 +1,39 @@
+name: Lint
+
+on:
+  pull_request:
+    paths:
+      - "**.hs"
+      - "**.cabal"
+      - "cabal.project"
+      - .github/workflows/lint.yaml
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  cabal-gild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: tfausak/cabal-gild-setup-action@v2
+        with:
+          version: 1.6.0.2
+      - run: cabal-gild --input mediacopy3000.cabal --mode check
+      - run: cabal-gild --input ascmhl/ascmhl.cabal --mode check
+  hlint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: 'Set up HLint'
+      uses: haskell-actions/hlint-setup@v2
+      with:
+        version: '3.10'
+
+    - name: 'Run HLint'
+      uses: haskell-actions/hlint-run@v2
+      with:
+        path: '["app/", "src/", "ascmhl/", "tests/", "tests-conformance/"]'
+        fail-on: warning

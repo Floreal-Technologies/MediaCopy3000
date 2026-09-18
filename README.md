@@ -1,0 +1,49 @@
+# MediaCopy 3000
+
+MediaCopy 3000 is a media offloading application for videographers and photographers.
+
+<p align="center">
+  <img width="32%" alt="The offloading dialog" src="https://github.com/Floreal-Technologies/MediaCopy3000/blob/main/manual/en/images/offload-dialog.png?raw=true">
+  <img width="32%" alt="The execution plan" src="https://github.com/Floreal-Technologies/MediaCopy3000/blob/main/manual/en/images/plan-ready.png?raw=true">
+  <img width="32%" alt="The queue view" src="https://github.com/Floreal-Technologies/MediaCopy3000/blob/main/manual/en/images/queue.png?raw=true">
+</p>
+
+## Features
+
+* Integrity verification through the ASC Media Hash List (MHL) manifest format
+* Sealing of a media source in place, so a later copy has original hashes to check against
+* Plan review before execution, so that all actions are accounted for.
+
+## Development
+
+[`CONTRIBUTING.md`](CONTRIBUTING.md) holds the architecture, the build and the packaging, and how
+the pictures in the manual are made.
+
+`just` lists every recipe. `just test` and `just conformance` run the two test suites, `just lint`
+and `just style` run HLint and the formatters, and `just xref` checks that the cross references
+between the code and `manual/` still hold.
+
+## Packages
+
+The repository holds two packages:
+
+* `ascmhl/`:  the ASC MHL format
+* `mediacopy3000`: The application domain, the engine, the GTK interface.
+
+## Packaging
+
+Build a package with `scripts/package.sh`:
+
+```
+scripts/package.sh -v head [deb|rpm|pacman|flatpak|tarball|osxpkg]
+```
+
+The `-v` flag sets the version label.
+Use `head` for a development build, or a version number such as `1.2.3`.
+The format argument is optional.
+When you omit it, the script builds every package format for the host operating system.
+
+## Acknowledgements
+
+* [Guerilla.Studio](https://guerilla.studio) for the idea
+* [Pomfort GmbH](https://pomfort.com) for the domain knowledge

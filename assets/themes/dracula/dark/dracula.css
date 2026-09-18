@@ -1,0 +1,68 @@
+/* Dracula
+ *
+ * Palette: https://spec.draculatheme.com/
+ * The application picks this file from the Preferences dialog; it overrides the libadwaita colour
+ * variables, so every rule in `styles.css` follows it without an edit.
+ */
+:root {
+  --window-bg-color: #282A36;
+  --window-fg-color: #F8F8F2;
+  --view-bg-color: #22242E;
+  --view-fg-color: #F8F8F2;
+
+  --headerbar-bg-color: #44475A;
+  --headerbar-fg-color: #F8F8F2;
+  --headerbar-border-color: #F8F8F2;
+  --headerbar-backdrop-color: #282A36;
+  --headerbar-shade-color: rgb(0 0 6 / 36%);
+  --headerbar-darker-shade-color: rgb(0 0 12 / 90%);
+
+  --sidebar-bg-color: #44475A;
+  --sidebar-fg-color: #F8F8F2;
+  --sidebar-backdrop-color: #282A36;
+  --sidebar-shade-color: rgb(0 0 6 / 25%);
+  --sidebar-border-color: rgb(0 0 6 / 36%);
+
+  --secondary-sidebar-bg-color: #22242E;
+  --secondary-sidebar-fg-color: #F8F8F2;
+  --secondary-sidebar-backdrop-color: #282A36;
+  --secondary-sidebar-shade-color: rgb(0 0 6 / 25%);
+  --secondary-sidebar-border-color: rgb(0 0 6 / 36%);
+
+  --card-bg-color: #44475A;
+  --card-fg-color: #F8F8F2;
+  --card-shade-color: rgb(0 0 6 / 36%);
+
+  --dialog-bg-color: #44475A;
+  --dialog-fg-color: #F8F8F2;
+
+  --popover-bg-color: #44475A;
+  --popover-fg-color: #F8F8F2;
+  --popover-shade-color: rgb(0 0 6 / 25%);
+
+  --thumbnail-bg-color: #4E5268;
+  --thumbnail-fg-color: #F8F8F2;
+
+  --shade-color: rgb(0 0 6 / 25%);
+  --scrollbar-outline-color: rgb(0 0 12 / 95%);
+
+  --accent-bg-color: #BD93F9;
+  --accent-fg-color: #282A36;
+  --accent-color: #BD93F9;
+
+  --success-bg-color: #50FA7B;
+  --success-fg-color: #282A36;
+  --success-color: #50FA7B;
+
+  --warning-bg-color: #F1FA8C;
+  --warning-fg-color: #282A36;
+  --warning-color: #F1FA8C;
+
+  --error-bg-color: #FF5555;
+  --error-fg-color: #282A36;
+  --error-color: #FF5555;
+
+  --destructive-bg-color: #FF5555;
+  --destructive-fg-color: #282A36;
+  --destructive-color: #FF5555;
+}

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>eu.choutri.MediaCopy3000</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <url type="homepage"> https://github.com/Floreal-Technologies/MediaCopy3000</url>
+  <url type="bugtracker"> https://github.com/Floreal-Technologies/MediaCopy3000/issues</url>
+  <name>MediaCopy 3000</name>
+  <summary>Verified media offload and ASC MHL verification</summary>
+  <description>
+    <p>
+      MediaCopy 3000 copies media files from a source to one or more destinations and checks
+      the copy with a hash. It writes an ASC Media Hash List (MHL) into each destination, so you can check the transfer again at a later time.
+    </p>
+  </description>
+  <launchable type="desktop-id">eu.choutri.MediaCopy3000.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <image type="source" width="1100" height="720">https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/main/manual/en/images/queue.png</image>
+      <caption>The job list with several jobs</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source" width="1100" height="720">https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/main/manual/en/images/offload-dialog.png</image>
+      <caption>The dialog with a media source and two destinations</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source" width="1100" height="720">https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/main/manual/en/images/plan-ready.png</image>
+      <caption>A plan that is ready to run</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source" width="1100" height="720">https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/main/manual/en/images/job-running.png</image>
+      <caption>An offload in progress</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source" width="1100" height="720">https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/main/manual/en/images/verify-history.png</image>
+      <caption>The history of a folder with three generations</caption>
+    </screenshot>
+  </screenshots>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Utility</category>
+  </categories>
+  <keywords>
+    <keyword>offload</keyword>
+    <keyword>backup</keyword>
+    <keyword>checksum</keyword>
+    <keyword>MHL</keyword>
+    <keyword>camera</keyword>
+    <keyword>hash</keyword>
+    <keyword>card</keyword>
+    <keyword>rushes</keyword>
+  </keywords>
+  <branding>
+    <color type="primary" scheme_preference="light">#c0d7e8</color>
+    <color type="primary" scheme_preference="dark">#243b4d</color>
+  </branding>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <developer id="eu.choutri">
+    <name>Feriel Choutri de Tarlé</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0.0" date="2026-09-09"/>
+  </releases>
+</component>
