@@ -40,7 +40,7 @@ jobs:
       # A link to a page that does not exist fails here; see ignoreDeadLinks in the config.
       - run: npm run docs:build
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: manual/.vitepress/dist
 
