@@ -1,0 +1,359 @@
+cabal-version: 3.4
+name: mediacopy3000
+version: 0.1.0.0
+synopsis: Verified media offload and ASC MHL verification for videographers
+license: GPL-3.0-only
+license-file: LICENSE
+author: Feriel Choutri de Tarlé
+maintainer: feriel@choutri.eu
+category: Distribution
+build-type: Simple
+-- Every file the application resolves at run time through Paths_mediacopy3000.
+data-files:
+  assets/styles.css
+  assets/themes/**/*.css
+  assets/themes/**/*.json
+
+extra-source-files:
+  tests/fixtures/**/*.mhl
+  tests/fixtures/**/*.xml
+  tests/fixtures/**/*.xsd
+
+tested-with: ghc ==9.14.1
+
+common options
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wpartial-fields
+    -Wredundant-constraints
+    -fhide-source-paths
+    -Wno-unused-do-bind
+    -fshow-hole-constraints
+    -Wno-unticked-promoted-constructors
+    -fwrite-ide-info
+
+  default-extensions:
+    DuplicateRecordFields
+    NoFieldSelectors
+    NoStarIsType
+    OrPatterns
+    OverloadedLabels
+    OverloadedRecordDot
+    OverloadedStrings
+    StrictData
+    TypeFamilies
+    ViewPatterns
+
+  default-language: GHC2024
+
+-- The domain: what a job, a plan, a finding and a job format are. It knows the manifest format
+-- and nothing about files, hashing or screens.
+library domain
+  import: options
+  hs-source-dirs: src/domain
+  exposed-modules:
+    MediaCopy.Domain.Destination
+    MediaCopy.Domain.DirectoryHash
+    MediaCopy.Domain.FileSystem
+    MediaCopy.Domain.History
+    MediaCopy.Domain.Job
+    MediaCopy.Domain.JobFormat
+    MediaCopy.Domain.JobFormat.Internal
+    MediaCopy.Domain.Plan
+    MediaCopy.Domain.Preflight
+
+  build-depends:
+    ascmhl,
+    base,
+    bytestring,
+    containers,
+    effectful-core,
+    filepath,
+    text,
+    text-display,
+    time,
+    vector,
+
+-- The application: the engine that runs a plan, the ports it runs through, and the repository
+-- that reads and writes a folder's history.
+library application
+  import: options
+  hs-source-dirs: src/application
+  exposed-modules:
+    MediaCopy.Effects.Emit
+    MediaCopy.Effects.FileSystem
+    MediaCopy.Effects.FileSystem.Native
+    MediaCopy.Effects.FileSystem.Types
+    MediaCopy.Effects.Hasher
+    MediaCopy.Engine
+    MediaCopy.Engine.Config
+    MediaCopy.Engine.Generation
+    MediaCopy.Engine.Plan
+    MediaCopy.Engine.Violation
+    MediaCopy.EventLog
+    MediaCopy.Mhl.Store
+
+  other-modules: Paths_mediacopy3000
+  autogen-modules: Paths_mediacopy3000
+  build-depends:
+    ascmhl,
+    async,
+    base,
+    bytestring,
+    containers,
+    cryptohash-md5,
+    cryptohash-sha1,
+    cryptohash-sha512,
+    directory,
+    disk-free-space,
+    effectful-core,
+    file-io,
+    filepath,
+    mediacopy3000:domain,
+    monad-time-effectful,
+    os-string,
+    primitive,
+    stm,
+    text,
+    text-display,
+    time,
+    vector,
+    xxhash-ffi ^>=0.3,
+
+  -- The three calls no portable library answers: one stat per directory entry, a writer
+  -- synchronised to the device before it closes, and a directory synchronised after a rename. One module, written twice.
+  if os(windows)
+    hs-source-dirs: src/application-windows
+    build-depends: Win32
+  else
+    hs-source-dirs: src/application-posix
+    build-depends: unix
+
+-- The operator's side: the presentation model, the report and the appearance. Toolkit-free;
+-- the GTK library is the adapter that draws it.
+library interface
+  import: options
+  hs-source-dirs: src/interface
+  exposed-modules:
+    MediaCopy.Interface.Theme
+    MediaCopy.Interface.Wording
+    MediaCopy.Model
+    MediaCopy.Report
+
+  build-depends:
+    aeson,
+    ascmhl,
+    base,
+    containers,
+    filepath,
+    mediacopy3000:domain,
+    optics-core,
+    text,
+    text-display,
+    time,
+    vector,
+
+library demo
+  import: options
+  hs-source-dirs: src/demo
+  exposed-modules:
+    MediaCopy.Demo
+    MediaCopy.Demo.Fixtures
+
+  build-depends:
+    ascmhl,
+    base,
+    containers,
+    filepath,
+    mediacopy3000:domain,
+    mediacopy3000:interface,
+    text,
+    text-display,
+    time,
+    vector,
+
+library
+  import: options
+  hs-source-dirs: src/gtk
+  exposed-modules:
+    MediaCopy.Gtk.Actions
+    MediaCopy.Gtk.Assets
+    MediaCopy.Gtk.Reload
+    MediaCopy.Gtk.Runtime
+    MediaCopy.Gtk.Screenshot
+    MediaCopy.Gtk.Theme
+    MediaCopy.Gtk.View
+    MediaCopy.Gtk.Widgets.CloseConfirm
+    MediaCopy.Gtk.Widgets.Common
+    MediaCopy.Gtk.Widgets.FileRow
+    MediaCopy.Gtk.Widgets.History
+    MediaCopy.Gtk.Widgets.JobDetail
+    MediaCopy.Gtk.Widgets.JobRow
+    MediaCopy.Gtk.Widgets.OffloadDialog
+    MediaCopy.Gtk.Widgets.PlanSheet
+    MediaCopy.Gtk.Widgets.Preferences
+
+  other-modules: Paths_mediacopy3000
+  autogen-modules: Paths_mediacopy3000
+  build-depends:
+    aeson,
+    ascmhl,
+    async,
+    base,
+    containers,
+    directory,
+    effectful-core,
+    extra,
+    file-io,
+    filepath,
+    gi-adwaita ^>=1.0,
+    gi-gdk4,
+    gi-gio ^>=2.0,
+    gi-glib ^>=2.0,
+    gi-gsk,
+    gi-gtk ^>=4.0,
+    gi-pango ^>=1.0,
+    haskell-gi-base,
+    hostname,
+    mediacopy3000:application,
+    mediacopy3000:domain,
+    mediacopy3000:interface,
+    monad-time-effectful,
+    text,
+    text-display,
+    time,
+    vector,
+
+  -- The floor is the oldest supported distribution, because the gi-* packages generate their
+  -- bindings from the GIR of the machine that builds them. See .tasks/lessons.md.
+  pkgconfig-depends:
+    gtk4 >=4.14,
+    libadwaita-1 >=1.5,
+
+executable mediacopy3000
+  import: options
+  ghc-options:
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N2
+
+  main-is: Main.hs
+  hs-source-dirs: app
+  build-depends:
+    base,
+    effectful-core,
+    filepath,
+    mediacopy3000,
+    mediacopy3000:application,
+    mediacopy3000:demo,
+    mediacopy3000:domain,
+    mediacopy3000:interface,
+    optparse-applicative,
+    text,
+    time,
+
+-- Counts what one job's worth of messages costs the window to paint. Not part of `just test`.
+executable render-bench
+  import: options
+  ghc-options:
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N2
+
+  main-is: Main.hs
+  hs-source-dirs: bench
+  build-depends:
+    ascmhl,
+    base,
+    directory,
+    extra,
+    gi-adwaita ^>=1.0,
+    gi-gdk4,
+    gi-gio ^>=2.0,
+    gi-glib ^>=2.0,
+    gi-gtk ^>=4.0,
+    haskell-gi-base,
+    mediacopy3000,
+    mediacopy3000:demo,
+    mediacopy3000:domain,
+    mediacopy3000:interface,
+    text,
+    time,
+    vector,
+
+test-suite core-test
+  import: options
+  type: exitcode-stdio-1.0
+  hs-source-dirs: tests
+  main-is: Main.hs
+  other-modules:
+    MediaCopy.Domain.DirectoryHashTest
+    MediaCopy.Domain.JobFormatTest
+    MediaCopy.Domain.JobTest
+    MediaCopy.Domain.PlanTest
+    MediaCopy.Effects.FileSystemTest
+    MediaCopy.EngineTest
+    MediaCopy.Interface.ThemeTest
+    MediaCopy.Interface.WordingTest
+    MediaCopy.ModelTest
+    MediaCopy.Test.InMemoryFS
+
+  build-depends:
+    ascmhl,
+    base,
+    bytestring,
+    containers,
+    directory,
+    effectful-core,
+    file-io,
+    filepath,
+    hedgehog,
+    mediacopy3000:application,
+    mediacopy3000:demo,
+    mediacopy3000:domain,
+    mediacopy3000:interface,
+    monad-time-effectful,
+    os-string,
+    tasty,
+    tasty-hedgehog,
+    tasty-hunit,
+    text,
+    text-display,
+    time,
+    vector,
+
+test-suite conformance-test
+  import: options
+  type: exitcode-stdio-1.0
+  hs-source-dirs: tests-conformance
+  main-is: Main.hs
+  other-modules:
+    MediaCopy.Conformance.Ascmhl
+    MediaCopy.Conformance.Harness
+    MediaCopy.Conformance.InteropTest
+    MediaCopy.Conformance.OursToReferenceTest
+    MediaCopy.Conformance.ReferenceToOursTest
+
+  build-depends:
+    ascmhl,
+    base,
+    bytestring,
+    containers,
+    directory,
+    effectful-core,
+    filepath,
+    mediacopy3000:application,
+    mediacopy3000:domain,
+    monad-time-effectful,
+    process,
+    tasty,
+    tasty-hunit,
+    temporary,
+    text,
+    text-display,
+    time,
+    vector,

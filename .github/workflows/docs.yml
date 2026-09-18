@@ -1,0 +1,60 @@
+name: Manual
+
+on:
+  pull_request:
+    paths:
+      - 'manual/**'
+      - package.json
+      - package-lock.json
+      - .github/workflows/docs.yml
+  push:
+    branches: [main]
+    paths:
+      - 'manual/**'
+      - package.json
+      - package-lock.json
+      - .github/workflows/docs.yml
+
+# One deployment at a time. A second push waits rather than racing the first.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the manual
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # lastUpdated reads each page's commit date, so a shallow clone dates every page today.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # A link to a page that does not exist fails here; see ignoreDeadLinks in the config.
+      - run: npm run docs:build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: manual/.vitepress/dist
+
+  deploy:
+    name: Publish to Pages
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

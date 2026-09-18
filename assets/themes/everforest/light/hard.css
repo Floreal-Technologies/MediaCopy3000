@@ -1,0 +1,68 @@
+/* Everforest Light Hard
+ *
+ * Palette: https://github.com/sainnhe/everforest (palette.md, light hard)
+ * The application picks this file from the Preferences dialog; it overrides the libadwaita colour
+ * variables, so every rule in `styles.css` follows it without an edit.
+ */
+:root {
+  --window-bg-color: #F2EFDF;
+  --window-fg-color: #5C6A72;
+  --view-bg-color: #FFFBEF;
+  --view-fg-color: #5C6A72;
+
+  --headerbar-bg-color: #FFFBEF;
+  --headerbar-fg-color: #5C6A72;
+  --headerbar-border-color: #5C6A72;
+  --headerbar-backdrop-color: #F2EFDF;
+  --headerbar-shade-color: rgb(0 0 6 / 12%);
+  --headerbar-darker-shade-color: rgb(0 0 6 / 12%);
+
+  --sidebar-bg-color: #FFFBEF;
+  --sidebar-fg-color: #5C6A72;
+  --sidebar-backdrop-color: #F2EFDF;
+  --sidebar-shade-color: rgb(0 0 6 / 7%);
+  --sidebar-border-color: rgb(0 0 6 / 12%);
+
+  --secondary-sidebar-bg-color: #F2EFDF;
+  --secondary-sidebar-fg-color: #5C6A72;
+  --secondary-sidebar-backdrop-color: #F2EFDF;
+  --secondary-sidebar-shade-color: rgb(0 0 6 / 7%);
+  --secondary-sidebar-border-color: rgb(0 0 6 / 12%);
+
+  --card-bg-color: #FFFBEF;
+  --card-fg-color: #5C6A72;
+  --card-shade-color: rgb(0 0 6 / 12%);
+
+  --dialog-bg-color: #FFFBEF;
+  --dialog-fg-color: #5C6A72;
+
+  --popover-bg-color: #FFFBEF;
+  --popover-fg-color: #5C6A72;
+  --popover-shade-color: rgb(0 0 6 / 7%);
+
+  --thumbnail-bg-color: #F8F5E4;
+  --thumbnail-fg-color: #5C6A72;
+
+  --shade-color: rgb(0 0 6 / 7%);
+  --scrollbar-outline-color: #ffffff;
+
+  --accent-bg-color: #3A94C5;
+  --accent-fg-color: #FFFBEF;
+  --accent-color: #3A94C5;
+
+  --success-bg-color: #8DA101;
+  --success-fg-color: #FFFBEF;
+  --success-color: #8DA101;
+
+  --warning-bg-color: #DFA000;
+  --warning-fg-color: #5C6A72;
+  --warning-color: #DFA000;
+
+  --error-bg-color: #F85552;
+  --error-fg-color: #FFFBEF;
+  --error-color: #F85552;
+
+  --destructive-bg-color: #F85552;
+  --destructive-fg-color: #FFFBEF;
+  --destructive-color: #F85552;
+}

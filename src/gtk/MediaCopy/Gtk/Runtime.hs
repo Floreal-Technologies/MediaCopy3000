@@ -1,0 +1,277 @@
+{-# LANGUAGE ImplicitParams #-}
+
+module MediaCopy.Gtk.Runtime
+  ( Runtime (..)
+  , start
+  , dispatch
+  ) where
+
+import Control.Concurrent.Async
+import Control.Exception
+import Control.Monad (forM_, void, when)
+import Data.GI.Base (AttrOp (On, (:=)), new, on)
+import Data.GI.Base.GError (catchGErrorJustDomain)
+import Data.IORef
+import Data.Text (Text)
+import Data.Text qualified as T
+import Data.Text.Display (display)
+import Data.Text.Encoding (encodeUtf8)
+import Data.Time (getCurrentTime)
+import Data.Vector (Vector)
+import Effectful (runEff)
+import Effectful.Time (runTime)
+import GI.Adw qualified as Adw
+import GI.GLib qualified as GLib
+import GI.Gio qualified as Gio
+import GI.Gtk qualified as Gtk
+import Network.HostName qualified as HostName
+import System.Exit (ExitCode (ExitFailure), exitWith)
+import System.File.OsPath (writeFile')
+import System.OsPath (OsPath, encodeFS)
+
+import MediaCopy.Domain.Job (JobEvent (..), JobId, JobSpec (..))
+import MediaCopy.Domain.Plan (JobPlan (..))
+import MediaCopy.Effects.Emit (runEmitIO)
+import MediaCopy.Effects.FileSystem (defaultChunkSize, runFileSystemIO)
+import MediaCopy.Effects.Hasher (runHasherIO)
+import MediaCopy.Engine
+import MediaCopy.EventLog (withEventLog)
+import MediaCopy.Gtk.Reload (Environment, loadCss, readEnvironment)
+import MediaCopy.Gtk.Screenshot (Startup (..), seeded)
+import MediaCopy.Gtk.Theme
+import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
+import MediaCopy.Interface.Theme (PaletteMode (..), ThemeSection, themeSections)
+import MediaCopy.Interface.Wording (noHistoryText)
+import MediaCopy.Model
+import MediaCopy.Report (renderPlanText)
+
+-- |  All the data needed by the runtime.
+data Runtime = Runtime
+  { modelRef :: IORef Model
+  , widgets :: Widgets
+  , engine :: IORef (Maybe (JobId, Async ()))
+  -- ^ One job at a time.
+  , themeAdapter :: ThemeAdapter
+  }
+
+-- | Entrypoint of the GUI.
+start :: Startup -> IO ()
+start startup = do
+  environment <- readEnvironment
+  runtimeRef <- newIORef Nothing
+  app <-
+    new
+      Adw.Application
+      [ #applicationId := "eu.choutri.MediaCopy3000"
+      , On #activate (activate runtimeRef environment startup ?self)
+      ]
+  status <- Gio.applicationRun app Nothing
+  when (status /= 0) (exitWith (ExitFailure (fromIntegral status)))
+
+-- | A second activation presents the window that exists. It builds no other window.
+activate :: IORef (Maybe Runtime) -> Environment -> Startup -> Adw.Application -> IO ()
+activate runtimeRef environment startup app =
+  readIORef runtimeRef >>= \case
+    Just runtime -> Gtk.windowPresent runtime.widgets.window
+    Nothing -> buildAndPresent runtimeRef environment startup app
+
+buildAndPresent
+  :: IORef (Maybe Runtime)
+  -> Environment
+  -> Startup
+  -> Adw.Application
+  -> IO ()
+buildAndPresent runtimeRef environment startup app = do
+  startedAt <- getCurrentTime
+  themeAdapter <- newThemeAdapter
+  desktop <- readDesktopBase themeAdapter
+  modelRef <- newIORef (initialModel startedAt desktop)
+  engine <- newIORef Nothing
+  -- The widgets need a dispatcher and the dispatcher needs the runtime that holds them.
+  let dispatchNow msg =
+        readIORef runtimeRef >>= \case
+          Nothing -> pure ()
+          Just runtime -> dispatch runtime msg
+  -- The interface can only express an intent. Every other message comes from here.
+  (lightSections, darkSections) <- loadThemeSections
+  widgets <- buildWidgets app (apply themeAdapter) lightSections darkSections (\intent -> dispatchNow (Ui intent))
+  loadCss environment
+  let runtime = Runtime {modelRef, widgets, engine, themeAdapter}
+  writeIORef runtimeRef (Just runtime)
+  -- The idle queue keeps the report out of the notification 'apply' itself
+  -- causes.
+  onDesktopBase themeAdapter (\observed -> postMessage runtime (DesktopBase observed))
+  installCloseRequest widgets.window dispatchNow
+  installTicker startup dispatchNow
+  model <- readIORef modelRef
+  widgets.render model
+  Gtk.windowPresent widgets.window
+  -- A frame is a whole model, and a render dresses the window from it.
+  let showFrame frame = do
+        writeIORef modelRef frame
+        widgets.render frame
+  seeded widgets.window app showFrame startup
+
+-- | Main-thread entry point. GTK signal handlers already run on the GTK thread.
+dispatch :: Runtime -> Message -> IO ()
+dispatch runtime msg = do
+  old <- readIORef runtime.modelRef
+  let (current, cmds) = update msg old
+  writeIORef runtime.modelRef current
+  runtime.widgets.render current
+  mapM_ (\cmd -> guarded runtime (runCommand runtime cmd)) cmds
+
+-- | `postMessage` is the only entry into the model from a worker thread.
+postMessage :: Runtime -> Message -> IO ()
+postMessage runtime msg =
+  void (GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE (dispatch runtime msg >> pure False))
+
+--  | An IO failure inside a GTK callback can abort the process, so it becomes a
+-- toast instead.
+guarded :: Runtime -> IO () -> IO ()
+guarded runtime action =
+  try @SomeException action >>= \case
+    Left err -> case fromException @SomeAsyncException err of
+      Just _ -> throwIO err
+      Nothing -> postMessage runtime (ShowToast (T.pack (displayException err)))
+    Right () -> pure ()
+
+runCommand :: Runtime -> Command -> IO ()
+runCommand runtime = \case
+  OpenFolderDialog toMessage -> openFolderDialog runtime toMessage
+  OpenSaveDialog title suggested toMessage -> openSaveDialog runtime title suggested toMessage
+  ComputePlan spec -> planWorker runtime spec
+  StartJob plan -> startJob runtime plan
+  CancelRunning jobId ->
+    readIORef runtime.engine >>= \case
+      Just (held, worker)
+        -- 'cancel' waits for the thread to finish, and the GTK loop must not.
+        | held == jobId -> void (async (cancel worker))
+      _ -> pure ()
+  LoadHistory jobId folder -> loadHistory runtime jobId folder
+  WriteFile path text -> writeFile' path (encodeUtf8 text)
+  -- 'windowDestroy', not 'windowClose': the handler that asked for this blocks a close.
+  CloseWindow -> Gtk.windowDestroy runtime.widgets.window
+
+-- | The palettes the asset tree holds, split into the two lists the Preferences dialog shows.
+loadThemeSections :: IO (Vector ThemeSection, Vector ThemeSection)
+loadThemeSections = do
+  palettes <- loadPalettes
+  pure (themeSections LightPalette palettes, themeSections DarkPalette palettes)
+
+-- | The window never closes itself: the close becomes a message, and the handler blocks the close.
+installCloseRequest :: Adw.ApplicationWindow -> (Message -> IO ()) -> IO ()
+installCloseRequest window dispatchNow =
+  void $ on window #closeRequest $ do
+    dispatchNow (Ui RequestClose)
+    pure True
+
+-- | A seeded run holds the clock still, because a tick resamples the copy rate against bytes that
+-- cannot move. The picture then loses the rate the seed gives it.
+installTicker :: Startup -> (Message -> IO ()) -> IO ()
+installTicker startup dispatchNow =
+  when (null startup.frames) $
+    void
+      ( GLib.timeoutAdd
+          GLib.PRIORITY_DEFAULT
+          1_000
+          ( getCurrentTime >>= \t ->
+              dispatchNow (Tick t) >> pure True
+          )
+      )
+
+openFolderDialog :: Runtime -> (OsPath -> Message) -> IO ()
+openFolderDialog runtime toMessage = do
+  dialog <- new Gtk.FileDialog [#title := "Choose a Folder"]
+  Gtk.fileDialogSelectFolder dialog (Just runtime.widgets.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
+    guarded runtime (sendPicked runtime toMessage (Gtk.fileDialogSelectFolderFinish dialog result))
+
+openSaveDialog :: Runtime -> Text -> Text -> (OsPath -> Message) -> IO ()
+openSaveDialog runtime title suggested toMessage = do
+  dialog <- new Gtk.FileDialog [#title := title, #initialName := suggested]
+  Gtk.fileDialogSave dialog (Just runtime.widgets.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
+    guarded runtime (sendPicked runtime toMessage (Gtk.fileDialogSaveFinish dialog result))
+
+-- | Starts the engine on a plan. A second thread behind it frees the slot and reports a failure
+-- the engine could not report itself.
+startJob :: Runtime -> JobPlan -> IO ()
+startJob runtime plan = do
+  let spec = plan.spec
+  host <- HostName.getHostName
+  let config = defaultToolInfo {hostname = T.pack host}
+  let sink event = postMessage runtime (EngineEvent spec.jobId event)
+  previous <- readIORef runtime.engine
+  worker <- async $ do
+    -- At most one engine runs at a time. The model frees its slot on the terminal event,
+    -- which the engine emits before it unwinds. As a result, the engine before this one can still
+    -- close its handles.
+    mapM_ (\held -> void (waitCatch (snd held))) previous
+    withEventLog spec (renderPlanText spec plan) $ \logPath logLine -> do
+      forM_ logPath (\p -> sink (LogOpened p))
+      runEff (runFileSystemIO defaultChunkSize (runHasherIO (runTime (runEmitIO (\ev -> logLine ev >> sink ev) (executePlan config plan)))))
+  writeIORef runtime.engine (Just (spec.jobId, worker))
+  void $ async $ do
+    outcome <- waitCatch worker
+    case outcome of
+      Left err
+        | not (wasCancelled err) ->
+            postMessage runtime (EngineEvent spec.jobId (JobFailed (T.pack (displayException err))))
+      _ -> pure ()
+    atomicModifyIORef' runtime.engine (\held -> (clearWhen spec.jobId held, ()))
+
+loadHistory :: Runtime -> JobId -> OsPath -> IO ()
+loadHistory runtime jobId folder = void $ async $ do
+  loaded <- runEff (runFileSystemIO defaultChunkSize (readHistory folder))
+  case loaded of
+    Left e -> postMessage runtime (ShowToast (display e))
+    Right Nothing -> postMessage runtime (ShowToast (noHistoryText folder))
+    Right (Just hist) -> postMessage runtime (HistoryLoaded jobId hist)
+
+-- | The plan phase runs off the GTK thread, because 'walk' on a full media source takes seconds.
+planWorker :: Runtime -> JobSpec -> IO ()
+planWorker runtime spec =
+  void $ async $ do
+    attempt <- try @SomeException (runEff (runFileSystemIO defaultChunkSize (planJob spec)))
+    case attempt of
+      Left err -> case fromException @SomeAsyncException err of
+        Just _ -> throwIO err
+        Nothing -> postMessage runtime (PlanComputed spec (Left (T.pack (displayException err))))
+      Right plan -> postMessage runtime (PlanComputed spec (Right plan))
+
+-- | Only the job that filled the slot can empty it, so a job that started meanwhile stays.
+clearWhen :: JobId -> Maybe (JobId, Async ()) -> Maybe (JobId, Async ())
+clearWhen finished held = case held of
+  Just (jobId, _) | jobId == finished -> Nothing
+  _ -> held
+
+-- | The model already marks a cancelled job, so its `AsyncCancelled` needs no event.
+wasCancelled :: SomeException -> Bool
+wasCancelled err = case fromException err of
+  Just AsyncCancelled -> True
+  Nothing -> False
+
+class PickedFile file where
+  pickedFile :: file -> Maybe Gio.File
+
+instance PickedFile Gio.File where
+  pickedFile = Just
+
+instance PickedFile (Maybe Gio.File) where
+  pickedFile = id
+
+sendPicked :: (PickedFile file) => Runtime -> (OsPath -> Message) -> IO file -> IO ()
+sendPicked runtime toMessage finish =
+  catchGErrorJustDomain
+    (finish >>= \picked -> mapM_ (sendPath runtime toMessage) (pickedFile picked))
+    (\dialogError message -> reportDialogError runtime dialogError message)
+
+reportDialogError :: Runtime -> Gtk.DialogError -> Text -> IO ()
+reportDialogError runtime dialogError message = case dialogError of
+  (Gtk.DialogErrorCancelled; Gtk.DialogErrorDismissed) -> pure ()
+  _ -> postMessage runtime (ShowToast message)
+
+sendPath :: Runtime -> (OsPath -> Message) -> Gio.File -> IO ()
+sendPath runtime toMessage file =
+  Gio.fileGetPath file >>= \case
+    Nothing -> postMessage runtime (ShowToast "Chosen location has no filesystem path")
+    Just raw -> encodeFS raw >>= \path -> postMessage runtime (toMessage path)

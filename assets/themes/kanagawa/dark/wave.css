@@ -1,0 +1,68 @@
+/* Kanagawa Wave
+ *
+ * Palette: https://github.com/rebelot/kanagawa.nvim (lua/kanagawa/colors.lua, palette)
+ * The application picks this file from the Preferences dialog; it overrides the libadwaita colour
+ * variables, so every rule in `styles.css` follows it without an edit.
+ */
+:root {
+  --window-bg-color: #1F1F28;
+  --window-fg-color: #DCD7BA;
+  --view-bg-color: #16161D;
+  --view-fg-color: #DCD7BA;
+
+  --headerbar-bg-color: #2A2A37;
+  --headerbar-fg-color: #DCD7BA;
+  --headerbar-border-color: #DCD7BA;
+  --headerbar-backdrop-color: #1F1F28;
+  --headerbar-shade-color: rgb(0 0 6 / 36%);
+  --headerbar-darker-shade-color: rgb(0 0 12 / 90%);
+
+  --sidebar-bg-color: #2A2A37;
+  --sidebar-fg-color: #DCD7BA;
+  --sidebar-backdrop-color: #1F1F28;
+  --sidebar-shade-color: rgb(0 0 6 / 25%);
+  --sidebar-border-color: rgb(0 0 6 / 36%);
+
+  --secondary-sidebar-bg-color: #16161D;
+  --secondary-sidebar-fg-color: #DCD7BA;
+  --secondary-sidebar-backdrop-color: #1F1F28;
+  --secondary-sidebar-shade-color: rgb(0 0 6 / 25%);
+  --secondary-sidebar-border-color: rgb(0 0 6 / 36%);
+
+  --card-bg-color: #2A2A37;
+  --card-fg-color: #DCD7BA;
+  --card-shade-color: rgb(0 0 6 / 36%);
+
+  --dialog-bg-color: #2A2A37;
+  --dialog-fg-color: #DCD7BA;
+
+  --popover-bg-color: #2A2A37;
+  --popover-fg-color: #DCD7BA;
+  --popover-shade-color: rgb(0 0 6 / 25%);
+
+  --thumbnail-bg-color: #363646;
+  --thumbnail-fg-color: #DCD7BA;
+
+  --shade-color: rgb(0 0 6 / 25%);
+  --scrollbar-outline-color: rgb(0 0 12 / 95%);
+
+  --accent-bg-color: #7E9CD8;
+  --accent-fg-color: #1F1F28;
+  --accent-color: #7E9CD8;
+
+  --success-bg-color: #98BB6C;
+  --success-fg-color: #1F1F28;
+  --success-color: #98BB6C;
+
+  --warning-bg-color: #FF9E3B;
+  --warning-fg-color: #1F1F28;
+  --warning-color: #FF9E3B;
+
+  --error-bg-color: #E82424;
+  --error-fg-color: #1F1F28;
+  --error-color: #E82424;
+
+  --destructive-bg-color: #E82424;
+  --destructive-fg-color: #1F1F28;
+  --destructive-color: #E82424;
+}

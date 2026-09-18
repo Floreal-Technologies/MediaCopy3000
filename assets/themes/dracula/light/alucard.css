@@ -1,0 +1,68 @@
+/* Alucard
+ *
+ * Palette: https://draculatheme.com/spec (Alucard, the light complement of Dracula)
+ * The application picks this file from the Preferences dialog; it overrides the libadwaita colour
+ * variables, so every rule in `styles.css` follows it without an edit.
+ */
+:root {
+  --window-bg-color: #ECE9DF;
+  --window-fg-color: #1F1F1F;
+  --view-bg-color: #FFFBEB;
+  --view-fg-color: #1F1F1F;
+
+  --headerbar-bg-color: #FFFBEB;
+  --headerbar-fg-color: #1F1F1F;
+  --headerbar-border-color: #1F1F1F;
+  --headerbar-backdrop-color: #ECE9DF;
+  --headerbar-shade-color: rgb(0 0 6 / 12%);
+  --headerbar-darker-shade-color: rgb(0 0 6 / 12%);
+
+  --sidebar-bg-color: #FFFBEB;
+  --sidebar-fg-color: #1F1F1F;
+  --sidebar-backdrop-color: #ECE9DF;
+  --sidebar-shade-color: rgb(0 0 6 / 7%);
+  --sidebar-border-color: rgb(0 0 6 / 12%);
+
+  --secondary-sidebar-bg-color: #DEDCCF;
+  --secondary-sidebar-fg-color: #1F1F1F;
+  --secondary-sidebar-backdrop-color: #ECE9DF;
+  --secondary-sidebar-shade-color: rgb(0 0 6 / 7%);
+  --secondary-sidebar-border-color: rgb(0 0 6 / 12%);
+
+  --card-bg-color: #FFFBEB;
+  --card-fg-color: #1F1F1F;
+  --card-shade-color: rgb(0 0 6 / 12%);
+
+  --dialog-bg-color: #EFEDDC;
+  --dialog-fg-color: #1F1F1F;
+
+  --popover-bg-color: #EFEDDC;
+  --popover-fg-color: #1F1F1F;
+  --popover-shade-color: rgb(0 0 6 / 7%);
+
+  --thumbnail-bg-color: #CECCC0;
+  --thumbnail-fg-color: #1F1F1F;
+
+  --shade-color: rgb(0 0 6 / 7%);
+  --scrollbar-outline-color: #ffffff;
+
+  --accent-bg-color: #644AC9;
+  --accent-fg-color: #FFFBEB;
+  --accent-color: #644AC9;
+
+  --success-bg-color: #14710A;
+  --success-fg-color: #FFFBEB;
+  --success-color: #14710A;
+
+  --warning-bg-color: #846E15;
+  --warning-fg-color: #FFFBEB;
+  --warning-color: #846E15;
+
+  --error-bg-color: #CB3A2A;
+  --error-fg-color: #FFFBEB;
+  --error-color: #CB3A2A;
+
+  --destructive-bg-color: #CB3A2A;
+  --destructive-fg-color: #FFFBEB;
+  --destructive-color: #CB3A2A;
+}

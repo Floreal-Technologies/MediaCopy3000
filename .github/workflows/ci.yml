@@ -1,0 +1,499 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+
+jobs:
+  generate-matrix:
+    name: 'Generate matrix from cabal'
+    outputs:
+      test-matrix: ${{ steps.set-test-matrix.outputs.matrix }}
+      release-matrix: ${{ steps.extend-release-matrix.outputs.matrix }}
+      primary: ${{ steps.primary.outputs.entry }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract the tested GHC versions (tests)
+        id: set-test-matrix
+        uses: kleidukos/get-tested@v0.1.10.0
+        with:
+          cabal-file: mediacopy3000.cabal
+          ubuntu-version: '24.04,26.04'
+          version: 0.1.10.0
+
+      - name: Pick the runner for the conformance suite
+        id: primary
+        env:
+          MATRIX: ${{ steps.set-test-matrix.outputs.matrix }}
+        run: |
+          echo "entry=$(jq -c '.include[0]' <<< "$MATRIX")" >> "$GITHUB_OUTPUT"
+
+      - name: Extract the tested GHC versions (packages)
+        id: set-release-matrix
+        uses: kleidukos/get-tested@v0.1.10.0
+        with:
+          cabal-file: mediacopy3000.cabal
+          ubuntu-version: '24.04,26.04'
+          macos-version: 'latest'
+          version: 0.1.10.0
+
+      - name: Add the aarch64 Ubuntu runners to the release matrix
+        id: extend-release-matrix
+        env:
+          MATRIX: ${{ steps.set-release-matrix.outputs.matrix }}
+        run: |
+          echo "matrix=$(jq -c '.include += [.include[] | select(.os | startswith("ubuntu-")) | .os += "-arm"]' <<< "$MATRIX")" >> "$GITHUB_OUTPUT"
+
+  tests:
+    name: ${{ matrix.ghc }} on ${{ matrix.os }}
+    needs: generate-matrix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.test-matrix) }}
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Haskell
+      id: setup-haskell
+      uses: haskell-actions/setup@v2
+      with:
+        ghc-version: ${{ matrix.ghc }}
+        cabal-version: ${{ matrix.cabal }}
+
+    - name: Configure environment
+      run: |
+        sudo apt update
+        sudo apt install -y \
+          libadwaita-1-dev \
+          libcairo2-dev \
+          libfreetype-dev \
+          libgdk-pixbuf-2.0-dev \
+          libgirepository1.0-dev \
+          libglib2.0-dev \
+          libgraphene-1.0-dev \
+          libgtk-4-dev \
+          libharfbuzz-dev \
+          liblzma-dev \
+          libpango1.0-dev \
+          libxxhash-dev \
+          zlib1g-dev
+        echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
+        echo "$HOME/.cabal/bin" >> $GITHUB_PATH
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+        cabal update
+        cabal build --dry-run all
+
+    - name: Cache
+      uses: actions/cache@v6
+      with:
+        path: ${{ steps.setup-haskell.outputs.cabal-store }}
+        key: ${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ hashFiles('**/plan.json') }}
+        restore-keys: ${{ runner.os }}-ghc-${{ matrix.ghc }}-
+
+    - name: Build
+      run: |
+        cabal build all
+
+    - name: Test
+      run: |
+        cabal test core-test ascmhl-test
+
+    - name: Set up just
+      uses: extractions/setup-just@v4
+      with:
+        just-version: '1.58.0'
+
+    - name: Install doctest
+      run: |
+        cabal install doctest-0.25.0 \
+          --ignore-project \
+          --with-compiler=ghc-9.14.1 \
+          --overwrite-policy=always
+
+    - name: Doctest
+      run: |
+        just doctest
+
+  tests-windows:
+    name: 9.14.1 on windows-latest
+    runs-on: windows-latest
+    steps:
+    # Before the checkout. Otherwise git writes CRLF and the MSYS2 tools fail on it.
+    - name: Keep the line endings the repository uses
+      run: git config --global core.autocrlf input
+
+    - uses: actions/checkout@v7
+
+    - name: Set up Haskell
+      id: setup-haskell
+      uses: haskell-actions/setup@v2
+      with:
+        ghc-version: '9.14.1'
+
+    # Into the MSYS2 that GHCup uses. The runner image installs GHCup with
+    # GHCUP_MSYS2=C:\msys64, so GHCup's MSYS2 is the pre-installed one. A second MSYS2 beside
+    # it is what the Cabal manual names as the source of undecipherable errors.
+    - name: Install the GTK stack into GHCup's MSYS2
+      shell: pwsh
+      run: |
+        $msys = if ($env:GHCUP_MSYS2) { $env:GHCUP_MSYS2 } else { 'C:\msys64' }
+        $pacman = "$msys\usr\bin\pacman.exe"
+        if (-not (Test-Path $pacman)) { throw "no pacman at $pacman" }
+        & $pacman -S --noconfirm --needed `
+          mingw-w64-ucrt-x86_64-gtk4 `
+          mingw-w64-ucrt-x86_64-libadwaita `
+          mingw-w64-ucrt-x86_64-pkgconf `
+          mingw-w64-ucrt-x86_64-gobject-introspection `
+          mingw-w64-ucrt-x86_64-xxhash `
+          mingw-w64-ucrt-x86_64-ntldd
+        if ($LASTEXITCODE -ne 0) { throw "pacman failed with $LASTEXITCODE" }
+
+    - name: Configure environment
+      shell: pwsh
+      run: |
+        $msys = if ($env:GHCUP_MSYS2) { $env:GHCUP_MSYS2 } else { 'C:\msys64' }
+        $ucrt = "$msys\ucrt64"
+        # GITHUB_PATH and GITHUB_ENV reach the next step, and cabal runs in this one.
+        $env:PATH = "$ucrt\bin;$env:PATH"
+        $env:PKG_CONFIG_PATH = "$ucrt\lib\pkgconfig"
+        "$ucrt\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+        "PKG_CONFIG_PATH=$ucrt\lib\pkgconfig" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+        "XDG_DATA_DIRS=$ucrt\share" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+        @"
+        package *
+          extra-include-dirs: $ucrt\include
+          extra-lib-dirs: $ucrt\lib
+        "@ | Out-File -FilePath cabal.project.local -Encoding utf8
+        cabal update
+        cabal build --dry-run all
+
+    - name: Cache
+      uses: actions/cache@v6
+      with:
+        path: ${{ steps.setup-haskell.outputs.cabal-store }}
+        key: ${{ runner.os }}-ghc-9.14.1-${{ hashFiles('**/plan.json') }}
+        restore-keys: ${{ runner.os }}-ghc-9.14.1-
+
+    - name: Build
+      run: cabal build exe:mediacopy3000
+
+    - name: Test
+      run: cabal test core-test ascmhl-test
+
+    # Prints the libadwaita version the build resolved, and the number of libraries the
+    # installer has to carry. Both are wanted when the packaging job is read.
+    - name: Report what the build resolved
+      shell: pwsh
+      run: |
+        pkg-config --modversion gtk4 libadwaita-1
+        $exe = (Get-ChildItem -Recurse -Filter mediacopy3000.exe dist-newstyle | Select-Object -First 1).FullName
+        $count = (& ntldd -R $exe | Select-String -NotMatch 'C:\\Windows').Count
+        Write-Host "non-system libraries: $count"
+
+  conformance:
+    name: Conformance against the ASC MHL reference tool
+    needs: generate-matrix
+    runs-on: ${{ fromJSON(needs.generate-matrix.outputs.primary).os }}
+    env:
+      MEDIACOPY_CONFORMANCE: required
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Haskell
+      id: setup-haskell
+      uses: haskell-actions/setup@v2
+      with:
+        ghc-version: ${{ fromJSON(needs.generate-matrix.outputs.primary).ghc }}
+        cabal-version: ${{ fromJSON(needs.generate-matrix.outputs.primary).cabal }}
+
+    - name: Configure environment
+      run: |
+        sudo apt update
+        sudo apt install -y \
+          libadwaita-1-dev \
+          libcairo2-dev \
+          libfreetype-dev \
+          libgdk-pixbuf-2.0-dev \
+          libgirepository1.0-dev \
+          libglib2.0-dev \
+          libgraphene-1.0-dev \
+          libgtk-4-dev \
+          libharfbuzz-dev \
+          liblzma-dev \
+          libpango1.0-dev \
+          libxxhash-dev \
+          zlib1g-dev
+        echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
+        echo "$HOME/.cabal/bin" >> $GITHUB_PATH
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+        cabal update
+        cabal build --dry-run all
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
+
+    - name: Install the ASC MHL reference tool
+      run: ./scripts/install-ascmhl.sh
+
+    - name: Cache
+      uses: actions/cache@v6
+      with:
+        path: ${{ steps.setup-haskell.outputs.cabal-store }}
+        key: conformance-${{ runner.os }}-ghc-${{ fromJSON(needs.generate-matrix.outputs.primary).ghc }}-${{ hashFiles('**/plan.json') }}
+        restore-keys: conformance-${{ runner.os }}-ghc-${{ fromJSON(needs.generate-matrix.outputs.primary).ghc }}-
+
+    - name: Build
+      run: |
+        cabal build conformance-test
+
+    - name: Test
+      run: |
+        cabal test conformance-test
+
+  packages:
+    name: Packages with ${{ matrix.ghc }} on ${{ matrix.os }}
+    if: github.event_name == 'push'
+    needs: [generate-matrix, tests, conformance]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.release-matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Haskell
+        id: setup-haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{ matrix.ghc }}
+          cabal-version: 'latest'
+
+      - name: Configure environment (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            libadwaita-1-dev \
+            libcairo2-dev \
+            libfreetype-dev \
+            libgdk-pixbuf-2.0-dev \
+            libgirepository1.0-dev \
+            libglib2.0-dev \
+            libgraphene-1.0-dev \
+            libgtk-4-dev \
+            libharfbuzz-dev \
+            liblzma-dev \
+            libpango1.0-dev \
+            libxxhash-dev \
+            zlib1g-dev \
+            rpm \
+            zstd \
+            libarchive-tools \
+            ruby-full \
+            flatpak \
+            flatpak-builder
+          sudo gem install fpm
+          flatpak remote-add --user --if-not-exists flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+          cabal update
+          cabal freeze --project-file=cabal.release.project
+
+      - name: Configure environment (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install gtk4 libadwaita gobject-introspection pkgconf xxhash dylibbundler librsvg
+          cabal update
+          cabal freeze --project-file=cabal.release.project
+
+      - name: Cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.setup-haskell.outputs.cabal-store }}
+          key: release-${{ matrix.os }}-ghc-${{ matrix.ghc }}-${{ hashFiles('**/plan.json') }}
+          restore-keys: release-${{ matrix.os }}-ghc-${{ matrix.ghc }}-
+
+      - name: Cache flatpak runtimes
+        if: startsWith(matrix.os, 'ubuntu-24.04')
+        uses: actions/cache@v6
+        with:
+          path: ~/.local/share/flatpak
+          key: flatpak-runtimes-${{ matrix.os }}-${{ runner.arch }}-${{ hashFiles('packaging/flatpak/eu.choutri.MediaCopy3000.yml') }}
+
+      - name: Build packages
+        run: |
+          FORMATS=()
+          case "${{ matrix.os }}" in
+            ubuntu-26.04*) FORMATS=(deb rpm pacman) ;;
+            ubuntu-24.04*) FORMATS=(deb flatpak tarball) ;;
+          esac
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            ./scripts/package.sh -v "${GITHUB_REF_NAME#v}" ${FORMATS[@]+"${FORMATS[@]}"}
+          else
+            ./scripts/package.sh -v head ${FORMATS[@]+"${FORMATS[@]}"}
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages-${{ matrix.os }}-${{ runner.arch }}
+          path: dist-package/out/*
+          if-no-files-found: error
+
+  package-windows:
+    name: MSI on windows-latest
+    if: github.event_name == 'push'
+    needs: [tests-windows, conformance]
+    runs-on: windows-latest
+    steps:
+      - name: Keep the line endings the repository uses
+        run: git config --global core.autocrlf input
+
+      - uses: actions/checkout@v7
+
+      - name: Set up Haskell
+        id: setup-haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.14.1'
+
+      - name: Install the GTK stack into GHCup's MSYS2
+        shell: pwsh
+        run: |
+          $msys = if ($env:GHCUP_MSYS2) { $env:GHCUP_MSYS2 } else { 'C:\msys64' }
+          $pacman = "$msys\usr\bin\pacman.exe"
+          if (-not (Test-Path $pacman)) { throw "no pacman at $pacman" }
+          & $pacman -S --noconfirm --needed `
+            mingw-w64-ucrt-x86_64-gtk4 `
+            mingw-w64-ucrt-x86_64-libadwaita `
+            mingw-w64-ucrt-x86_64-pkgconf `
+            mingw-w64-ucrt-x86_64-gobject-introspection `
+            mingw-w64-ucrt-x86_64-xxhash `
+            mingw-w64-ucrt-x86_64-ntldd
+          if ($LASTEXITCODE -ne 0) { throw "pacman failed with $LASTEXITCODE" }
+
+      - name: Configure environment
+        shell: pwsh
+        run: |
+          $msys = if ($env:GHCUP_MSYS2) { $env:GHCUP_MSYS2 } else { 'C:\msys64' }
+          $ucrt = "$msys\ucrt64"
+          # GITHUB_PATH and GITHUB_ENV reach the next step, and cabal runs in this one.
+          $env:PATH = "$ucrt\bin;$env:PATH"
+          $env:PKG_CONFIG_PATH = "$ucrt\lib\pkgconfig"
+          "$ucrt\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          "PKG_CONFIG_PATH=$ucrt\lib\pkgconfig" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          @"
+          package *
+            extra-include-dirs: $ucrt\include
+            extra-lib-dirs: $ucrt\lib
+          "@ | Out-File -FilePath cabal.project.local -Encoding utf8
+          cabal update
+          cabal build --dry-run all
+
+      - name: Cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.setup-haskell.outputs.cabal-store }}
+          key: ${{ runner.os }}-ghc-9.14.1-${{ hashFiles('**/plan.json') }}
+          restore-keys: ${{ runner.os }}-ghc-9.14.1-
+
+      - name: Build
+        run: cabal build exe:mediacopy3000
+
+      - name: Stage the tree and build the MSI
+        shell: pwsh
+        run: ./scripts/package.ps1 -Version 0.1.0
+
+      # No elevation. A per-user package that needs an administrator is a broken package.
+      - name: Install it
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem dist-package/out -Filter *.msi | Select-Object -First 1).FullName
+          Start-Process msiexec.exe -Wait -ArgumentList "/i `"$msi`" /qn /l*v install.log MSIINSTALLPERUSER=1"
+          $exe = "$env:LOCALAPPDATA\Programs\MediaCopy 3000\mediacopy3000.exe"
+          if (-not (Test-Path $exe)) { Get-Content install.log -Tail 40; throw "not installed at $exe" }
+
+      # app/Main.hs answers --help itself and exits 0 without opening a window, so this
+      # works on a runner with no screen.
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          & "$env:LOCALAPPDATA\Programs\MediaCopy 3000\mediacopy3000.exe" --help
+          if ($LASTEXITCODE -ne 0) { throw "--help exited $LASTEXITCODE" }
+
+      - name: Uninstall
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem dist-package/out -Filter *.msi | Select-Object -First 1).FullName
+          Start-Process msiexec.exe -Wait -ArgumentList "/x `"$msi`" /qn"
+          $exe = "$env:LOCALAPPDATA\Programs\MediaCopy 3000\mediacopy3000.exe"
+          if (Test-Path $exe) { throw "still installed after /x" }
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-windows-latest-${{ runner.arch }}
+          path: dist-package/out/*
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: [packages, package-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: packages
+          merge-multiple: true
+
+      - name: Sign packages
+        uses: thomasdesr/minisign-action@68f9ff8e1074691a178b8ceb098d3d056aac54a3 # v1.4
+        with:
+          args: -Sm packages/*
+          minisign_key: ${{ secrets.MINISIGN_SECRET_KEY }}
+          password: ${{ secrets.MINISIGN_PASSWORD }}
+
+      - name: Add public key to release assets
+        run: cp packaging/mc3k-release.pub packages/
+
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --verify-tag \
+            packages/*
+
+      - name: Update rolling head release
+        if: github.ref == 'refs/heads/main'
+        env:
+          TAG: mediacopy3000-head
+          RELEASES: repos/${{ github.repository }}/releases
+        run: |
+          drafts() {
+            gh api "$RELEASES" --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id"
+          }
+          for id in $(drafts); do
+            gh api -X DELETE "$RELEASES/$id"
+          done
+          gh release create "$TAG" \
+            --draft \
+            --prerelease \
+            --title "$TAG" \
+            --notes "Rolling build of the latest commit on main." \
+            packages/*
+          draft_id="$(drafts)"
+          : "${draft_id:?no draft release found after upload}"
+          if published_id="$(gh api "$RELEASES/tags/$TAG" --jq .id 2>/dev/null)"; then
+            gh api -X DELETE "$RELEASES/$published_id"
+          fi
+          git tag -f "$TAG"
+          git push -f origin "$TAG"
+          gh api -X PATCH "$RELEASES/$draft_id" -F draft=false

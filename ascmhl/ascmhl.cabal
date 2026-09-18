@@ -1,0 +1,98 @@
+cabal-version: 3.4
+name: ascmhl
+version: 0.1.0.0
+synopsis: The ASC Media Hash List manifest format, read and written
+description:
+  The types, reader and writer of ASC MHL v2.0, and the layout of an @ascmhl\/@ folder.
+  The library is pure: it holds no effect, opens no file and knows nothing of the application
+  that uses it.
+
+license: GPL-3.0-only
+license-file: LICENSE
+author: Feriel Choutri de Tarlé
+maintainer: feriel@choutri.eu
+category: Codec
+build-type: Simple
+extra-source-files:
+  test/fixtures/**/*.mhl
+  test/fixtures/**/*.xml
+
+tested-with: ghc ==9.14.1
+
+common options
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wpartial-fields
+    -Wredundant-constraints
+    -fhide-source-paths
+    -Wno-unused-do-bind
+    -fshow-hole-constraints
+    -Wno-unticked-promoted-constructors
+    -fwrite-ide-info
+
+  default-extensions:
+    DuplicateRecordFields
+    NoFieldSelectors
+    NoStarIsType
+    OrPatterns
+    OverloadedLabels
+    OverloadedRecordDot
+    OverloadedStrings
+    StrictData
+    TypeFamilies
+    ViewPatterns
+
+  default-language: GHC2024
+
+library
+  import: options
+  hs-source-dirs: src
+  exposed-modules:
+    Ascmhl.Build
+    Ascmhl.Hash
+    Ascmhl.Layout
+    Ascmhl.Path
+    Ascmhl.Read
+    Ascmhl.Types
+    Ascmhl.Write
+
+  other-modules: Ascmhl.Schema
+  build-depends:
+    base,
+    bytestring,
+    containers,
+    filepath,
+    os-string,
+    text,
+    text-display,
+    time,
+    vector,
+    xml-conduit,
+
+test-suite ascmhl-test
+  import: options
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Main.hs
+  other-modules:
+    Ascmhl.HashTest
+    Ascmhl.PathTest
+    Ascmhl.RoundTripTest
+
+  build-depends:
+    ascmhl,
+    base,
+    bytestring,
+    containers,
+    cryptohash-sha512,
+    tasty,
+    tasty-hunit,
+    text,
+    text-display,
+    time,
+    vector,
+    xml-conduit,

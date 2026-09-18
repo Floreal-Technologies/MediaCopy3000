@@ -1,0 +1,68 @@
+/* Catppuccin Mocha
+ *
+ * Palette: https://github.com/catppuccin/palette (palette.json, mocha)
+ * The application picks this file from the Preferences dialog; it overrides the libadwaita colour
+ * variables, so every rule in `styles.css` follows it without an edit.
+ */
+:root {
+  --window-bg-color: #1e1e2e;
+  --window-fg-color: #cdd6f4;
+  --view-bg-color: #181825;
+  --view-fg-color: #cdd6f4;
+
+  --headerbar-bg-color: #313244;
+  --headerbar-fg-color: #cdd6f4;
+  --headerbar-border-color: #cdd6f4;
+  --headerbar-backdrop-color: #1e1e2e;
+  --headerbar-shade-color: rgb(0 0 6 / 36%);
+  --headerbar-darker-shade-color: rgb(0 0 12 / 90%);
+
+  --sidebar-bg-color: #313244;
+  --sidebar-fg-color: #cdd6f4;
+  --sidebar-backdrop-color: #1e1e2e;
+  --sidebar-shade-color: rgb(0 0 6 / 25%);
+  --sidebar-border-color: rgb(0 0 6 / 36%);
+
+  --secondary-sidebar-bg-color: #11111b;
+  --secondary-sidebar-fg-color: #cdd6f4;
+  --secondary-sidebar-backdrop-color: #1e1e2e;
+  --secondary-sidebar-shade-color: rgb(0 0 6 / 25%);
+  --secondary-sidebar-border-color: rgb(0 0 6 / 36%);
+
+  --card-bg-color: #313244;
+  --card-fg-color: #cdd6f4;
+  --card-shade-color: rgb(0 0 6 / 36%);
+
+  --dialog-bg-color: #313244;
+  --dialog-fg-color: #cdd6f4;
+
+  --popover-bg-color: #313244;
+  --popover-fg-color: #cdd6f4;
+  --popover-shade-color: rgb(0 0 6 / 25%);
+
+  --thumbnail-bg-color: #45475a;
+  --thumbnail-fg-color: #cdd6f4;
+
+  --shade-color: rgb(0 0 6 / 25%);
+  --scrollbar-outline-color: rgb(0 0 12 / 95%);
+
+  --accent-bg-color: #89b4fa;
+  --accent-fg-color: #11111b;
+  --accent-color: #89b4fa;
+
+  --success-bg-color: #a6e3a1;
+  --success-fg-color: #11111b;
+  --success-color: #a6e3a1;
+
+  --warning-bg-color: #f9e2af;
+  --warning-fg-color: #11111b;
+  --warning-color: #f9e2af;
+
+  --error-bg-color: #f38ba8;
+  --error-fg-color: #11111b;
+  --error-color: #f38ba8;
+
+  --destructive-bg-color: #f38ba8;
+  --destructive-fg-color: #11111b;
+  --destructive-color: #f38ba8;
+}

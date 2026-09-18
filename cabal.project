@@ -1,0 +1,16 @@
+packages:
+  .
+  ascmhl/
+
+with-compiler: ghc-9.14.1
+
+tests: True
+
+semaphore: True
+
+jobs: $ncpus
+
+write-ghc-environment-files: always
+
+index-state: hackage.haskell.org 2026-09-10T12:02:32Z
+

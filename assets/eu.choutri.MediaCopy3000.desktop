@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=MediaCopy 3000
+Comment=Verified media offload and ASC MHL verification
+Exec=mediacopy3000
+Icon=eu.choutri.MediaCopy3000
+Terminal=false
+Type=Application
+Categories=AudioVideo;Video;Utility;
+Keywords=offload;backup;checksum;hash;MHL;camera;card;rushes;
+StartupNotify=true

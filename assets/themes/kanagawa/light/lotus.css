@@ -1,0 +1,68 @@
+/* Kanagawa Lotus
+ *
+ * Palette: https://github.com/rebelot/kanagawa.nvim (lua/kanagawa/colors.lua, lotus)
+ * The application picks this file from the Preferences dialog; it overrides the libadwaita colour
+ * variables, so every rule in `styles.css` follows it without an edit.
+ */
+:root {
+  --window-bg-color: #e5ddb0;
+  --window-fg-color: #545464;
+  --view-bg-color: #f2ecbc;
+  --view-fg-color: #545464;
+
+  --headerbar-bg-color: #f2ecbc;
+  --headerbar-fg-color: #545464;
+  --headerbar-border-color: #545464;
+  --headerbar-backdrop-color: #e5ddb0;
+  --headerbar-shade-color: rgb(0 0 6 / 12%);
+  --headerbar-darker-shade-color: rgb(0 0 6 / 12%);
+
+  --sidebar-bg-color: #f2ecbc;
+  --sidebar-fg-color: #545464;
+  --sidebar-backdrop-color: #e5ddb0;
+  --sidebar-shade-color: rgb(0 0 6 / 7%);
+  --sidebar-border-color: rgb(0 0 6 / 12%);
+
+  --secondary-sidebar-bg-color: #dcd5ac;
+  --secondary-sidebar-fg-color: #545464;
+  --secondary-sidebar-backdrop-color: #e5ddb0;
+  --secondary-sidebar-shade-color: rgb(0 0 6 / 7%);
+  --secondary-sidebar-border-color: rgb(0 0 6 / 12%);
+
+  --card-bg-color: #f2ecbc;
+  --card-fg-color: #545464;
+  --card-shade-color: rgb(0 0 6 / 12%);
+
+  --dialog-bg-color: #f2ecbc;
+  --dialog-fg-color: #545464;
+
+  --popover-bg-color: #f2ecbc;
+  --popover-fg-color: #545464;
+  --popover-shade-color: rgb(0 0 6 / 7%);
+
+  --thumbnail-bg-color: #e7dba0;
+  --thumbnail-fg-color: #545464;
+
+  --shade-color: rgb(0 0 6 / 7%);
+  --scrollbar-outline-color: #ffffff;
+
+  --accent-bg-color: #4d699b;
+  --accent-fg-color: #f2ecbc;
+  --accent-color: #4d699b;
+
+  --success-bg-color: #6f894e;
+  --success-fg-color: #f2ecbc;
+  --success-color: #6f894e;
+
+  --warning-bg-color: #e98a00;
+  --warning-fg-color: #545464;
+  --warning-color: #e98a00;
+
+  --error-bg-color: #c84053;
+  --error-fg-color: #f2ecbc;
+  --error-color: #c84053;
+
+  --destructive-bg-color: #c84053;
+  --destructive-fg-color: #f2ecbc;
+  --destructive-color: #c84053;
+}
