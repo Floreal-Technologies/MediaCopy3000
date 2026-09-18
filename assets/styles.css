@@ -1,0 +1,3 @@
+/* Empty on purpose. libadwaita's own .success, .error and .warning classes carry every colour this
+   application asks for, and the type sizes come from its title-* and caption classes. A rule here
+   would override a theme the operator chose, so add one only when libadwaita offers nothing. */

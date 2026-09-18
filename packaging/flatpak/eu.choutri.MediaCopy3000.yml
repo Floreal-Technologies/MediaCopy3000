@@ -1,0 +1,22 @@
+# The Flatpak manifest.
+app-id: eu.choutri.MediaCopy3000
+runtime: org.gnome.Platform
+runtime-version: '49'
+sdk: org.gnome.Sdk
+command: mediacopy3000
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  # We need to access the host's file system and mounted volumes for file transfers
+  - --filesystem=host
+  - --env=mediacopy3000_datadir=/app/share/mediacopy3000
+modules:
+  - name: mediacopy3000
+    buildsystem: simple
+    build-commands:
+      - cp -a ./. /app
+    sources:
+      - type: dir
+        path: ../../dist-package/root/usr

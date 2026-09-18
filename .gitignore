@@ -1,0 +1,17 @@
+dist*
+.hie
+cabal.project.local*
+.envrc
+.vscode/
+node_modules/
+manual/.vitepress/dist/
+manual/.vitepress/cache/
+.flatpak-builder/
+
+# Bench timings are machine-specific and session-specific.
+bench/results.csv
+
+# scripts/package.ps1 generates this from the staged tree on every run.
+packaging/windows/staged-files.wxs
+
+.ghc.environment.*

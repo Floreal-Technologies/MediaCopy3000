@@ -1,0 +1,126 @@
+-- | One sidebar row: kind icon, job name, phase line and progress bar.
+module MediaCopy.Gtk.Widgets.JobRow
+  ( JobRow (..)
+  , newJobRow
+  , jobIdOfRow
+  ) where
+
+import Data.GI.Base (AttrOp ((:=)), new, set)
+import Data.Map.Strict qualified as Map
+import Data.Text (Text)
+import Data.Text qualified as T
+import Data.Text.Display (display)
+import Data.Text.Read qualified as TR
+import Data.Time (UTCTime)
+import GI.Gtk qualified as Gtk
+import GI.Pango qualified as Pango
+
+import MediaCopy.Domain.Job (JobId (..), JobPhase (..), JobResult (..), JobSpec (..), JobState (..), fractionOf, jobKind, jobLabel)
+import MediaCopy.Gtk.Widgets.Common (nameAccessible, newCell, newLabel, paddedBox, renderCell, toggleClass)
+import MediaCopy.Interface.Wording (KindUi (..), count, humanRate, kindUi, quietText)
+
+-- | A row carries its job's id as its widget name, so a selection says which job it picked.
+rowName :: JobId -> Text
+rowName (JobId n) = "job-" <> T.pack (show n)
+
+jobIdOfRow :: Gtk.ListBoxRow -> IO (Maybe JobId)
+jobIdOfRow listRow = do
+  name <- Gtk.widgetGetName listRow
+  pure (T.stripPrefix "job-" name >>= \digits -> readJobId digits)
+
+readJobId :: Text -> Maybe JobId
+readJobId digits = case TR.decimal digits of
+  Right (n, rest) | T.null rest -> Just (JobId n)
+  _ -> Nothing
+
+-- | Everything a sidebar row shows. Nothing else can make one look different, so a row
+-- that reads the same needs no paint.
+data RowView = RowView
+  { icon :: Text
+  , label :: Text
+  , phase :: Text
+  , fraction :: Double
+  , allOk :: Bool
+  , bad :: Bool
+  }
+  deriving stock (Eq)
+
+data JobRow = JobRow
+  { row :: Gtk.ListBoxRow
+  , update :: UTCTime -> JobState -> Double -> IO ()
+  -- ^ The rate is bytes per second and is 0 for every job that does not run. The time is the clock
+  -- the model carries, which the row ages to tell a slow phase from a stopped one.
+  }
+
+newJobRow :: JobState -> IO JobRow
+newJobRow state = do
+  icon <- new Gtk.Image [#valign := Gtk.AlignStart]
+  nameAccessible icon (display (jobKind state.spec.job))
+  name <- newLabel (jobLabel state.spec.job) [#xalign := 0, #ellipsize := Pango.EllipsizeModeEnd] ["heading"]
+  sub <- newLabel "" [#xalign := 0, #ellipsize := Pango.EllipsizeModeEnd] ["caption"]
+  bar <- new Gtk.ProgressBar []
+  nameAccessible bar (jobLabel state.spec.job <> " progress")
+  lines' <- new Gtk.Box [#orientation := Gtk.OrientationVertical, #spacing := 2, #hexpand := True]
+  Gtk.boxAppend lines' name
+  Gtk.boxAppend lines' sub
+  Gtk.boxAppend lines' bar
+  body <- paddedBox Gtk.OrientationHorizontal 10 6
+  Gtk.boxAppend body icon
+  Gtk.boxAppend body lines'
+  row <- new Gtk.ListBoxRow [#child := body, #name := rowName state.spec.jobId]
+  cell <- newCell $ \view -> do
+    set icon [#iconName := view.icon]
+    set name [#label := view.label]
+    set sub [#label := view.phase]
+    Gtk.progressBarSetFraction bar view.fraction
+    toggleClass sub "success" view.allOk
+    toggleClass bar "success" view.allOk
+    toggleClass sub "error" view.bad
+    toggleClass bar "error" view.bad
+  let update now current rate = renderCell cell (rowView now current rate)
+  -- A row that has just been made shows no age, whatever the clock says elsewhere.
+  update state.lastMovedAt state 0
+  pure JobRow {row, update}
+
+rowView :: UTCTime -> JobState -> Double -> RowView
+rowView now state rate =
+  RowView
+    { icon = (kindUi (jobKind state.spec.job)).icon
+    , label = jobLabel state.spec.job
+    , phase = phaseText now state rate
+    , fraction = fractionOf state
+    , allOk = isAllOk state.phase
+    , bad = isBad state.phase
+    }
+
+-- | The line a job's row in the sidebar carries.
+phaseText :: UTCTime -> JobState -> Double -> Text
+phaseText now state rate = case state.phase of
+  Queued -> "Queued"
+  NeedsReview -> "Needs review"
+  Running -> runningText now state rate
+  Finished AllOk -> "Finished · " <> count (Map.size state.files) <> " files · all OK"
+  Finished (WithFailures failures) -> "Finished · " <> count failures <> " failures"
+  Failed _ -> "Failed"
+  Cancelled -> "Cancelled"
+
+runningText :: UTCTime -> JobState -> Double -> Text
+runningText now state rate
+  | Just quiet <- quietText now state = quiet
+  | ui.showsProgress = ui.runningVerb <> " · " <> count (percentOf state) <> " % · " <> humanRate rate
+  | otherwise = ui.runningVerb <> "…"
+  where
+    ui = kindUi (jobKind state.spec.job)
+
+percentOf :: JobState -> Int
+percentOf state = floor (fractionOf state * 100)
+
+isAllOk :: JobPhase -> Bool
+isAllOk = \case
+  Finished AllOk -> True
+  _ -> False
+
+isBad :: JobPhase -> Bool
+isBad = \case
+  (Finished (WithFailures _); Failed _) -> True
+  _ -> False
