@@ -22,12 +22,12 @@ import System.Posix.Unistd qualified as PosixUnistd
 
 #if defined(darwin_HOST_OS)
 import Foreign.C.Error (throwErrnoIfMinus1_)
-import Foreign.C.Types (CInt)
+import Foreign.C.Types (CInt (..))
 #else
 import System.Posix.Fcntl qualified as Fcntl
+#endif
 
 import MediaCopy.Effects.FileSystem.Types (Entry (..), feedHandle)
-#endif
 
 statEntry :: OsPath -> IO Entry
 statEntry path = do
