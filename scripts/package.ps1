@@ -26,13 +26,24 @@
 
 param(
     [string]$Version = '0.0.0',
-    [string]$Ucrt = 'C:\ghcup\msys64\ucrt64',
+    [string]$Ucrt,
     [string]$Stage = 'dist-package/windows',
     [switch]$SkipMsi
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if (-not $Ucrt) {
+    $candidates = @(
+        [Environment]::GetEnvironmentVariable('GHCUP_MSYS2')
+        'C:\ghcup\msys64'
+        'C:\msys64'
+    ) | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\', '/') + '\ucrt64' }
+    $Ucrt = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $Ucrt) { throw "no MSYS2 UCRT64 tree found; pass -Ucrt" }
+    Write-Host "using the MSYS2 UCRT64 tree at $Ucrt"
+}
 
 function Copy-Into {
     param([Parameter(Mandatory)][string]$Source, [Parameter(Mandatory)][string]$Destination)
@@ -171,6 +182,7 @@ New-Item -ItemType Directory -Path 'dist-package/out' -Force | Out-Null
 $msi = "dist-package/out/mediacopy3000-$Version-x64.msi"
 
 wix build `
+    --acceptEula wix7 `
     -d Version=$Version `
     -arch x64 `
     -out $msi `
