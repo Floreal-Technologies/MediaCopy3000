@@ -472,7 +472,7 @@ carriesTheMediaSourceHistoryIntoTheDestination = do
   length (manifestsUnder [osp|/dest/vol/ascmhl/|]) @?= 2
   mapM_
     ( \k ->
-        fmap fst (Map.lookup ([osp|/dest/vol/ascmhl|] </> makeRelative [osp|/vol/ascmhl|] k) fs.files) @?= fmap fst (Map.lookup k fs.files)
+        fmap fst (Map.lookup (slashedPath ([osp|/dest/vol/ascmhl|] </> makeRelative [osp|/vol/ascmhl|] k)) fs.files) @?= fmap fst (Map.lookup k fs.files)
     )
     sourceManifests
   case Map.lookup [osp|/dest/vol/ascmhl/ascmhl_chain.xml|] fs.files of

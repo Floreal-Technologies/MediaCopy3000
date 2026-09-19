@@ -12,8 +12,7 @@ module MediaCopy.Gtk.View
   ) where
 
 import Control.Monad (void)
-import Data.GI.Base (AttrOp (On, (:=)), new, set)
-import Data.GI.Base.GValue (toGValue)
+import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Int (Int64)
 import Data.Map.Strict (Map)
@@ -153,8 +152,8 @@ addNarrowBreakpoint :: Adw.ApplicationWindow -> Adw.NavigationSplitView -> IO ()
 addNarrowBreakpoint window splitView = do
   narrow <- Adw.breakpointConditionParse "max-width: 620sp"
   breakpoint <- Adw.breakpointNew narrow
-  collapsed <- toGValue True
-  Adw.breakpointAddSetter breakpoint splitView "collapsed" (Just collapsed)
+  void $ on breakpoint #apply $ set splitView [#collapsed := True]
+  void $ on breakpoint #unapply $ set splitView [#collapsed := False]
   Adw.applicationWindowAddBreakpoint window breakpoint
 
 -- | The dismissal lands after the current paint, never inside it.

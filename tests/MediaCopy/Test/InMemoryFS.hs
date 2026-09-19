@@ -15,6 +15,7 @@ module MediaCopy.Test.InMemoryFS
   , withUnreadableFreeSpace
   , epoch
   , runFileSystemMem
+  , slashedPath
   ) where
 
 import Ascmhl.Layout (ascmhlDir)
