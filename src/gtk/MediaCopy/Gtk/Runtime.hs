@@ -250,10 +250,21 @@ wasCancelled err = case fromException err of
   Just AsyncCancelled -> True
   Nothing -> False
 
-sendPicked :: Runtime -> (OsPath -> Message) -> IO Gio.File -> IO ()
+-- | GTK marks the file as nullable up to 4.14, so we have to account for
+-- versions that provided on Ubuntu 24 **and** 26
+class PickedFile file where
+  pickedFile :: file -> Maybe Gio.File
+
+instance PickedFile Gio.File where
+  pickedFile = Just
+
+instance PickedFile (Maybe Gio.File) where
+  pickedFile = id
+
+sendPicked :: (PickedFile file) => Runtime -> (OsPath -> Message) -> IO file -> IO ()
 sendPicked runtime toMessage finish =
   catchGErrorJustDomain
-    (finish >>= \file -> sendPath runtime toMessage file)
+    (finish >>= \picked -> mapM_ (sendPath runtime toMessage) (pickedFile picked))
     (\dialogError message -> reportDialogError runtime dialogError message)
 
 reportDialogError :: Runtime -> Gtk.DialogError -> Text -> IO ()
