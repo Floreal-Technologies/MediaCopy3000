@@ -1,35 +1,30 @@
 # Installation
 
-MediaCopy 3000 is provided free of charge.
+## Latest Version (v0.1.0)
 
-## Where to get a package
+### Windows and macOS
 
-| What you want | Page |
+| Your computer | Package |
 |---|---|
-| The newest release | [Latest release](https://github.com/Floreal-Technologies/MediaCopy3000/releases/latest) |
-| An older release | [All releases](https://github.com/Floreal-Technologies/MediaCopy3000/releases) |
-| The build of the last commit | [`mediacopy3000-head`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/tag/mediacopy3000-head) |
+| Windows 10 or 11, 64-bit Intel or AMD | [`mediacopy3000-0.1.0-x64.msi`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-x64.msi) |
+| macOS 15 or later, Apple silicon (M1, M2, M3, M4) | [`mediacopy3000-0.1.0-macos-15-arm64.pkg`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-macos-15-arm64.pkg) |
 
-## Which file to take
+### Linux
+
+| Distribution | Intel or AMD (x86_64) | ARM (aarch64) |
+|---|---|---|
+| Ubuntu 24.04 and Debian | [`.deb`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-ubuntu-24-x86_64.deb) | [`.deb`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-ubuntu-24-aarch64.deb) |
+| Ubuntu 26.04 | [`.deb`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-ubuntu-26-x86_64.deb) | [`.deb`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-ubuntu-26-aarch64.deb) |
+| Fedora 44 and later | [`.rpm`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-fedora-44-x86_64.rpm) | [`.rpm`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-fedora-44-aarch64.rpm) |
+| Arch Linux | [`.pkg.tar.zst`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-archlinux-x86_64.pkg.tar.zst) | [`.pkg.tar.zst`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-archlinux-aarch64.pkg.tar.zst) |
+| Any Linux with Flatpak | [`.flatpak`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-x86_64.flatpak) | [`.flatpak`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-aarch64.flatpak) |
+| Any other Linux | [`.tar.gz`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-linux-x86_64.tar.gz) | [`.tar.gz`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-linux-aarch64.tar.gz) |
+
+These links give the packages of release 0.1.0. [All releases](https://github.com/Floreal-Technologies/MediaCopy3000/releases) has the older versions, and
+[`mediacopy3000-head`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/tag/mediacopy3000-head) has the build of the last commit.
 
 A package file is named `mediacopy3000-<version>-<system>-<architecture>.<format>`. The version is a
-number such as `0.1.0.0`, or the word `head`.
-
-| File | System |
-|---|---|
-| `…-macos-15-<arch>.pkg` | macOS 15 and later |
-| `…-x64.msi` | Windows on a 64-bit Intel or AMD computer |
-| `…-ubuntu-24-<arch>.deb` | Ubuntu 24.04 and Debian |
-| `…-ubuntu-26-<arch>.deb` | Ubuntu 26.04 |
-| `…-fedora-44-<arch>.rpm` | Fedora 44 and later |
-| `…-archlinux-<arch>.pkg.tar.zst` | Arch Linux |
-| `…-<arch>.flatpak` | Any Linux with Flatpak |
-| `…-linux-<arch>.tar.gz` | Any other Linux |
-
-
-The architecture is `x86_64` for an Intel or AMD computer. It is `aarch64`
-on Linux and `arm64` on macOS for an ARM computer, such as a Mac with Apple
-silicon (M1, M2, M3, M4, etc).
+number such as `0.1.0`, or the word `head`.
 
 ## Install it
 

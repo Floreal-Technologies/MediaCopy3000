@@ -1,35 +1,31 @@
 # Installation
 
-MediaCopy 3000 est un logiciel gratuit.
+## Dernière Version (v0.1.0)
 
-## Où récupérer un paquet
+### Windows et macOS
 
-| Ce que vous cherchez | Page |
+| Votre ordinateur | Paquet |
 |---|---|
-| La dernière version publiée | [Dernière version](https://github.com/Floreal-Technologies/MediaCopy3000/releases/latest) |
-| Une version antérieure | [Toutes les versions](https://github.com/Floreal-Technologies/MediaCopy3000/releases) |
-| La construction du dernier commit | [`mediacopy3000-head`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/tag/mediacopy3000-head) |
+| Windows 10 ou 11, Intel ou AMD 64 bits | [`mediacopy3000-0.1.0-x64.msi`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-x64.msi) |
+| macOS 15 ou ultérieur, Apple Silicon (M1, M2, M3, M4) | [`mediacopy3000-0.1.0-macos-15-arm64.pkg`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-macos-15-arm64.pkg) |
 
-## Quel fichier choisir
+### Linux
+
+| Distribution | Intel ou AMD (x86_64) | ARM (aarch64) |
+|---|---|---|
+| Ubuntu 24.04 et Debian | [`.deb`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-ubuntu-24-x86_64.deb) | [`.deb`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-ubuntu-24-aarch64.deb) |
+| Ubuntu 26.04 | [`.deb`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-ubuntu-26-x86_64.deb) | [`.deb`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-ubuntu-26-aarch64.deb) |
+| Fedora 44 et ultérieur | [`.rpm`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-fedora-44-x86_64.rpm) | [`.rpm`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-fedora-44-aarch64.rpm) |
+| Arch Linux | [`.pkg.tar.zst`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-archlinux-x86_64.pkg.tar.zst) | [`.pkg.tar.zst`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-archlinux-aarch64.pkg.tar.zst) |
+| Toute distribution Linux avec Flatpak | [`.flatpak`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-x86_64.flatpak) | [`.flatpak`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-aarch64.flatpak) |
+| Toute autre distribution Linux | [`.tar.gz`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-linux-x86_64.tar.gz) | [`.tar.gz`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-linux-aarch64.tar.gz) |
+
+Ces liens donnent les paquets de la version 0.1.0. [Toutes les versions](https://github.com/Floreal-Technologies/MediaCopy3000/releases) contient les versions
+antérieures, et [`mediacopy3000-head`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/tag/mediacopy3000-head) contient la construction du
+dernier commit.
 
 Un fichier de paquet est nommé `mediacopy3000-<version>-<système>-<architecture>.<format>`. La
-version est un numéro tel que `1.2.3`, ou bien le mot `head`.
-
-| Fichier | Système |
-|---|---|
-| `…-macos-15-<arch>.pkg` | macOS 15 et ultérieur |
-| `…-x64.msi` | Windows sur un ordinateur Intel ou AMD 64 bits |
-| `…-ubuntu-24-<arch>.deb` | Ubuntu 24.04 et Debian |
-| `…-ubuntu-26-<arch>.deb` | Ubuntu 26.04 |
-| `…-fedora-44-<arch>.rpm` | Fedora 44 et ultérieur |
-| `…-archlinux-<arch>.pkg.tar.zst` | Arch Linux |
-| `…-<arch>.flatpak` | Toute distribution Linux avec Flatpak |
-| `…-linux-<arch>.tar.gz` | Toute autre distribution Linux |
-
-
-L'architecture est `x86_64` pour un ordinateur Intel ou AMD. Elle est `aarch64`
-sous Linux et `arm64` sous macOS pour un ordinateur ARM, tel qu'un Mac équipé
-d'une puce Apple Silicon (M1, M2, M3, M4, etc).
+version est un numéro tel que `0.1.0`, ou bien le mot `head`.
 
 ## Installer le paquet
 
