@@ -1,12 +1,20 @@
 # MediaCopy 3000
 
-MediaCopy 3000 is a media offloading application for videographers and photographers.
+<div align="center">
+  <p>
+    MediaCopy 3000 is a media offloading application for videographers and photographers.
+  </p>
 
-<p align="center">
-  <img width="32%" alt="The offloading dialog" src="https://github.com/Floreal-Technologies/MediaCopy3000/blob/main/manual/en/images/offload-dialog.png?raw=true">
-  <img width="32%" alt="The execution plan" src="https://github.com/Floreal-Technologies/MediaCopy3000/blob/main/manual/en/images/plan-ready.png?raw=true">
-  <img width="32%" alt="The queue view" src="https://github.com/Floreal-Technologies/MediaCopy3000/blob/main/manual/en/images/queue.png?raw=true">
-</p>
+  <p>
+    <img width="40%" alt="The offloading dialog" src="https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/refs/heads/main/manual/en/images/offload-dialog.png">
+    <img width="40%" alt="The execution plan" src="https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/refs/heads/main/manual/en/images/themes/queue-dracula-light-alucard.png">
+  </p>
+
+  <p>
+    <img width="40%" alt="The queue view" src="https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/refs/heads/main/manual/en/images/themes/queue-catppuccin-dark-frappé.png">
+    <img width="40%" alt="The queue view" src="https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/refs/heads/main/manual/en/images/themes/queue-catppuccin-light-latte.png">
+  </p>
+</div>
 
 ## Features
 
