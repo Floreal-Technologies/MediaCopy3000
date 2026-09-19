@@ -1,0 +1,114 @@
+name: Dependency submission
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: dependency-submission-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  submit-dependencies:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout target project
+        uses: actions/checkout@v6
+        with:
+          path: project
+
+      - name: Checkout cabal-plan-submit
+        uses: actions/checkout@v6
+        with:
+          repository: dancewithheart/cabal-plan-submit
+          path: cabal-plan-submit
+
+      - name: Setup Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: "9.14.1"
+          cabal-version: "3.16.1.0"
+
+      - name: Configure environment
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            libadwaita-1-dev \
+            libcairo2-dev \
+            libfreetype-dev \
+            libgdk-pixbuf-2.0-dev \
+            libgirepository1.0-dev \
+            libglib2.0-dev \
+            libgraphene-1.0-dev \
+            libgtk-4-dev \
+            libharfbuzz-dev \
+            liblzma-dev \
+            libpango1.0-dev \
+            libxxhash-dev \
+            zlib1g-dev
+
+      - name: Cache Cabal store
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cabal/store
+            ~/.cabal/packages
+            cabal-plan-submit/dist-newstyle
+            project/dist-newstyle
+          key: ${{ runner.os }}-ghc-9.14.1-${{ hashFiles('project/**/*.cabal', 'project/cabal.project*', 'cabal-plan-submit/**/*.cabal', 'cabal-plan-submit/cabal.project*') }}
+          restore-keys: |
+            ${{ runner.os }}-ghc-9.14.1-
+
+      - name: Build target project
+        working-directory: project
+        run: |
+           cabal update
+           cabal build all --dry-run
+
+      - name: Build cabal-plan-submit
+        working-directory: cabal-plan-submit
+        run: cabal build exe:cabal-plan-submit
+
+      - name: Render and validate dependency snapshot
+        working-directory: project
+        env:
+          SHA: ${{ github.sha }}
+          REF: ${{ github.ref }}
+        run: |
+          BIN="$(cd ../cabal-plan-submit && cabal list-bin exe:cabal-plan-submit | tail -n 1)"
+          "$BIN" render-snapshot dist-newstyle/cache/plan.json "$SHA" "$REF" > ../snapshot.json
+          "$BIN" validate-snapshot ../snapshot.json
+
+      - name: Submit dependency snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          owner="${REPO%/*}"
+          repo="${REPO#*/}"
+
+          response="$(
+            curl \
+              --fail-with-body \
+              -X POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$owner/$repo/dependency-graph/snapshots" \
+              --data-binary @snapshot.json
+          )"
+
+          echo "$response" | jq .
+
+          snapshot_id="$(echo "$response" | jq -r '.id')"
+          snapshot_url="https://api.github.com/repos/$owner/$repo/dependency-graph/snapshots/$snapshot_id"
+
+          echo "Snapshot API URL: $snapshot_url"
+          echo "Snapshot result: $(echo "$response" | jq -r '.result')"
+          echo "Snapshot message: $(echo "$response" | jq -r '.message')"
