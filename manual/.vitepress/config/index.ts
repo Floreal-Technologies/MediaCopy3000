@@ -5,7 +5,7 @@ import fr from './fr'
 export default defineConfig({
   title: 'MediaCopy 3000',
   description: 'Verified media offload and ASC MHL verification for videographers',
-  base: '/MediaCopy3000/',
+  base: '/',
   ignoreDeadLinks: false,
   lastUpdated: true,
   sitemap: { hostname: 'https://docs.floreal.tech/MediaCopy3000/' },
