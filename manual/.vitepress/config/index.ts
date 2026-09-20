@@ -8,7 +8,7 @@ export default defineConfig({
   base: '/MediaCopy3000/',
   ignoreDeadLinks: false,
   lastUpdated: true,
-  sitemap: { hostname: 'https://floreal-technologies.github.io/MediaCopy3000/' },
+  sitemap: { hostname: 'https://docs.floreal.tech/MediaCopy3000/' },
 
   rewrites: {
     'en/:rest*': ':rest*',
