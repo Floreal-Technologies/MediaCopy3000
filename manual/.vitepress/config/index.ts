@@ -2,13 +2,15 @@ import { defineConfig } from 'vitepress'
 import en from './en'
 import fr from './fr'
 
+const base = process.env.DOCS_BASE ?? '/mediacopy3000'
+
 export default defineConfig({
   title: 'MediaCopy 3000',
   description: 'Verified media offload and ASC MHL verification for videographers',
-  base: '/',
+  base,
   ignoreDeadLinks: false,
   lastUpdated: true,
-  sitemap: { hostname: 'https://docs.floreal.tech/MediaCopy3000/' },
+  sitemap: { hostname: `https://docs.floreal.tech${base}` },
 
   rewrites: {
     'en/:rest*': ':rest*',

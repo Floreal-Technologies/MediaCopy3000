@@ -1,0 +1,23 @@
+name: Notify the docs site
+
+on:
+  push:
+    branches: [main]
+    paths: ['manual/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start the docs deployment
+        env:
+          GH_TOKEN: ${{ secrets.DOCS_DISPATCH_TOKEN }}
+        run: |
+          gh workflow run deploy.yml \
+            --repo Floreal-Technologies/floreal-docs \
+            -f product=mediacopy3000 \
+            -f sha=${{ github.sha }}
