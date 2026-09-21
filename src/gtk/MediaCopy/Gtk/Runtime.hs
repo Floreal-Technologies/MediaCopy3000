@@ -36,7 +36,8 @@ import MediaCopy.Effects.FileSystem (defaultChunkSize, runFileSystemIO)
 import MediaCopy.Effects.Hasher (runHasherIO)
 import MediaCopy.Engine
 import MediaCopy.EventLog (withEventLog)
-import MediaCopy.Gtk.Reload (Environment, loadCss, readEnvironment)
+import MediaCopy.Gtk.Environment (Environment, readEnvironment)
+import MediaCopy.Gtk.Reload (loadCss)
 import MediaCopy.Gtk.Screenshot (Startup (..), seeded)
 import MediaCopy.Gtk.Theme
 import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
@@ -83,7 +84,7 @@ buildAndPresent
   -> IO ()
 buildAndPresent runtimeRef environment startup app = do
   startedAt <- getCurrentTime
-  themeAdapter <- newThemeAdapter
+  themeAdapter <- newThemeAdapter environment
   desktop <- readDesktopBase themeAdapter
   modelRef <- newIORef (initialModel startedAt desktop)
   engine <- newIORef Nothing
@@ -93,7 +94,7 @@ buildAndPresent runtimeRef environment startup app = do
           Nothing -> pure ()
           Just runtime -> dispatch runtime msg
   -- The interface can only express an intent. Every other message comes from here.
-  (lightSections, darkSections) <- loadThemeSections
+  (lightSections, darkSections) <- loadThemeSections environment
   widgets <- buildWidgets app (apply themeAdapter) lightSections darkSections (\intent -> dispatchNow (Ui intent))
   loadCss environment
   let runtime = Runtime {modelRef, widgets, engine, themeAdapter}
@@ -154,9 +155,9 @@ runCommand runtime = \case
   CloseWindow -> Gtk.windowDestroy runtime.widgets.window
 
 -- | The palettes the asset tree holds, split into the two lists the Preferences dialog shows.
-loadThemeSections :: IO (Vector ThemeSection, Vector ThemeSection)
-loadThemeSections = do
-  palettes <- loadPalettes
+loadThemeSections :: Environment -> IO (Vector ThemeSection, Vector ThemeSection)
+loadThemeSections environment = do
+  palettes <- loadPalettes environment
   pure (themeSections LightPalette palettes, themeSections DarkPalette palettes)
 
 -- | The window never closes itself: the close becomes a message, and the handler blocks the close.

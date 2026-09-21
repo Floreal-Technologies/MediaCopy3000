@@ -39,7 +39,8 @@ import Text.Printf (printf)
 
 import MediaCopy.Demo.Fixtures qualified as Fixtures
 import MediaCopy.Domain.Job
-import MediaCopy.Gtk.Reload (Environment (Production), loadCss)
+import MediaCopy.Gtk.Environment (Environment (Production))
+import MediaCopy.Gtk.Reload (loadCss)
 import MediaCopy.Gtk.Theme (apply, loadPalettes, newThemeAdapter)
 import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
 import MediaCopy.Interface.Theme (PaletteMode (..), themeSections)
@@ -85,8 +86,8 @@ readResultsPath = \case
 
 bench :: Int -> FilePath -> Adw.Application -> IO ()
 bench fileCount resultsPath app = do
-  themeAdapter <- newThemeAdapter
-  palettes <- loadPalettes
+  themeAdapter <- newThemeAdapter Production
+  palettes <- loadPalettes Production
   let lightSections = themeSections LightPalette palettes
       darkSections = themeSections DarkPalette palettes
   widgets <- buildWidgets app (apply themeAdapter) lightSections darkSections (\_intent -> pure ())

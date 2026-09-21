@@ -25,23 +25,25 @@ import GI.Gdk qualified as Gdk
 import GI.Gtk qualified as Gtk
 import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
 import System.FilePath (takeExtension, (</>))
-import System.IO (hPutStrLn, stderr)
 
 import MediaCopy.Gtk.Assets (resolveAsset)
+import MediaCopy.Gtk.Environment (Environment)
+import MediaCopy.Gtk.Log (logLine)
 import MediaCopy.Interface.Theme
 
 -- | While a color scheme is forced, 'Adw.styleManagerGetDark' answers with that forced scheme and
 -- not with the desktop's wish. So the adapter reports a base only while it forces nothing, and
 -- reads the true base again the moment it stops forcing one.
 data ThemeAdapter = ThemeAdapter
-  { provider :: Gtk.CssProvider
+  { environment :: Environment
+  , provider :: Gtk.CssProvider
   , manager :: Adw.StyleManager
   , forced :: IORef (Maybe PaletteMode)
   , handler :: IORef (Maybe (PaletteMode -> IO ()))
   }
 
-newThemeAdapter :: IO ThemeAdapter
-newThemeAdapter = do
+newThemeAdapter :: Environment -> IO ThemeAdapter
+newThemeAdapter environment = do
   provider <- Gtk.cssProviderNew
   whenJustM Gdk.displayGetDefault $ \display ->
     Gtk.styleContextAddProviderForDisplay
@@ -51,7 +53,7 @@ newThemeAdapter = do
   manager <- Adw.styleManagerGetDefault
   forced <- newIORef Nothing
   handler <- newIORef Nothing
-  let adapter = ThemeAdapter {provider, manager, forced, handler}
+  let adapter = ThemeAdapter {environment, provider, manager, forced, handler}
   void $ on manager (Adw.PropertyNotify #dark) $ \_ ->
     readIORef forced >>= \case
       Just _ -> pure ()
@@ -66,7 +68,7 @@ apply adapter appearance desktop = do
     -- An empty stylesheet leaves the operator's own desktop theme in place.
     Nothing -> Gtk.cssProviderLoadFromString adapter.provider ""
     Just relative -> do
-      path <- resolveAsset relative
+      path <- resolveAsset adapter.environment relative
       Gtk.cssProviderLoadFromPath adapter.provider path
   previous <- readIORef adapter.forced
   let wanted = forcedScheme appearance
@@ -109,15 +111,15 @@ schemeOf = \case
   Just DarkPalette -> Adw.ColorSchemeForceDark
 
 -- | Every palette the asset tree holds. An absent tree holds none.
-loadPalettes :: IO (Vector Palette)
-loadPalettes = readThemeListing <&> maybe V.empty (uncurry palettesFrom)
+loadPalettes :: Environment -> IO (Vector Palette)
+loadPalettes environment = readThemeListing environment <&> maybe V.empty (uncurry palettesFrom)
 
 -- | The tree as it stands, with the root it was found under. 'Nothing' when
 -- there is no tree. The reader names directories and files and decides nothing
 -- else.
-readThemeListing :: IO (Maybe (FilePath, ThemeListing))
-readThemeListing = do
-  root <- resolveAsset themeRoot
+readThemeListing :: Environment -> IO (Maybe (FilePath, ThemeListing))
+readThemeListing environment = do
+  root <- resolveAsset environment themeRoot
   present <- doesDirectoryExist root
   if not present
     then pure Nothing
@@ -161,7 +163,7 @@ familyInfo familyDir = do
     else
       Aeson.eitherDecodeFileStrict' path >>= \case
         Left reason -> do
-          hPutStrLn stderr ("mediacopy3000: " <> path <> ": " <> reason)
+          logLine (path <> ": " <> reason)
           pure noFamilyInfo
         Right found -> pure found
   where

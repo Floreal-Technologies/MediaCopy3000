@@ -104,10 +104,14 @@ foreach ($theme in 'Adwaita', 'hicolor') {
 # fontconfig.
 Copy-Into "$Ucrt/etc/fonts" "$Stage/etc/fonts"
 
-# The application's own data. resolveAsset in src/gtk/MediaCopy/Gtk/Assets.hs asks for the
-# path "assets/styles.css", so the data directory must hold an "assets" directory.
-Copy-Into 'assets/styles.css' "$Stage/share/mediacopy3000/assets/styles.css"
-Copy-Into 'assets/themes' "$Stage/share/mediacopy3000/assets/themes"
+# The application's own data, where besideExecutable in src/gtk/MediaCopy/Gtk/Assets.hs
+# looks for it. The check is there because another shape starts and shows no style.
+$appAssets = "$Stage/share/mediacopy3000/assets"
+Copy-Into 'assets/styles.css' "$appAssets/styles.css"
+Copy-Into 'assets/themes' "$appAssets/themes"
+foreach ($required in "$appAssets/styles.css", "$appAssets/themes") {
+    if (-not (Test-Path $required)) { throw "staged tree broken: $required is missing" }
+}
 
 Write-Host "staged into $Stage"
 if ($SkipMsi) { return }

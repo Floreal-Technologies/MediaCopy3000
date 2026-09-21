@@ -91,9 +91,11 @@ CI builds and tests the application on Windows. The job `tests-windows` runs `co
 MC3K_ENV=dev cabal run mediacopy3000
 ```
 
-With `MC3K_ENV=dev`, the application reads `assets/styles.css` from the source
-tree and loads it again every time the file changes. Without it, the application
-reads the installed copy of the same file.
+With `MC3K_ENV=dev`, the application reads `assets/styles.css` from the working
+directory and loads it again every time the file changes.
+Otherwise, the application reads the installed copy:
+first the `data-files` directory, (`mediacopy3000_datadir` variable),
+and then `share/mediacopy3000` under the installation prefix.
 
 ### Packages
 

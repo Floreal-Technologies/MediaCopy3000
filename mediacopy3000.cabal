@@ -182,6 +182,8 @@ library
   exposed-modules:
     MediaCopy.Gtk.Actions
     MediaCopy.Gtk.Assets
+    MediaCopy.Gtk.Environment
+    MediaCopy.Gtk.Log
     MediaCopy.Gtk.Reload
     MediaCopy.Gtk.Runtime
     MediaCopy.Gtk.Screenshot
