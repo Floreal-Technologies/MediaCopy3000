@@ -48,8 +48,6 @@ import MediaCopy.Engine.Plan (planJob)
 import MediaCopy.Engine.Violation (PlanViolation (..), orThrow)
 import MediaCopy.Mhl.Store
 
--- | What a step of a pass needs: the disk, a hasher, the clock, somewhere to report, the running
--- tally, and the two values a job settles once and never changes.
 type Copying es =
   ( FileSystem :> es
   , Hasher :> es
@@ -60,7 +58,6 @@ type Copying es =
   , Reader JobInstant :> es
   )
 
--- | 'Copying' without the instant, for a step that hashes and writes no manifest.
 type Hashing es =
   ( FileSystem :> es
   , Hasher :> es
