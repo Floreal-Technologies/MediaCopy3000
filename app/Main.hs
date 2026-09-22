@@ -1,3 +1,5 @@
+{-# LANGUAGE MultilineStrings #-}
+
 module Main (main) where
 
 import Control.Exception (SomeException, displayException, try)
@@ -77,7 +79,9 @@ run = \case
   -- The screenshot script asks for the scene names rather than repeating them.
   ListScenes -> mapM_ T.putStrLn sceneNames
   PlanOnly job -> planCommand job
-  Gui -> startup >>= Runtime.start
+  Gui -> do
+    T.putStrLn banner
+    startup >>= Runtime.start
 
 commandInfo :: ParserInfo Command
 commandInfo =
@@ -155,3 +159,16 @@ startup =
             , expand = scene.expand
             , scroll = scene.scroll
             }
+
+banner :: T.Text
+banner =
+  """
+   __  __          _ _        _____                  ____  ___   ___   ___
+  |  \\/  |        | (_)      / ____|                |__ / / _ \\ / _ \\ / _ \\
+  | \\  / | ___  __| |_  __ _| |     ___  _ __  _   _ |_ \\| (_) | (_) | (_) |
+  | |\\/| |/ _ \\/ _` | |/ _` | |    / _ \\| '_ \\| | | |___/ \\___/ \\___/ \\___/
+  | |  | |  __/ (_| | | (_| | |___| (_) | |_) | |_| |
+  |_|  |_|\\___|\\__,_|_|\\__,_|\\_____\\___/| .__/ \\__, |
+                                        | |     __/ |
+                                        |_|    |___/
+  """
