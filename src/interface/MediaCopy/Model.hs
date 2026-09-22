@@ -13,6 +13,7 @@ module MediaCopy.Model
   , selectedEntry
   , canCancelSelected
   , canReportSelected
+  , reviewableSpec
   , hasFinishedJobs
   ) where
 
@@ -113,6 +114,7 @@ data UiMessage
   | PickVerifyFolder
   | PickSealFolder
   | CancelSelectedJob
+  | ReviewSelectedJob
   | SaveSelectedReport
   | SavePlan
   | SelectJob (Maybe JobId)
@@ -208,6 +210,9 @@ updateUi msg model = case msg of
   DiscardPlan -> (model {planPhase = Idle}, [])
   PickVerifyFolder -> (model, [OpenFolderDialog (\folder -> RequestPlan (VerifyFolder VerifyJob {folder}))])
   PickSealFolder -> (model, [OpenFolderDialog (\folder -> RequestPlan (SealMediaSource SealJob {folder}))])
+  ReviewSelectedJob -> case reviewableSpec model of
+    Just spec -> (model {planPhase = Planning spec}, [ComputePlan spec])
+    Nothing -> (model, [])
   CancelSelectedJob -> case model.selected of
     Nothing -> (model, [])
     Just jid -> cancelJob jid model
@@ -408,6 +413,11 @@ canCancelSelected model = case selectedEntry model of
   Just entry -> case entry.state.phase of
     (Queued; Running; NeedsReview) -> True
     _ -> False
+
+reviewableSpec :: Model -> Maybe JobSpec
+reviewableSpec model = case (model.planPhase, selectedEntry model) of
+  (Idle, Just entry) | entry.state.phase == NeedsReview -> Just entry.state.spec
+  _ -> Nothing
 
 canReportSelected :: Model -> Bool
 canReportSelected model = case selectedEntry model of

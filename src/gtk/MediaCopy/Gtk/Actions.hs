@@ -9,6 +9,7 @@ import Control.Monad (unless)
 import Data.Function ((&))
 import Data.GI.Base (AttrOp (On, (:=)), new)
 import Data.List (List)
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Display (Display (..), display)
@@ -55,6 +56,7 @@ actionTable =
     , always "win.seal" "Seal Media…" ["<Control>l"] (Just JobsSection) (Just (Send PickSealFolder))
     , (always "win.save-report" "Save Report…" ["<Control>s"] (Just JobsSection) (Just (Send SaveSelectedReport))) {enabled = Just canReportSelected}
     , (always "win.cancel-job" "Cancel Job" [] Nothing (Just (Send CancelSelectedJob))) {enabled = Just canCancelSelected}
+    , (always "win.review-job" "Review Plan…" [] Nothing (Just (Send ReviewSelectedJob))) {enabled = Just (isJust . reviewableSpec)}
     , (always "win.clear-finished" "Clear Finished" [] Nothing (Just (Send ClearFinished))) {enabled = Just hasFinishedJobs}
     , always "win.next-job" "Next Job" ["<Control>Page_Down"] (Just NavigationSection) (Just (Send SelectNextJob))
     , always "win.previous-job" "Previous Job" ["<Control>Page_Up"] (Just NavigationSection) (Just (Send SelectPreviousJob))

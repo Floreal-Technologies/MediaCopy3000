@@ -226,9 +226,11 @@ newFileListPane = do
 newActionBar :: IO Gtk.Box
 newActionBar = do
   cancelBtn <- actionButton "win.cancel-job" ["destructive-action"]
+  reviewBtn <- actionButton "win.review-job" []
   reportBtn <- actionButton "win.save-report" []
   actions <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #spacing := 8, #halign := Gtk.AlignEnd]
   Gtk.boxAppend actions cancelBtn
+  Gtk.boxAppend actions reviewBtn
   Gtk.boxAppend actions reportBtn
   pure actions
 
