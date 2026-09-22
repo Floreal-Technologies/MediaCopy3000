@@ -19,12 +19,12 @@ jobs:
 
     steps:
       - name: Checkout target project
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           path: project
 
       - name: Checkout cabal-plan-submit
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: dancewithheart/cabal-plan-submit
           path: cabal-plan-submit
