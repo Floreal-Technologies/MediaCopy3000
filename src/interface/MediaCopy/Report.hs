@@ -16,9 +16,8 @@ import Data.Text.Display (display)
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Lazy.Builder qualified as TB
-import Data.Vector (Vector)
 import Data.Vector qualified as V
-import System.OsPath (OsPath, takeFileName)
+import System.OsPath (takeFileName)
 
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan
@@ -58,9 +57,9 @@ renderBody st plan =
     <> foldMap (\ready -> renderPlan ready) plan
     <> renderResult (jobKind st.spec.job) st.phase
     <> renderCounts st
-    <> renderManifests st.mhlPaths
-    <> renderOrigins st.originsUsed
-    <> renderLog st.logPath
+    <> foldMap (\p -> field "Manifest" (pathText p)) st.mhlPaths
+    <> foldMap (\origin -> field "Originals" origin) st.originsUsed
+    <> foldMap (\p -> field "Log" (pathText p)) st.logPath
 
 renderPlan :: JobPlan -> Builder
 renderPlan plan =
@@ -83,8 +82,8 @@ renderSealPass :: SealPass -> Builder
 renderSealPass pass =
   field
     "  seal first"
-    ( count (V.length pass.steps)
-        <> " files, "
+    ( plural "file" (V.length pass.steps)
+        <> ", "
         <> T.pack (show pass.bytes)
         <> " bytes, on failure: "
         <> display pass.onFailure
@@ -142,17 +141,6 @@ renderCounts st =
            <> " replaced"
        )
 
-renderManifests :: Vector OsPath -> Builder
-renderManifests paths = foldMap (\p -> field "Manifest" (pathText p)) paths
-
-renderOrigins :: Maybe Text -> Builder
-renderOrigins = \case
-  Nothing -> mempty
-  Just origin -> field "Originals" origin
-
-renderLog :: Maybe OsPath -> Builder
-renderLog = maybe mempty (\p -> field "Log" (pathText p))
-
 renderFailures :: JobState -> Builder
 renderFailures st =
   let failures = Map.toList st.files & filter (\pair -> isFailure (snd pair).status)
@@ -201,5 +189,5 @@ renderGenerationLine gen =
         <> "  "
         <> display gen.process
         <> "  "
-        <> failuresText gen.failures
+        <> plural "failure" gen.failures
     )

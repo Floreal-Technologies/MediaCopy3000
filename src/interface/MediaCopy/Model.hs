@@ -19,7 +19,6 @@ module MediaCopy.Model
 
 import Ascmhl.Types (MhlHistory)
 import Data.Function ((&))
-import Data.Functor ((<&>))
 import Data.List (List)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map.Strict (Map)
@@ -29,7 +28,7 @@ import Data.Text (Text)
 import Data.Time (UTCTime)
 import Data.Vector qualified as V
 import GHC.Generics (Generic)
-import Optics.Core (ix, (%), (%~), (.~), (?~), _Just)
+import Optics.Core (ix, (%), (%~), (.~), (?~), (^?), _Just)
 import System.OsPath (OsPath)
 
 import MediaCopy.Domain.Job
@@ -46,9 +45,6 @@ data OffloadDraft = OffloadDraft
   , destinations :: List OsPath
   }
   deriving stock (Eq, Generic, Show)
-
-emptyDraft :: OffloadDraft
-emptyDraft = OffloadDraft {mediaSource = Nothing, destinations = []}
 
 draftReady :: OffloadDraft -> Bool
 draftReady draft = isJust draft.mediaSource && not (null draft.destinations)
@@ -197,7 +193,7 @@ updateUi msg model = case msg of
   PickSource -> (model, [OpenFolderDialog SourcePicked])
   AddDestination -> (model, [OpenFolderDialog DestinationPicked])
   RemoveDestination i -> (model & #draft % _Just % #destinations %~ (\dests -> deleteAt i dests), [])
-  OpenOffloadDialog -> (model {draft = Just emptyDraft}, [])
+  OpenOffloadDialog -> (model {draft = Just OffloadDraft {mediaSource = Nothing, destinations = []}}, [])
   CloseOffloadDialog -> (model {draft = Nothing}, [])
   SetBase wanted -> (model {appearance = model.appearance {base = wanted}}, [])
   SetPalette wanted -> (model {appearance = setPalette wanted model.appearance}, [])
@@ -266,9 +262,6 @@ setPhase jid phase model = model & #jobs % ix jid % #state % #phase .~ phase
 storePlan :: JobId -> JobPlan -> Model -> Model
 storePlan jid fresh model = model & #jobs % ix jid % #plan ?~ fresh
 
-phaseOf :: JobId -> Model -> Maybe JobPhase
-phaseOf jid model = Map.lookup jid model.jobs <&> \entry -> entry.state.phase
-
 cancelJob :: JobId -> Model -> (Model, List Command)
 cancelJob jid model
   | model.running == Just jid =
@@ -276,8 +269,11 @@ cancelJob jid model
       in (model1, CancelRunning jid : cmds)
   | jid `elem` model.queue =
       (setPhase jid Cancelled model {queue = filter (\queued -> queued /= jid) model.queue}, [])
-  | phaseOf jid model == Just NeedsReview =
-      (setPhase jid Cancelled model {planPhase = closedFor jid model}, [])
+  | model ^? #jobs % ix jid % #state % #phase == Just NeedsReview =
+      let closed = case planningSpec model of
+            Just spec | spec.jobId == jid -> Idle
+            _ -> model.planPhase
+      in (setPhase jid Cancelled model {planPhase = closed}, [])
   | otherwise = (model, [])
 
 neighbour :: Int -> Model -> Maybe JobId
@@ -331,11 +327,6 @@ offered :: JobPlan -> PlanPhase -> PlanPhase
 offered fresh phase = case phase of
   Idle -> Ready fresh
   _ -> phase
-
-closedFor :: JobId -> Model -> PlanPhase
-closedFor jid model = case planningSpec model of
-  Just spec | spec.jobId == jid -> Idle
-  _ -> model.planPhase
 
 planningSpec :: Model -> Maybe JobSpec
 planningSpec model = case model.planPhase of

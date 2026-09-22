@@ -31,7 +31,7 @@ import Text.Printf (printf)
 
 import MediaCopy.Demo.Fixtures qualified as Fixtures
 import MediaCopy.Domain.Job
-import MediaCopy.Gtk.Environment (Environment (Production))
+import MediaCopy.Gtk.Environment (Environment, withEnvironment)
 import MediaCopy.Gtk.Reload (loadCss)
 import MediaCopy.Gtk.Theme (apply, loadPalettes, newThemeAdapter)
 import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
@@ -48,7 +48,7 @@ defaultResultsPath :: FilePath
 defaultResultsPath = "bench/results.csv"
 
 main :: IO ()
-main = do
+main = withEnvironment $ \environment -> do
   args <- getArgs
   let fileCount = readFileCount args
       resultsPath = readResultsPath args
@@ -57,7 +57,7 @@ main = do
       Adw.Application
       [ #applicationId := "eu.choutri.MediaCopy3000.RenderBench"
       , #flags := [Gio.ApplicationFlagsNonUnique]
-      , On #activate (bench fileCount resultsPath ?self)
+      , On #activate (bench environment fileCount resultsPath ?self)
       ]
   status <- Gio.applicationRun app Nothing
   when (status /= 0) (exitWith (ExitFailure (fromIntegral status)))
@@ -74,14 +74,14 @@ readResultsPath = \case
   _ : raw : _ -> raw
   _ -> defaultResultsPath
 
-bench :: Int -> FilePath -> Adw.Application -> IO ()
-bench fileCount resultsPath app = do
-  themeAdapter <- newThemeAdapter Production
-  palettes <- loadPalettes Production
+bench :: Environment -> Int -> FilePath -> Adw.Application -> IO ()
+bench environment fileCount resultsPath app = do
+  themeAdapter <- newThemeAdapter environment
+  palettes <- loadPalettes environment
   let lightSections = themeSections LightPalette palettes
       darkSections = themeSections DarkPalette palettes
   widgets <- buildWidgets app (apply themeAdapter) lightSections darkSections (\_intent -> pure ())
-  loadCss Production
+  loadCss environment
   Gtk.windowPresent widgets.window
   settle 500
   counters <- newCounters widgets.window

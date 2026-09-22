@@ -5,7 +5,6 @@ module Main (main) where
 import Control.Exception (SomeException, displayException, try)
 import Data.List (List)
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import Data.List.NonEmpty qualified as NE
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
 import Data.Time (getCurrentTime)
@@ -22,7 +21,7 @@ import MediaCopy.Domain.Plan (planBlocked)
 import MediaCopy.Effects.FileSystem (defaultChunkSize, runFileSystemIO)
 import MediaCopy.Engine (planJob)
 import MediaCopy.Gtk.Runtime qualified as Runtime
-import MediaCopy.Gtk.Screenshot (Startup (..), defaultStartup)
+import MediaCopy.Gtk.Screenshot (Startup (..))
 import MediaCopy.Report (renderPlanText)
 
 main :: IO ()
@@ -128,22 +127,24 @@ planCommand job = do
       T.putStr (renderPlanText spec plan)
       exitWith (if planBlocked plan then ExitFailure 1 else ExitSuccess)
 
-startup :: IO Startup
+startup :: IO (Maybe Startup)
 startup =
   lookupEnv "MC3K_DEMO" >>= \case
-    Nothing -> pure defaultStartup
+    Nothing -> pure Nothing
     Just wanted -> case lookupScene (T.pack wanted) of
       Nothing -> die ("no such demo scene: " <> wanted <> "\nknown scenes: " <> T.unpack (T.intercalate ", " sceneNames))
       Just scene -> do
         shot <- lookupEnv "MC3K_SHOT"
         pure
-          defaultStartup
-            { frames = NE.toList scene.frames
-            , action = scene.action
-            , shot
-            , expand = scene.expand
-            , scroll = scene.scroll
-            }
+          ( Just
+              Startup
+                { frame = scene.frame
+                , action = scene.action
+                , shot
+                , expand = scene.expand
+                , scroll = scene.scroll
+                }
+          )
 
 banner :: T.Text
 banner =

@@ -1,21 +1,17 @@
 module MediaCopy.Gtk.Widgets.CloseConfirm
-  ( CloseConfirm (..)
-  , newCloseConfirm
-  , renderCloseConfirm
+  ( newCloseConfirm
   ) where
 
 import Data.GI.Base (AttrOp (On, (:=)), new)
 import GI.Adw qualified as Adw
 
-import MediaCopy.Gtk.Widgets.Common (Cell, newOpenCell, renderCell)
-import MediaCopy.Model (Model (..), UiMessage (..))
-
-newtype CloseConfirm = CloseConfirm {openCell :: Cell Bool}
+import MediaCopy.Gtk.Widgets.Common (Cell, newOpenCell)
+import MediaCopy.Model (UiMessage (..))
 
 newCloseConfirm
   :: Adw.ApplicationWindow
   -> (UiMessage -> IO ())
-  -> IO CloseConfirm
+  -> IO (Cell Bool)
 newCloseConfirm window dispatch = do
   dialog <-
     new
@@ -31,8 +27,4 @@ newCloseConfirm window dispatch = do
   Adw.alertDialogSetDefaultResponse dialog (Just "keep")
   Adw.alertDialogSetCloseResponse dialog "keep"
   asDialog <- Adw.toDialog dialog
-  openCell <- newOpenCell asDialog window
-  pure CloseConfirm {openCell}
-
-renderCloseConfirm :: CloseConfirm -> Model -> IO ()
-renderCloseConfirm widget current = renderCell widget.openCell current.closeConfirm
+  newOpenCell asDialog window

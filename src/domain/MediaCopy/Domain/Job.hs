@@ -39,7 +39,7 @@ module MediaCopy.Domain.Job
   , fractionOf
   , Throughput (..)
   , rateOf
-  , failuresText
+  , plural
   ) where
 
 import Ascmhl.Hash
@@ -142,7 +142,7 @@ jobLabel job = pathText (takeFileName (jobRoot job))
 originsDescription :: Map RelPath Hash -> Text
 originsDescription resolved
   | Map.null resolved = "none found – every file recorded as original"
-  | otherwise = "the media source's own history, " <> T.pack (show (Map.size resolved)) <> " files"
+  | otherwise = "the media source's own history, " <> plural "file" (Map.size resolved)
 
 data JobSpec = JobSpec
   { jobId :: JobId
@@ -226,8 +226,8 @@ instance Display JobEvent where
   displayBuilder = \case
     Planned (PlannedWork fs toRead) ->
       "planned "
-        <> displayBuilder (T.pack (show (V.length fs)))
-        <> " files, "
+        <> displayBuilder (plural "file" (V.length fs))
+        <> ", "
         <> displayBuilder (T.pack (show toRead))
         <> " bytes to read"
     FileStatusChanged p s -> displayBuilder p <> " " <> displayBuilder s
@@ -237,7 +237,7 @@ instance Display JobEvent where
     OriginalsResolved origin algo -> "originals " <> displayBuilder origin <> " · " <> displayBuilder algo
     LogOpened p -> "log " <> displayBuilder (pathText p)
     JobFinished AllOk -> "finished, all ok"
-    JobFinished (WithFailures n) -> "finished, " <> displayBuilder (failuresText n)
+    JobFinished (WithFailures n) -> "finished, " <> displayBuilder (plural "failure" n)
     JobFailed message -> "failed – " <> displayBuilder message
 
 data SealStopped = SealStopped
@@ -311,13 +311,13 @@ rateOf state = case (state.phase, state.throughput) of
   _ -> 0
 
 -- |
--- >>> failuresText 1
+-- >>> plural "failure" 1
 -- "1 failure"
--- >>> failuresText 3
--- "3 failures"
-failuresText :: Int -> Text
-failuresText 1 = "1 failure"
-failuresText n = T.pack (show n) <> " failures"
+-- >>> plural "file" 3
+-- "3 files"
+plural :: Text -> Int -> Text
+plural noun 1 = "1 " <> noun
+plural noun n = T.pack (show n) <> " " <> noun <> "s"
 
 fractionOf :: JobState -> Double
 fractionOf state

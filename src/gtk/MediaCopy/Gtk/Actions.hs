@@ -1,6 +1,5 @@
 module MediaCopy.Gtk.Actions
-  ( actionLabel
-  , actionButton
+  ( actionButton
   , headerAction
   , installActions
   ) where

@@ -24,7 +24,7 @@ import Text.XML
 import Text.XML.Cursor
 
 import Ascmhl.Hash
-import Ascmhl.Path (RelPath (..), mkRelPath)
+import Ascmhl.Path (mkRelPath)
 import Ascmhl.Schema qualified as Schema
 import Ascmhl.Types
 

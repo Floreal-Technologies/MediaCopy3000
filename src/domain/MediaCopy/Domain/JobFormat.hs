@@ -14,7 +14,6 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Display (Display (..), display)
 
@@ -35,7 +34,8 @@ newtype FormatError = MixedFormats (List HashAlgo)
 -- | >>> display (MixedFormats [MD5, SHA1])
 -- "ASC MHL: the originals hold more than one hash format: md5, sha1"
 instance Display FormatError where
-  displayBuilder (MixedFormats mixed) = displayBuilder (mixedMessage mixed)
+  displayBuilder (MixedFormats mixed) =
+    displayBuilder ("ASC MHL: the originals hold more than one hash format: " <> T.intercalate ", " (map (\algo -> display algo) mixed))
 
 -- |
 -- >>> settleFormat Map.empty Set.empty
@@ -52,10 +52,6 @@ settleFormat expected present = case (algosOf (Map.restrictKeys expected present
   (mixed@(_ : _ : _), _) -> Left (MixedFormats mixed)
   ([], [algo]) -> Right (JobFormat algo)
   ([], _) -> Right (JobFormat preferredAlgo)
-
-mixedMessage :: List HashAlgo -> Text
-mixedMessage mixed =
-  "ASC MHL: the originals hold more than one hash format: " <> T.intercalate ", " (map (\algo -> display algo) mixed)
 
 algosOf :: Map RelPath Hash -> List HashAlgo
 algosOf hashes = hashes & Map.elems & map (\h -> h.algo) & Set.fromList & Set.toList

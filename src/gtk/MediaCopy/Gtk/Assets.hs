@@ -4,24 +4,25 @@ module MediaCopy.Gtk.Assets
 
 import Control.Monad.Extra (findM)
 import Data.List (intercalate)
+import Data.Text qualified as T
+import Effectful.Log (logAttention_)
 import System.Directory (doesPathExist)
 import System.Environment (getExecutablePath)
 import System.FilePath (takeDirectory, (</>))
 
-import MediaCopy.Gtk.Environment (Environment (..))
-import MediaCopy.Gtk.Log (logLine)
+import MediaCopy.Gtk.Environment (Environment (..), Mode (..), logWith)
 import Paths_mediacopy3000 (getDataFileName)
 
 resolveAsset :: Environment -> FilePath -> IO FilePath
 resolveAsset environment relative = do
   installed <- getDataFileName relative
-  let sourceTree = [relative | environment == Development]
+  let sourceTree = [relative | environment.mode == Development]
   fromPrefixes <- besideExecutable relative
   let candidates = sourceTree <> (installed : fromPrefixes)
   findM doesPathExist candidates >>= \case
     Just found -> pure found
     Nothing -> do
-      logLine ("no " <> relative <> "; tried " <> intercalate ", " candidates)
+      logWith environment (logAttention_ (T.pack ("no " <> relative <> "; tried " <> intercalate ", " candidates)))
       pure installed
 
 besideExecutable :: FilePath -> IO [FilePath]

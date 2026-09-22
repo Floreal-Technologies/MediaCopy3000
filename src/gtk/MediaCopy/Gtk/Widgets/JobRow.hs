@@ -14,7 +14,7 @@ import Data.Time (UTCTime)
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
-import MediaCopy.Domain.Job (JobId (..), JobPhase (..), JobResult (..), JobSpec (..), JobState (..), failuresText, fractionOf, jobKind, jobLabel, rateOf)
+import MediaCopy.Domain.Job (JobId (..), JobPhase (..), JobResult (..), JobSpec (..), JobState (..), fractionOf, jobKind, jobLabel, plural, rateOf)
 import MediaCopy.Gtk.Widgets.Common (nameAccessible, newCell, newLabel, paddedBox, renderCell, toggleClass)
 import MediaCopy.Interface.Wording (KindUi (..), count, humanRate, kindUi, quietText)
 
@@ -82,8 +82,10 @@ rowView now state =
     , label = jobLabel state.spec.job
     , phase = phaseText now state
     , fraction = fractionOf state
-    , allOk = isAllOk state.phase
-    , bad = isBad state.phase
+    , allOk = state.phase == Finished AllOk
+    , bad = case state.phase of
+        (Finished (WithFailures _); Failed _) -> True
+        _ -> False
     }
 
 phaseText :: UTCTime -> JobState -> Text
@@ -91,28 +93,15 @@ phaseText now state = case state.phase of
   Queued -> "Queued"
   NeedsReview -> "Needs review"
   Running -> runningText now state
-  Finished AllOk -> "Finished · " <> count (Map.size state.files) <> " files · all OK"
-  Finished (WithFailures failures) -> "Finished · " <> failuresText failures
+  Finished AllOk -> "Finished · " <> plural "file" (Map.size state.files) <> " · all OK"
+  Finished (WithFailures failures) -> "Finished · " <> plural "failure" failures
   Failed _ -> "Failed"
   Cancelled -> "Cancelled"
 
 runningText :: UTCTime -> JobState -> Text
 runningText now state
   | Just quiet <- quietText now state = quiet
-  | ui.showsProgress = ui.runningVerb <> " · " <> count (percentOf state) <> " % · " <> humanRate (rateOf state)
+  | ui.showsProgress = ui.runningVerb <> " · " <> count (floor (fractionOf state * 100) :: Int) <> " % · " <> humanRate (rateOf state)
   | otherwise = ui.runningVerb <> "…"
   where
     ui = kindUi (jobKind state.spec.job)
-
-percentOf :: JobState -> Int
-percentOf state = floor (fractionOf state * 100)
-
-isAllOk :: JobPhase -> Bool
-isAllOk = \case
-  Finished AllOk -> True
-  _ -> False
-
-isBad :: JobPhase -> Bool
-isBad = \case
-  (Finished (WithFailures _); Failed _) -> True
-  _ -> False

@@ -29,8 +29,8 @@ import MediaCopy.Domain.History (HistoryError)
 import MediaCopy.Domain.Job
 import MediaCopy.Effects.Emit
 import MediaCopy.Effects.FileSystem (defaultChunkSize, runFileSystemIO)
-import MediaCopy.Effects.Hasher (runHasherIO)
-import MediaCopy.Engine (defaultToolInfo, readHistory, runJob)
+import MediaCopy.Effects.Hasher (runHasher)
+import MediaCopy.Engine (readHistory, runJob)
 
 withTempTree :: String -> (FilePath -> IO a) -> IO a
 withTempTree label use = withSystemTempDirectory label use
@@ -47,10 +47,10 @@ osPathOf p = case encodeUtf p of
 
 runEngineIO :: JobSpec -> IO (Vector JobEvent)
 runEngineIO spec =
-  runJob defaultToolInfo spec
+  runJob "localhost" spec
     & runEmitCollect
     & runTime
-    & runHasherIO
+    & runHasher
     & runFileSystemIO defaultChunkSize
     & runEff
     & fmap (\result -> snd result)

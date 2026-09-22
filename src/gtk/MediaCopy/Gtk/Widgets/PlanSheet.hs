@@ -20,7 +20,7 @@ import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 import System.OsPath (takeFileName)
 
-import MediaCopy.Domain.Job (ExistingCopy (..), Job (..), JobSpec (..), OffloadJob (..), OnSealFailure (..), SealFirst (..), jobLabel)
+import MediaCopy.Domain.Job (ExistingCopy (..), Job (..), JobSpec (..), OffloadJob (..), OnSealFailure (..), SealFirst (..), jobLabel, plural)
 import MediaCopy.Domain.JobFormat (formatAlgo)
 import MediaCopy.Domain.Plan
 import MediaCopy.Gtk.Widgets.Common
@@ -239,7 +239,7 @@ sealSubtitle plan = case plan.sealPass of
   Just pass -> "reads " <> humanBytes pass.bytes <> " first, then writes generation " <> count (plan.generations + 1)
   Nothing
     | plan.generations == 0 -> "the media source has no history; sealing records its hashes before a byte is copied"
-    | otherwise -> "the media source already holds " <> count plan.generations <> " generations, which the copies are checked against"
+    | otherwise -> "the media source already holds " <> plural "generation" plan.generations <> ", which the copies are checked against"
 
 orderedFindings :: JobPlan -> Vector Finding
 orderedFindings plan = blockers plan <> V.filter (\finding -> finding.severity == Warning) plan.findings
@@ -247,7 +247,7 @@ orderedFindings plan = blockers plan <> V.filter (\finding -> finding.severity =
 summaryOf :: JobPlan -> Vector Row
 summaryOf plan =
   V.fromList
-    [ plainRow (count (V.length plan.steps) <> " files") (humanBytes plan.totalBytes)
+    [ plainRow (plural "file" (V.length plan.steps)) (humanBytes plan.totalBytes)
     , plainRow "Hash format" (formatText plan)
     , plainRow "Steps" (stepCounts plan)
     ]
@@ -307,8 +307,7 @@ executionText plan = case plan.execution of
 carriedText :: Int -> Text
 carriedText carried
   | carried <= 0 = ""
-  | carried == 1 = " · carries 1 generation"
-  | otherwise = " · carries " <> count carried <> " generations"
+  | otherwise = " · carries " <> plural "generation" carried
 
 generationRow :: PlannedGeneration -> Row
 generationRow planned =

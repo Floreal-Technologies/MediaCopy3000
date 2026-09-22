@@ -18,7 +18,7 @@ import GI.Gtk qualified as Gtk
 
 import MediaCopy.Domain.Job (JobId)
 import MediaCopy.Gtk.Actions (headerAction, installActions)
-import MediaCopy.Gtk.Widgets.CloseConfirm (newCloseConfirm, renderCloseConfirm)
+import MediaCopy.Gtk.Widgets.CloseConfirm (newCloseConfirm)
 import MediaCopy.Gtk.Widgets.Common (Cell, flatNamed, newCell, renderCell, suppressing, unlessSuppressed)
 import MediaCopy.Gtk.Widgets.JobDetail (JobDetail (..), newJobDetail)
 import MediaCopy.Gtk.Widgets.JobRow (JobRow (..), jobIdOfRow, newJobRow)
@@ -69,7 +69,7 @@ buildWidgets app applyTheme lightSections darkSections dispatch = do
         renderOffloadDialog offloadDialog current
         renderPlanSheet planSheet current
         paintPreferences current.appearance
-        renderCloseConfirm closeConfirm current
+        renderCell closeConfirm current.closeConfirm
         renderCell toastCell current.toast
   pure Widgets {window, render}
 

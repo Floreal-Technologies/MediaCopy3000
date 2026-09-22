@@ -1,6 +1,5 @@
 module MediaCopy.Interface.Theme
   ( Theme (..)
-  , themeMode
   , Palette (..)
   , FamilyInfo (..)
   , noFamilyInfo
@@ -12,10 +11,9 @@ module MediaCopy.Interface.Theme
   , Base (..)
   , Appearance (..)
   , systemAppearance
-  , paletteOf
   , setPalette
   , resolveTheme
-  , forcedScheme
+  , forcedBase
   , usesBase
   , ThemeSection (..)
   , themeSections
@@ -108,14 +106,6 @@ data Theme
   | PaletteTheme Palette
   deriving stock (Eq, Ord, Show)
 
-themeMode :: Theme -> PaletteMode
-themeMode = \case
-  SystemTheme mode -> mode
-  PaletteTheme palette -> palette.mode
-
-systemLabel :: PaletteMode -> Text
-systemLabel mode = "System " <> T.toLower (display mode)
-
 data Base
   = FollowDesktop
   | AlwaysLight
@@ -143,22 +133,19 @@ systemAppearance =
     , dark = SystemTheme DarkPalette
     }
 
-paletteOf :: PaletteMode -> Appearance -> Theme
-paletteOf mode appearance = case mode of
-  LightPalette -> appearance.light
-  DarkPalette -> appearance.dark
-
 setPalette :: Theme -> Appearance -> Appearance
-setPalette wanted appearance = case themeMode wanted of
+setPalette wanted appearance = case mode of
   LightPalette -> appearance {light = wanted}
   DarkPalette -> appearance {dark = wanted}
+  where
+    mode = case wanted of
+      SystemTheme held -> held
+      PaletteTheme palette -> palette.mode
 
 resolveTheme :: Appearance -> PaletteMode -> Theme
-resolveTheme appearance desktop =
-  paletteOf (fromMaybe desktop (forcedBase appearance.base)) appearance
-
-forcedScheme :: Appearance -> Maybe PaletteMode
-forcedScheme appearance = forcedBase appearance.base
+resolveTheme appearance desktop = case fromMaybe desktop (forcedBase appearance.base) of
+  LightPalette -> appearance.light
+  DarkPalette -> appearance.dark
 
 usesBase :: PaletteMode -> Base -> Bool
 usesBase mode base = maybe True (\held -> held == mode) (forcedBase base)
@@ -202,7 +189,7 @@ addPalette sections palette =
 
 themeRowLabel :: Theme -> Text
 themeRowLabel = \case
-  SystemTheme mode -> systemLabel mode
+  SystemTheme mode -> "System " <> T.toLower (display mode)
   PaletteTheme palette -> titleCase palette.variant
 
 themeAsset :: Theme -> Maybe FilePath

@@ -1,6 +1,5 @@
 module MediaCopy.Gtk.Screenshot
   ( Startup (..)
-  , defaultStartup
   , seeded
   ) where
 
@@ -9,43 +8,35 @@ import Data.GI.Base (AttrOp ((:=)), castTo, set)
 import Data.List (List)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Effectful.Log (logAttention_)
 import GI.Adw qualified as Adw
 import GI.GLib qualified as GLib
 import GI.Gdk qualified as Gdk
 import GI.Gio qualified as Gio
 import GI.Gsk qualified as Gsk
 import GI.Gtk qualified as Gtk
-import System.IO (hPutStrLn, stderr)
 
+import MediaCopy.Gtk.Environment (Environment, logWith)
 import MediaCopy.Model (Model)
 
 data Startup = Startup
-  { frames :: List Model
+  { frame :: Model
   , action :: Maybe Text
   , shot :: Maybe FilePath
   , expand :: Bool
   , scroll :: Bool
   }
 
-defaultStartup :: Startup
-defaultStartup = Startup {frames = [], action = Nothing, shot = Nothing, expand = False, scroll = False}
-
-seeded :: Adw.ApplicationWindow -> Adw.Application -> (Model -> IO ()) -> Startup -> IO ()
-seeded window app showFrame startup = case startup.frames of
-  [] -> pure ()
-  first : rest -> do
-    Gtk.widgetSetCanTarget window False
-    Gtk.windowSetFocusVisible window False
-    void (GLib.timeoutAdd GLib.PRIORITY_DEFAULT 250 (frame first rest))
+seeded :: Environment -> Adw.ApplicationWindow -> Adw.Application -> (Model -> IO ()) -> Startup -> IO ()
+seeded environment window app showFrame startup = do
+  Gtk.widgetSetCanTarget window False
+  Gtk.windowSetFocusVisible window False
+  void $ GLib.timeoutAdd GLib.PRIORITY_DEFAULT 250 $ do
+    showFrame startup.frame
+    mapM_ (activateNamed environment window app) startup.action
+    void (GLib.timeoutAdd GLib.PRIORITY_DEFAULT 600 prepare)
+    pure False
   where
-    frame model rest = do
-      showFrame model
-      case rest of
-        next : more -> void (GLib.timeoutAdd GLib.PRIORITY_DEFAULT 600 (frame next more))
-        [] -> do
-          mapM_ (activateNamed window app) startup.action
-          void (GLib.timeoutAdd GLib.PRIORITY_DEFAULT 600 prepare)
-      pure False
     prepare = do
       when startup.expand (expandAll window)
       when startup.scroll (scrollToEnd window)
@@ -54,15 +45,15 @@ seeded window app showFrame startup = case startup.frames of
     settleMs = 3_500
     takeShot path = do
       outcome <- saveWindowPng window path
-      either (\err -> hPutStrLn stderr (T.unpack err)) pure outcome
+      either (\err -> logWith environment (logAttention_ err)) pure outcome
       Gtk.windowDestroy window
       pure False
 
-activateNamed :: Adw.ApplicationWindow -> Adw.Application -> Text -> IO ()
-activateNamed window app full = case T.breakOn "." full of
+activateNamed :: Environment -> Adw.ApplicationWindow -> Adw.Application -> Text -> IO ()
+activateNamed environment window app full = case T.breakOn "." full of
   ("app", rest) -> Gio.actionGroupActivateAction app (T.drop 1 rest) Nothing
   ("win", rest) -> Gio.actionGroupActivateAction window (T.drop 1 rest) Nothing
-  _ -> hPutStrLn stderr ("no such action: " <> T.unpack full)
+  _ -> logWith environment (logAttention_ ("no such action: " <> full))
 
 saveWindowPng :: Adw.ApplicationWindow -> FilePath -> IO (Either Text ())
 saveWindowPng window path = do

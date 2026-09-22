@@ -12,12 +12,12 @@ import Control.Monad (forM_, void, when)
 import Data.GI.Base (AttrOp (On, (:=)), new, on)
 import Data.GI.Base.GError (catchGErrorJustDomain)
 import Data.IORef
+import Data.Maybe (isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Display (display)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time (getCurrentTime)
-import Data.Vector (Vector)
 import Effectful (runEff)
 import Effectful.Time (runTime)
 import GI.Adw qualified as Adw
@@ -33,15 +33,15 @@ import MediaCopy.Domain.Job (JobEvent (..), JobId, JobSpec (..))
 import MediaCopy.Domain.Plan (JobPlan (..))
 import MediaCopy.Effects.Emit (runEmitIO)
 import MediaCopy.Effects.FileSystem (defaultChunkSize, runFileSystemIO)
-import MediaCopy.Effects.Hasher (runHasherIO)
+import MediaCopy.Effects.Hasher (runHasher)
 import MediaCopy.Engine
 import MediaCopy.EventLog (withEventLog)
-import MediaCopy.Gtk.Environment (Environment, readEnvironment)
+import MediaCopy.Gtk.Environment (Environment, withEnvironment)
 import MediaCopy.Gtk.Reload (loadCss)
 import MediaCopy.Gtk.Screenshot (Startup (..), seeded)
 import MediaCopy.Gtk.Theme
 import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
-import MediaCopy.Interface.Theme (PaletteMode (..), ThemeSection, themeSections)
+import MediaCopy.Interface.Theme (PaletteMode (..), themeSections)
 import MediaCopy.Interface.Wording (noHistoryText)
 import MediaCopy.Model
 import MediaCopy.Report (renderPlanText)
@@ -50,12 +50,10 @@ data Runtime = Runtime
   { modelRef :: IORef Model
   , widgets :: Widgets
   , engine :: IORef (Maybe (JobId, Async ()))
-  , themeAdapter :: ThemeAdapter
   }
 
-start :: Startup -> IO ()
-start startup = do
-  environment <- readEnvironment
+start :: Maybe Startup -> IO ()
+start startup = withEnvironment $ \environment -> do
   runtimeRef <- newIORef Nothing
   app <-
     new
@@ -66,7 +64,7 @@ start startup = do
   status <- Gio.applicationRun app Nothing
   when (status /= 0) (exitWith (ExitFailure (fromIntegral status)))
 
-activate :: IORef (Maybe Runtime) -> Environment -> Startup -> Adw.Application -> IO ()
+activate :: IORef (Maybe Runtime) -> Environment -> Maybe Startup -> Adw.Application -> IO ()
 activate runtimeRef environment startup app =
   readIORef runtimeRef >>= \case
     Just runtime -> Gtk.windowPresent runtime.widgets.window
@@ -75,7 +73,7 @@ activate runtimeRef environment startup app =
 buildAndPresent
   :: IORef (Maybe Runtime)
   -> Environment
-  -> Startup
+  -> Maybe Startup
   -> Adw.Application
   -> IO ()
 buildAndPresent runtimeRef environment startup app = do
@@ -88,10 +86,10 @@ buildAndPresent runtimeRef environment startup app = do
         readIORef runtimeRef >>= \case
           Nothing -> pure ()
           Just runtime -> dispatch runtime msg
-  (lightSections, darkSections) <- loadThemeSections environment
-  widgets <- buildWidgets app (apply themeAdapter) lightSections darkSections (\intent -> dispatchNow (Ui intent))
+  palettes <- loadPalettes environment
+  widgets <- buildWidgets app (apply themeAdapter) (themeSections LightPalette palettes) (themeSections DarkPalette palettes) (\intent -> dispatchNow (Ui intent))
   loadCss environment
-  let runtime = Runtime {modelRef, widgets, engine, themeAdapter}
+  let runtime = Runtime {modelRef, widgets, engine}
   writeIORef runtimeRef (Just runtime)
   onDesktopBase themeAdapter (\observed -> postMessage runtime (DesktopBase observed))
   installCloseRequest widgets.window dispatchNow
@@ -102,7 +100,7 @@ buildAndPresent runtimeRef environment startup app = do
   let showFrame frame = do
         writeIORef modelRef frame
         widgets.render frame
-  seeded widgets.window app showFrame startup
+  mapM_ (seeded environment widgets.window app showFrame) startup
 
 dispatch :: Runtime -> Message -> IO ()
 dispatch runtime msg = do
@@ -139,20 +137,15 @@ runCommand runtime = \case
   WriteFile path text -> writeFile' path (encodeUtf8 text)
   CloseWindow -> Gtk.windowDestroy runtime.widgets.window
 
-loadThemeSections :: Environment -> IO (Vector ThemeSection, Vector ThemeSection)
-loadThemeSections environment = do
-  palettes <- loadPalettes environment
-  pure (themeSections LightPalette palettes, themeSections DarkPalette palettes)
-
 installCloseRequest :: Adw.ApplicationWindow -> (Message -> IO ()) -> IO ()
 installCloseRequest window dispatchNow =
   void $ on window #closeRequest $ do
     dispatchNow (Ui RequestClose)
     pure True
 
-installTicker :: Startup -> (Message -> IO ()) -> IO ()
+installTicker :: Maybe Startup -> (Message -> IO ()) -> IO ()
 installTicker startup dispatchNow =
-  when (null startup.frames) $
+  when (isNothing startup) $
     void
       ( GLib.timeoutAdd
           GLib.PRIORITY_DEFAULT
@@ -178,14 +171,13 @@ startJob :: Runtime -> JobPlan -> IO ()
 startJob runtime plan = do
   let spec = plan.spec
   host <- HostName.getHostName
-  let config = defaultToolInfo {hostname = T.pack host}
   let sink event = postMessage runtime (EngineEvent spec.jobId event)
   previous <- readIORef runtime.engine
   worker <- async $ do
     mapM_ (\held -> void (waitCatch (snd held))) previous
     withEventLog spec (renderPlanText spec plan) $ \logPath logLine -> do
       forM_ logPath (\p -> sink (LogOpened p))
-      runEff (runFileSystemIO defaultChunkSize (runHasherIO (runTime (runEmitIO (\ev -> logLine ev >> sink ev) (executePlan config plan)))))
+      runEff (runFileSystemIO defaultChunkSize (runHasher (runTime (runEmitIO (\ev -> logLine ev >> sink ev) (executePlan (T.pack host) plan)))))
   writeIORef runtime.engine (Just (spec.jobId, worker))
   void $ async $ do
     outcome <- waitCatch worker

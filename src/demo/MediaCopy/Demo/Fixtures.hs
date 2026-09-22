@@ -4,18 +4,12 @@ module MediaCopy.Demo.Fixtures
   , shuttle
   , archive
   , mediaSourceFiles
-  , mediaSourceDirs
-  , mediaSourceTree
   , totalBytes
   , offloadJob
   , offloadFrom
   , verifyJob
   , sealJob
   , specFor
-  , offloadFactsReady
-  , offloadFactsBlocked
-  , verifyFacts
-  , sealFacts
   , readyPlan
   , blockedPlan
   , partialPlan

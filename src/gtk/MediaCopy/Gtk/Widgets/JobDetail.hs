@@ -41,13 +41,14 @@ import MediaCopy.Domain.Job
   , jobKind
   , jobLabel
   , jobRoot
+  , plural
   , rateOf
   )
 import MediaCopy.Gtk.Actions (actionButton)
 import MediaCopy.Gtk.Widgets.Common (nameAccessible, newLabel, paddedBox, suppressing, toggleClass, unlessSuppressed)
 import MediaCopy.Gtk.Widgets.FileRow (FileRow (..), newFileRow)
 import MediaCopy.Gtk.Widgets.History (HistoryView (..), newHistoryView, renderHistory)
-import MediaCopy.Interface.Wording (KindUi (..), count, generationsText, humanBytes, humanEta, humanRate, kindUi, quietText)
+import MediaCopy.Interface.Wording (KindUi (..), count, humanBytes, humanEta, humanRate, kindUi, quietText)
 import MediaCopy.Model (FileFilter (..), JobEntry (..), Model (..), UiMessage (..))
 
 data JobDetail = JobDetail
@@ -342,7 +343,7 @@ existingText = \case
 chainText :: Maybe MhlHistory -> Text
 chainText = \case
   Nothing -> "—"
-  Just loaded -> generationsText (V.length loaded.generations)
+  Just loaded -> plural "generation" (V.length loaded.generations)
 
 algoText :: Maybe MhlHistory -> JobState -> Text
 algoText loaded state = case state.originsAlgo of
@@ -362,8 +363,8 @@ progressLeftText state =
     <> " "
     <> count (doneCount state)
     <> " / "
-    <> count (Map.size state.files)
-    <> " files · "
+    <> plural "file" (Map.size state.files)
+    <> " · "
     <> humanBytes state.bytesDone
     <> " of "
     <> humanBytes state.bytesTotal

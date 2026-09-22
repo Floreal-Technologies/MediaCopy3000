@@ -7,13 +7,9 @@ module MediaCopy.Demo
 
 import Ascmhl.Hash (HashAlgo (..))
 import Ascmhl.Types (MhlHistory (..))
-import Data.Function ((&))
-import Data.List (List)
-import Data.List.NonEmpty (NonEmpty (..))
-import Data.List.NonEmpty qualified as NE
+import Data.List (List, find)
 import Data.Text (Text)
 import Data.Time (addUTCTime)
-import Data.Vector (Vector)
 import Data.Vector qualified as V
 
 import MediaCopy.Demo.Fixtures
@@ -24,7 +20,7 @@ import MediaCopy.Model (FileFilter (..), Message (..), Model (..), UiMessage (..
 
 data Scene = Scene
   { name :: Text
-  , frames :: NonEmpty Model
+  , frame :: Model
   , action :: Maybe Text
   , expand :: Bool
   , scroll :: Bool
@@ -40,7 +36,7 @@ scenes =
   , still "plan-partial" (offered (offloadJob UseHistory) partialPlan)
   , still "plan-blocked" (offered (offloadJob UseHistory) blockedPlan)
   , (still "plan-findings" (offered (offloadJob UseHistory) blockedPlan)) {scroll = True}
-  , still "plan-error" (RequestPlan (offloadJob UseHistory) : [PlanComputed (specFor first (offloadJob UseHistory)) (Left planErrorText)])
+  , still "plan-error" (RequestPlan (offloadJob UseHistory) : [PlanComputed (specFor first (offloadJob UseHistory)) (Left "/media/CARD_A001/ascmhl/ascmhl_chain.xml: unexpected end of input")])
   , still "job-running" (runningMessages <> [EngineEvent first (Progress 6_100_000_000), Tick (addUTCTime 2 at), EngineEvent first (Progress 8_640_000_000)])
   , still "job-finished" finishedMessages
   , still "job-failures" failuresMessages
@@ -51,37 +47,23 @@ scenes =
   , still "close-confirm" (runningMessages <> [EngineEvent first (Progress 8_640_000_000), Ui RequestClose])
   , (still "about" []) {action = Just "app.about"}
   ]
-    <> map queueUnder (V.toList demoPalettes)
-
-queueUnder :: Palette -> Scene
-queueUnder palette =
-  still
-    ("themes/queue-" <> palette.family <> "-" <> modeDirectory palette.mode <> "-" <> palette.variant)
-    (queueMessages <> [Ui (SetBase (baseFor palette.mode)), Ui (SetPalette (PaletteTheme palette))])
-
-baseFor :: PaletteMode -> Base
-baseFor = \case
-  DarkPalette -> AlwaysDark
-  LightPalette -> AlwaysLight
-
-demoPalettes :: Vector Palette
-demoPalettes = palettesFrom themeRoot paletteListing
-
-themeRoot :: FilePath
-themeRoot = "assets/themes"
+    <> [ still
+           ("themes/queue-" <> palette.family <> "-" <> modeDirectory palette.mode <> "-" <> palette.variant)
+           (queueMessages <> [Ui (SetBase base), Ui (SetPalette (PaletteTheme palette))])
+       | palette <- V.toList (palettesFrom "assets/themes" paletteListing)
+       , let base = case palette.mode of
+               DarkPalette -> AlwaysDark
+               LightPalette -> AlwaysLight
+       ]
 
 sceneNames :: List Text
 sceneNames = map (\scene -> scene.name) scenes
 
 lookupScene :: Text -> Maybe Scene
-lookupScene wanted = scenes & filter (\scene -> scene.name == wanted) & headOrNothing
-  where
-    headOrNothing = \case
-      [] -> Nothing
-      x : _ -> Just x
+lookupScene wanted = find (\scene -> scene.name == wanted) scenes
 
 still :: Text -> List Message -> Scene
-still name msgs = Scene {name, frames = NE.singleton (play msgs), action = Nothing, expand = False, scroll = False}
+still name msgs = Scene {name, frame = play msgs, action = Nothing, expand = False, scroll = False}
 
 play :: List Message -> Model
 play msgs = foldl (\model msg -> fst (update msg model)) (initialModel at LightPalette) msgs
@@ -198,6 +180,3 @@ statusOf index status = EngineEvent first (FileStatusChanged (fst (mediaSourceFi
 
 first :: JobId
 first = JobId 1
-
-planErrorText :: Text
-planErrorText = "/media/CARD_A001/ascmhl/ascmhl_chain.xml: unexpected end of input"

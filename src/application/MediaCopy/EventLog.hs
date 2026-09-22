@@ -67,15 +67,14 @@ logName :: JobSpec -> Text
 logName spec =
   T.pack (formatTime defaultTimeLocale "%Y-%m-%d_%H%M%S" spec.createdAt)
     <> "-"
-    <> jobNumber spec.jobId
+    <> T.pack (show n)
     <> "-"
     <> jobLabel spec.job
     <> "-"
     <> display (jobKind spec.job)
     <> ".log"
-
-jobNumber :: JobId -> Text
-jobNumber (JobId n) = T.pack (show n)
+  where
+    JobId n = spec.jobId
 
 writeHeader :: Handle -> Text -> IO ()
 writeHeader h header = void (try @IOException (TIO.hPutStrLn h ("MediaCopy 3000 event log\n" <> header)))

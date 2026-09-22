@@ -16,12 +16,11 @@ import Data.Bits (shiftR, (.&.))
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Char (isDigit)
+import Data.Foldable (find)
 import Data.Function ((&))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Display (Display (..))
-import Data.Vector (Vector)
-import Data.Vector qualified as V
 import Data.Word (Word64, Word8)
 import Numeric (showHex)
 
@@ -58,9 +57,6 @@ algoSpec = \case
     hexSpec element =
       AlgoSpec {mhlElement = element, readValue = \raw -> T.toLower raw, toDigest = hexToBytes}
 
-allAlgos :: Vector HashAlgo
-allAlgos = [minBound .. maxBound] & V.fromList
-
 -- |
 -- >>> preferredAlgo
 -- XXH64
@@ -82,7 +78,7 @@ instance Display HashAlgo where
 -- Nothing
 algoFromMhlElement :: Text -> Maybe HashAlgo
 algoFromMhlElement (T.toLower -> t) =
-  V.find (\which -> (algoSpec which).mhlElement == t) allAlgos
+  find (\which -> (algoSpec which).mhlElement == t) [minBound .. maxBound]
 
 -- |
 -- >>> toHex (BS.pack [0, 15, 255])

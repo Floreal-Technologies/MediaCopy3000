@@ -3,7 +3,6 @@ module MediaCopy.Interface.Wording
   , humanBytes
   , humanRate
   , humanEta
-  , generationsText
   , resultText
   , noHistoryText
   , quietText
@@ -20,7 +19,7 @@ import Data.Time (NominalDiffTime, UTCTime, diffUTCTime)
 import Numeric (showFFloat)
 import System.OsPath (OsPath)
 
-import MediaCopy.Domain.Job (Doing (..), JobKind (..), JobResult (..), JobState (..), failuresText, isDone)
+import MediaCopy.Domain.Job (Doing (..), JobKind (..), JobResult (..), JobState (..), isDone, plural)
 
 -- $setup
 -- >>> import System.OsPath (unsafeEncodeUtf)
@@ -51,7 +50,7 @@ count n = T.pack (show n)
 humanBytes :: Int64 -> Text
 humanBytes n
   | n < 1_000 = count n <> " B"
-  | n < 999_500 = whole (bytes / 1e3) <> " KB"
+  | n < 999_500 = count (round (bytes / 1e3) :: Int64) <> " KB"
   | n < 999_950_000 = decimal (bytes / 1e6) <> " MB"
   | n < 999_950_000_000 = decimal (bytes / 1e9) <> " GB"
   | otherwise = decimal (bytes / 1e12) <> " TB"
@@ -107,23 +106,11 @@ quietText now state
       OnFile status -> not (isDone status)
       WritingManifest -> True
 
-whole :: Double -> Text
-whole x = count (round x :: Int64)
-
 decimal :: Double -> Text
 decimal x = T.pack (showFFloat (Just 1) x "")
 
 pad2 :: Int -> Text
 pad2 n = T.justifyRight 2 '0' (count n)
-
--- |
--- >>> generationsText 1
--- "1 generation"
--- >>> generationsText 4
--- "4 generations"
-generationsText :: Int -> Text
-generationsText 1 = "1 generation"
-generationsText n = count n <> " generations"
 
 -- |
 -- >>> resultText SealKind AllOk
@@ -135,7 +122,7 @@ resultText kind = \case
   AllOk -> case kind of
     (OffloadKind; VerifyKind) -> "finished, all files verified"
     SealKind -> "finished, all files sealed"
-  WithFailures n -> "finished with " <> failuresText n
+  WithFailures n -> "finished with " <> plural "failure" n
 
 -- |
 -- >>> noHistoryText (unsafeEncodeUtf "card")

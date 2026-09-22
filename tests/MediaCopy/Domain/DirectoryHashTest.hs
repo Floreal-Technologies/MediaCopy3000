@@ -36,7 +36,7 @@ sampleTree =
 
 runHashes :: JobFormat -> DirNode -> IO (DirHashes, Vector (RelPath, DirHashes))
 runHashes fmt node =
-  runEff (runHasherIO (runErrorNoCallStack @DirectoryHashError (directoryHashes (hashBytes fmt) node))) >>= \case
+  runEff (runHasher (runErrorNoCallStack @DirectoryHashError (directoryHashes (hashBytes fmt) node))) >>= \case
     Left e -> assertFailure (T.unpack (display e))
     Right pairs -> pure pairs
 

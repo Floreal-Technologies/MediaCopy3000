@@ -1,13 +1,11 @@
 module MediaCopy.Engine
-  ( ToolInfo (..)
-  , defaultToolInfo
-  , runJob
+  ( runJob
   , planJob
   , executePlan
   , readHistory
   ) where
 
-import Ascmhl.Build (fileEntry)
+import Ascmhl.Build (creatorInfo, fileEntry)
 import Ascmhl.Hash
 import Ascmhl.Path (RelPath, relToOsPath)
 import Ascmhl.Types
@@ -29,10 +27,11 @@ import Data.Text.Display (display)
 import Data.Time (UTCTime, diffUTCTime)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
+import Data.Version (showVersion)
 import Effectful
 import Effectful.Error.Static (Error, runErrorNoCallStack, throwError)
 import Effectful.Exception (displayException, finally, throwIO, trySync)
-import Effectful.Reader.Static (Reader, ask, runReader)
+import Effectful.Reader.Static (Reader, ask, asks, runReader)
 import Effectful.State.Static.Local (State, evalState, get, modify)
 import Effectful.Time (Time, currentTime)
 import System.OsPath (OsPath)
@@ -43,21 +42,11 @@ import MediaCopy.Domain.Plan
 import MediaCopy.Effects.Emit
 import MediaCopy.Effects.FileSystem
 import MediaCopy.Effects.Hasher
-import MediaCopy.Engine.Config
 import MediaCopy.Engine.Generation (requireNextGeneration, writeGeneration)
 import MediaCopy.Engine.Plan (planJob)
 import MediaCopy.Engine.Violation (PlanViolation (..), orThrow)
 import MediaCopy.Mhl.Store
-
-type Copying es =
-  ( FileSystem :> es
-  , Hasher :> es
-  , Time :> es
-  , Emit :> es
-  , State JobProgress :> es
-  , Reader JobFormat :> es
-  , Reader JobInstant :> es
-  )
+import Paths_mediacopy3000 (version)
 
 type Hashing es =
   ( FileSystem :> es
@@ -68,7 +57,9 @@ type Hashing es =
   , Reader JobFormat :> es
   )
 
-type Pass es = (Copying es, Error PlanViolation :> es, Reader ToolInfo :> es)
+type Copying es = (Hashing es, Reader CreatorInfo :> es)
+
+type Pass es = (Copying es, Error PlanViolation :> es)
 
 data JobProgress = JobProgress
   { readSoFar :: Int64
@@ -93,21 +84,28 @@ data SealCheck = SealCheck
 
 runJob
   :: (FileSystem :> es, Hasher :> es, Time :> es, Emit :> es)
-  => ToolInfo
+  => Text
   -> JobSpec
   -> Eff es ()
-runJob cfg spec = planJob spec >>= executePlan cfg
+runJob hostname spec = planJob spec >>= executePlan hostname
 
 executePlan
   :: (FileSystem :> es, Hasher :> es, Time :> es, Emit :> es)
-  => ToolInfo
+  => Text
   -> JobPlan
   -> Eff es ()
-executePlan cfg plan
-  | planBlocked plan = emit (JobFailed (blockerText plan))
+executePlan hostname plan
+  | planBlocked plan =
+      plan
+        & blockers
+        & V.toList
+        & map (\finding -> display finding.code <> ": " <> finding.detail)
+        & T.intercalate "; "
+        & JobFailed
+        & emit
   | otherwise = do
       startTime <- currentTime
-      result <- trySync (runErrorNoCallStack @PlanViolation (runReader cfg (evalState (start startTime) (runPlan plan))))
+      result <- trySync (runErrorNoCallStack @PlanViolation (evalState (start startTime) (runPlan hostname plan)))
       case result of
         Left e -> emit (JobFailed (T.pack (displayException e)))
         Right (Left violation) -> emit (JobFailed (display violation))
@@ -115,21 +113,10 @@ executePlan cfg plan
   where
     start t = JobProgress {readSoFar = 0, lastEmit = t}
 
-blockerText :: JobPlan -> Text
-blockerText plan =
-  plan
-    & blockers
-    & V.toList
-    & map (\finding -> display finding.code <> ": " <> finding.detail)
-    & T.intercalate "; "
-
-getProgress :: (State JobProgress :> es) => Eff es JobProgress
-getProgress = get @JobProgress
-
 advanceProgress :: (Time :> es, Emit :> es, State JobProgress :> es) => Int64 -> Eff es ()
 advanceProgress n = do
   modify (\st -> st {readSoFar = st.readSoFar + n})
-  st <- getProgress
+  st <- get @JobProgress
   t <- currentTime
   when (diffUTCTime t st.lastEmit >= 0.1) $ do
     modify (\s -> s {lastEmit = t})
@@ -137,7 +124,7 @@ advanceProgress n = do
 
 flushProgress :: (Emit :> es, State JobProgress :> es) => Eff es ()
 flushProgress = do
-  st <- getProgress
+  st <- get @JobProgress
   emit (Progress st.readSoFar)
 
 runFileStep
@@ -146,7 +133,7 @@ runFileStep
   -> Eff es FileStepResult
   -> Eff es FileStepResult
 runFileStep step body = do
-  before <- getProgress
+  before <- get @JobProgress
   attempt <- trySync body
   case attempt of
     Left e -> do
@@ -208,7 +195,7 @@ copyAndVerify source writes sealed rel size = step `finally` void (trySync (remo
           _ -> pure written
       case attempt of
         Left e -> do
-          JobInstant t <- ask @JobInstant
+          t <- asks @CreatorInfo (\creator -> creator.creationDate)
           let check = checkAgainstSeal sealed srcHash
               outcome = IoError (T.pack (displayException e))
           pure FileStepResult {outcome, manifestEntry = Just (fileEntry rel size mtime check.hash FailedAction t)}
@@ -259,15 +246,12 @@ reuseOrReplace srcPath reusing rel mtime srcHash written = do
           readBack <- publishAndVerify rel demoted mtime srcHash
           case readBack of
             Ok -> pure (Left actual)
-            failure -> throwIO (userError (T.unpack (readBackText failure)))
-
-readBackText :: FileOutcome -> Text
-readBackText = \case
-  HashMismatch m -> "the copy written after a mismatch does not match either: " <> m.actual.value
-  other -> T.pack (show other)
+            failure -> throwIO $ userError $ case failure of
+              HashMismatch m -> T.unpack ("the copy written after a mismatch does not match either: " <> m.actual.value)
+              other -> show other
 
 publishCopy
-  :: (Hashing es, Reader JobInstant :> es)
+  :: (Copying es)
   => Vector PlannedWrite
   -> Maybe Hash
   -> RelPath
@@ -277,7 +261,7 @@ publishCopy
   -> Eff es FileStepResult
 publishCopy writes sealed rel size mtime srcHash = do
   destOutcome <- publishAndVerify rel writes mtime srcHash
-  JobInstant t <- ask @JobInstant
+  t <- asks @CreatorInfo (\creator -> creator.creationDate)
   let sourceCheck = checkAgainstSeal sealed srcHash
       outcome = case destOutcome of
         Ok -> sourceCheck.outcome
@@ -309,14 +293,16 @@ verifyDestinations writes srcHash = go (V.toList writes)
       if actual == srcHash then go ws else pure (HashMismatch (Mismatch srcHash actual))
 
 runPlan
-  :: (FileSystem :> es, Hasher :> es, Time :> es, Emit :> es, Error PlanViolation :> es, State JobProgress :> es, Reader ToolInfo :> es)
-  => JobPlan
+  :: (FileSystem :> es, Hasher :> es, Time :> es, Emit :> es, Error PlanViolation :> es, State JobProgress :> es)
+  => Text
+  -> JobPlan
   -> Eff es ()
-runPlan plan = do
+runPlan hostname plan = do
   fmt <- maybe (throwError PlanFormatMissing) pure plan.format
   forM_ (planRaceChecks plan) (\check -> requireGeneration (fst check) (snd check))
   emit (Planned (PlannedWork (V.map (\step -> (step.path, step.size)) plan.steps) plan.bytesToRead))
-  runReader (JobInstant plan.spec.createdAt) $ runReader fmt $ case plan.execution of
+  let creator = creatorInfo plan.spec.createdAt hostname "mediacopy3000" (T.pack (showVersion version))
+  runReader creator $ runReader fmt $ case plan.execution of
     CopyInto copy -> runOffloadPlan plan copy
     RecordAt record -> runGenerationPlan plan record
 
@@ -416,7 +402,7 @@ runStep root recorded step = case step.op of
     hashStep report = runFileStep step $ do
       (actual, mtime) <- hashOf FromDevice path (\bs -> advanceProgress (fromIntegral (BS.length bs)))
       flushProgress
-      JobInstant t <- ask @JobInstant
+      t <- asks @CreatorInfo (\creator -> creator.creationDate)
       pure (report actual mtime t)
     reportNew actual mtime t =
       FileStepResult {outcome = New, manifestEntry = Just (fileEntry step.path step.size mtime actual Original t)}

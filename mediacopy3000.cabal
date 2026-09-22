@@ -85,7 +85,6 @@ library application
     MediaCopy.Effects.FileSystem.Types
     MediaCopy.Effects.Hasher
     MediaCopy.Engine
-    MediaCopy.Engine.Config
     MediaCopy.Engine.Generation
     MediaCopy.Engine.Plan
     MediaCopy.Engine.Violation
@@ -174,7 +173,6 @@ library
     MediaCopy.Gtk.Actions
     MediaCopy.Gtk.Assets
     MediaCopy.Gtk.Environment
-    MediaCopy.Gtk.Log
     MediaCopy.Gtk.Reload
     MediaCopy.Gtk.Runtime
     MediaCopy.Gtk.Screenshot
@@ -212,6 +210,8 @@ library
     gi-pango ^>=1.0,
     haskell-gi-base,
     hostname,
+    log-base ^>=0.12,
+    log-effectful ^>=1.0,
     mediacopy3000:application,
     mediacopy3000:domain,
     mediacopy3000:interface,

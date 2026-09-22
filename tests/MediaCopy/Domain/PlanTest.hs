@@ -48,8 +48,8 @@ import MediaCopy.Domain.Plan
 import MediaCopy.Domain.Preflight
 import MediaCopy.Effects.Emit (Emit, runEmitCollect)
 import MediaCopy.Effects.FileSystem (FileSystem)
-import MediaCopy.Effects.Hasher (Hasher, runHasherIO)
-import MediaCopy.Engine (defaultToolInfo, executePlan, planJob, runJob)
+import MediaCopy.Effects.Hasher (Hasher, runHasher)
+import MediaCopy.Engine (executePlan, planJob, runJob)
 import MediaCopy.Test.InMemoryFS
 
 tests :: TestTree
@@ -507,7 +507,7 @@ planAndEngineAgree = withTests 400 $ property $ do
   cover 0.5 "all reuse with a recorded original" (allReuseWithRecordedOriginal scenario)
   ref <- evalIO (newIORef (seedScenario scenario))
   when scenario.sealed $ do
-    (_, sealEvents) <- evalIO (runEngine ref (runJob defaultToolInfo (sealSpec mediaSource)))
+    (_, sealEvents) <- evalIO (runEngine ref (runJob "localhost" (sealSpec mediaSource)))
     annotateShow sealEvents
     lastEvent sealEvents === Just (JobFinished AllOk)
   let parents = map (\d -> d.parent) scenario.destinations
@@ -517,7 +517,7 @@ planAndEngineAgree = withTests 400 $ property $ do
   annotateShow plan.steps
   assert (not (planBlocked plan))
   when scenario.sealed (assert (V.any isRecordedCopy plan.steps))
-  (_, evs) <- evalIO (runEngine ref (executePlan defaultToolInfo plan))
+  (_, evs) <- evalIO (runEngine ref (executePlan "localhost" plan))
   annotateShow evs
   lastProgress evs === Just (plan.bytesToRead + rewriteBytes scenario)
   lastEvent evs === Just (JobFinished AllOk)
@@ -566,7 +566,7 @@ lastEvent :: Vector JobEvent -> Maybe JobEvent
 lastEvent evs = fmap snd (V.unsnoc evs)
 
 runEngine :: IORef MemFS -> Eff '[Emit, Time, Hasher, FileSystem, IOE] a -> IO (a, Vector JobEvent)
-runEngine ref body = runEff (runFileSystemMem ref (runHasherIO (runTime (runEmitCollect body))))
+runEngine ref body = runEff (runFileSystemMem ref (runHasher (runTime (runEmitCollect body))))
 
 lastProgress :: Vector JobEvent -> Maybe Int64
 lastProgress evs =

@@ -17,9 +17,9 @@ import Data.Vector qualified as V
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
-import MediaCopy.Domain.Job (failuresText)
+import MediaCopy.Domain.Job (plural)
 import MediaCopy.Gtk.Widgets.Common (Cell, Row (..), RowHost (..), newCell, plainRow, renderActionRows, renderCell)
-import MediaCopy.Interface.Wording (count, generationsText)
+import MediaCopy.Interface.Wording (count)
 
 data HistoryView = HistoryView
   { root :: Gtk.ListBox
@@ -44,7 +44,7 @@ renderHistory view history = do
 renderGenerations :: Adw.ExpanderRow -> IORef (Vector Adw.ActionRow) -> Maybe MhlHistory -> IO ()
 renderGenerations expander rows history = do
   let generations = maybe V.empty (\loaded -> loaded.generations) history
-  set expander [#subtitle := generationsText (V.length generations)]
+  set expander [#subtitle := plural "generation" (V.length generations)]
   renderActionRows rows (InExpander expander) (V.map (\gen -> generationRow gen) generations)
 
 generationRow :: Generation -> Row
@@ -73,5 +73,5 @@ generationSubtitle generation =
 
 failuresSuffix :: Int -> Text
 failuresSuffix failures
-  | failures > 0 = " · " <> failuresText failures
+  | failures > 0 = " · " <> plural "failure" failures
   | otherwise = ""

@@ -5,7 +5,7 @@ module MediaCopy.Effects.Hasher
   , finish
   , withHasher
   , hashBytes
-  , runHasherIO
+  , runHasher
   ) where
 
 import Ascmhl.Hash
@@ -17,12 +17,11 @@ import Crypto.Hash.SHA512 qualified as SHA512
 import Data.ByteString (ByteString)
 import Data.ByteString.Unsafe qualified as BU
 import Data.Digest.XXHash.FFI.C (c_xxh64_digest, c_xxh64_reset, c_xxh64_update_safe)
-import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.IORef
 import Data.Primitive.ByteArray (MutableByteArray (MutableByteArray), newAlignedPinnedByteArray)
 import Effectful
-import Effectful.Dispatch.Dynamic (interpret_, send)
+import Effectful.Dispatch.Static (SideEffects (..), StaticRep, evalStaticRep, getStaticRep, unsafeEff_)
 import Foreign.C.Types (CULLong (..))
 
 import MediaCopy.Domain.JobFormat (JobFormat, formatAlgo)
@@ -33,34 +32,26 @@ data HasherState = HasherState
   , spent :: IORef Bool
   }
 
-data Hasher :: Effect where
-  NewHasher :: JobFormat -> Hasher m HasherState
-  Feed :: HasherState -> ByteString -> Hasher m ()
-  Finish :: HasherState -> Hasher m Hash
+data Hasher :: Effect
 
-type instance DispatchOf Hasher = Dynamic
+type instance DispatchOf Hasher = Static WithSideEffects
+
+data instance StaticRep Hasher = HasherRep
+
+runHasher :: (IOE :> es) => Eff (Hasher : es) a -> Eff es a
+runHasher = evalStaticRep HasherRep
 
 feed :: (Hasher :> es) => HasherState -> ByteString -> Eff es ()
-feed st bs = send (Feed st bs)
+feed st bs = getStaticRep >>= \HasherRep -> unsafeEff_ (unspent "feed" st >> st.feedH bs)
 
 finish :: (Hasher :> es) => HasherState -> Eff es Hash
-finish st = send (Finish st)
+finish st = getStaticRep >>= \HasherRep -> unsafeEff_ (unspent "finish" st >> writeIORef st.spent True >> st.finishH)
 
 withHasher :: (Hasher :> es) => JobFormat -> (HasherState -> Eff es a) -> Eff es a
-withHasher fmt use = send (NewHasher fmt) >>= use
+withHasher fmt use = getStaticRep >>= \HasherRep -> unsafeEff_ (stateOf (formatAlgo fmt)) >>= use
 
 hashBytes :: (Hasher :> es) => JobFormat -> ByteString -> Eff es Hash
 hashBytes fmt bytes = withHasher fmt (\hasher -> feed hasher bytes >> finish hasher)
-
-runHasherIO :: (IOE :> es) => Eff (Hasher : es) a -> Eff es a
-runHasherIO action =
-  action
-    & interpret_
-      ( \case
-          NewHasher fmt -> liftIO (newHasherState (formatAlgo fmt))
-          Feed st bs -> liftIO (unspent "feed" st >> st.feedH bs)
-          Finish st -> liftIO (unspent "finish" st >> writeIORef st.spent True >> st.finishH)
-      )
 
 unspent :: String -> HasherState -> IO ()
 unspent what st = do
@@ -70,28 +61,26 @@ unspent what st = do
 xxh64StateBytes :: Int
 xxh64StateBytes = 128
 
-newHasherState :: HashAlgo -> IO HasherState
-newHasherState algo = newIORef False >>= \flag -> stateOf flag algo
-
-stateOf :: IORef Bool -> HashAlgo -> IO HasherState
-stateOf spent = \case
-  XXH64 -> do
-    mba@(MutableByteArray st) <- newAlignedPinnedByteArray xxh64StateBytes 8
-    c_xxh64_reset st 0
-    pure
-      HasherState
-        { spent
-        , feedH = \bs -> do
-            BU.unsafeUseAsCStringLen bs (\(buf, len) -> c_xxh64_update_safe st buf (fromIntegral len))
-            touch mba
-        , finishH = do
-            CULLong w <- c_xxh64_digest st
-            touch mba
-            pure (Hash XXH64 (word64ToHex w))
-        }
-  MD5 -> newIORef MD5.init <&> \ref -> ctxHasher spent ref MD5.update (\ctx -> Hash MD5 (toHex (MD5.finalize ctx)))
-  SHA1 -> newIORef SHA1.init <&> \ref -> ctxHasher spent ref SHA1.update (\ctx -> Hash SHA1 (toHex (SHA1.finalize ctx)))
-  C4 -> newIORef SHA512.init <&> \ref -> ctxHasher spent ref SHA512.update (\ctx -> Hash C4 (c4FromSha512 (SHA512.finalize ctx)))
+stateOf :: HashAlgo -> IO HasherState
+stateOf algo =
+  newIORef False >>= \spent -> case algo of
+    XXH64 -> do
+      mba@(MutableByteArray st) <- newAlignedPinnedByteArray xxh64StateBytes 8
+      c_xxh64_reset st 0
+      pure
+        HasherState
+          { spent
+          , feedH = \bs -> do
+              BU.unsafeUseAsCStringLen bs (\(buf, len) -> c_xxh64_update_safe st buf (fromIntegral len))
+              touch mba
+          , finishH = do
+              CULLong w <- c_xxh64_digest st
+              touch mba
+              pure (Hash XXH64 (word64ToHex w))
+          }
+    MD5 -> newIORef MD5.init <&> \ref -> ctxHasher spent ref MD5.update (\ctx -> Hash MD5 (toHex (MD5.finalize ctx)))
+    SHA1 -> newIORef SHA1.init <&> \ref -> ctxHasher spent ref SHA1.update (\ctx -> Hash SHA1 (toHex (SHA1.finalize ctx)))
+    C4 -> newIORef SHA512.init <&> \ref -> ctxHasher spent ref SHA512.update (\ctx -> Hash C4 (c4FromSha512 (SHA512.finalize ctx)))
 
 ctxHasher :: IORef Bool -> IORef ctx -> (ctx -> ByteString -> ctx) -> (ctx -> Hash) -> HasherState
 ctxHasher spent ref update done =

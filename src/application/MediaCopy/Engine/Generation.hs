@@ -3,10 +3,10 @@ module MediaCopy.Engine.Generation
   , requireNextGeneration
   ) where
 
-import Ascmhl.Build (appendGeneration, creatorInfo, dirHash, directoryEntry, newManifest, orderedEntries)
+import Ascmhl.Build (appendGeneration, dirHash, directoryEntry, newManifest, orderedEntries)
 import Ascmhl.Hash
 import Ascmhl.Layout
-import Ascmhl.Path (RelPath, mkRelPath, pathText, relToOsPath)
+import Ascmhl.Path (mkRelPath, pathText, relToOsPath)
 import Ascmhl.Types
 import Ascmhl.Write (renderChain, renderManifest)
 import Data.Bifunctor (first)
@@ -16,7 +16,6 @@ import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text.Encoding qualified as TE
-import Data.Time (UTCTime)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Effectful
@@ -31,33 +30,35 @@ import MediaCopy.Domain.Plan (PlannedGeneration (..))
 import MediaCopy.Effects.Emit
 import MediaCopy.Effects.FileSystem
 import MediaCopy.Effects.Hasher
-import MediaCopy.Engine.Config
 import MediaCopy.Engine.Violation (PlanViolation (..), orThrow)
 import MediaCopy.Mhl.Store
 
 writeGeneration
-  :: (FileSystem :> es, Hasher :> es, Emit :> es, Error PlanViolation :> es, Reader JobFormat :> es, Reader ToolInfo :> es, Reader JobInstant :> es)
+  :: (FileSystem :> es, Hasher :> es, Emit :> es, Error PlanViolation :> es, Reader JobFormat :> es, Reader CreatorInfo :> es)
   => PlannedGeneration
   -> Vector Text
   -> Vector HashEntry
   -> Eff es ()
 writeGeneration planned patterns files = do
-  cfg <- ask @ToolInfo
+  creator <- ask @CreatorInfo
+  let t = creator.creationDate
   found <- loadChain planned.folder >>= orThrow . first (HistoryFaultAt planned.folder)
   let chain = fromMaybe (Chain {entries = V.empty}) found
   orThrow (requireNextGeneration planned.folder planned.number chain)
-  JobInstant t <- ask @JobInstant
   hashedFiles <- traverse (\e -> orThrow (firstHash e) <&> \h -> (e.path, h)) files
   let tree = buildTree hashedFiles planned.directories
   fmt <- ask @JobFormat
   rolled <- runErrorNoCallStack @DirectoryHashError (directoryHashes (hashBytes fmt) tree)
   (rootPair, rows) <- orThrow (first (\err -> HashUndecodable err) rolled)
-  dirRows <- traverse (\row -> dirEntryFor planned.folder t row) rows
+  let dirEntry (path, pair) = do
+        mtime <- mtimeOf (relToOsPath planned.folder path)
+        pure (directoryEntry path mtime (dirHash t pair.content pair.structure))
+  dirRows <- traverse dirEntry rows
   let entries = orderedEntries files dirRows
   orThrow (requirePlaced files entries)
   let manifest =
         newManifest
-          (creatorInfo t cfg.hostname cfg.toolName cfg.toolVersion)
+          creator
           planned.process
           (dirHash t rootPair.content rootPair.structure)
           patterns
@@ -74,11 +75,6 @@ writeGeneration planned patterns files = do
   let chain' = appendGeneration Chain {entries = V.fromList backfilled} planned.number nameRel mh
   writeTextAtomically (chainPath planned.folder) (renderChain chain')
   emit (MhlWritten planned.manifest)
-
-dirEntryFor :: (FileSystem :> es) => OsPath -> UTCTime -> (RelPath, DirHashes) -> Eff es DirectoryEntry
-dirEntryFor root t (path, pair) = do
-  mtime <- mtimeOf (relToOsPath root path)
-  pure (directoryEntry path mtime (dirHash t pair.content pair.structure))
 
 requireNextGeneration :: OsPath -> Int -> Chain -> Either PlanViolation ()
 requireNextGeneration folder number chain

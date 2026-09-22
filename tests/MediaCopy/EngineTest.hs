@@ -272,7 +272,7 @@ runCancelledAt status = do
           , job = Offload OffloadJob {source = [osp|/media-source|], destinations = NE.fromList [[osp|/ssd1|]], sealFirst = UseHistory, existingCopy = Nothing}
           , createdAt = epoch
           }
-  result <- try @CancelJob (runEff (runFileSystemMem ref (runHasherIO (runTime (runEmitIO sink (runJob defaultToolInfo spec))))))
+  result <- try @CancelJob (runEff (runFileSystemMem ref (runHasher (runTime (runEmitIO sink (runJob "localhost" spec))))))
   assertBool "expected the cancel to reach the caller" (either (const True) (const False) result)
   readIORef ref
 
@@ -594,7 +594,7 @@ blockedPlanWritesNothing = do
   before <- readIORef ref
   plan <- runEff (runFileSystemMem ref (planJob (offloadOneDest [osp|/media-source|] [osp|/ssd1|])))
   planBlocked plan @?= True
-  (_, evs) <- runEff (runFileSystemMem ref (runHasherIO (runTime (runEmitCollect (executePlan defaultToolInfo plan)))))
+  (_, evs) <- runEff (runFileSystemMem ref (runHasher (runTime (runEmitCollect (executePlan "localhost" plan)))))
   assertBool "expected JobFailed" (V.any isJobFailed evs)
   afterwards <- readIORef ref
   Map.keys afterwards.files @?= Map.keys before.files
@@ -635,7 +635,7 @@ isJobFailed _ = False
 
 runJobEvents :: IORef MemFS -> JobSpec -> IO (Vector JobEvent)
 runJobEvents ref spec = do
-  (_, evs) <- runEff (runFileSystemMem ref (runHasherIO (runTime (runEmitCollect (runJob defaultToolInfo spec)))))
+  (_, evs) <- runEff (runFileSystemMem ref (runHasher (runTime (runEmitCollect (runJob "localhost" spec)))))
   pure evs
 
 manifestPhases :: Vector JobEvent -> List String
