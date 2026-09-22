@@ -14,3 +14,4 @@ write-ghc-environment-files: always
 
 index-state: hackage.haskell.org 2026-09-10T12:02:32Z
 
+constraints: aeson-pretty +lib-only
