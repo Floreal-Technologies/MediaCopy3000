@@ -1,9 +1,3 @@
--- | Fixture models for the screenshots in @manual/@.
---
--- A scene is a list of 'Message' folded through the production 'update', so every state it shows is
--- one the application can get to. Nothing here touches a disk: the paths are literals and no
--- 'Command' runs. The media source, the jobs, the plans and the history live in
--- "MediaCopy.Demo.Fixtures", which the model tests read too.
 module MediaCopy.Demo
   ( Scene (..)
   , scenes
@@ -28,21 +22,14 @@ import MediaCopy.Domain.Plan (JobPlan)
 import MediaCopy.Interface.Theme (Base (..), Palette (..), PaletteMode (..), Theme (..), modeDirectory, palettesFrom)
 import MediaCopy.Model (FileFilter (..), Message (..), Model (..), UiMessage (..), initialModel, update)
 
--- | One screen to photograph. The code renders 'frames' in order. The last frame is the picture. A
--- second frame lets the interface measure a copy rate between two models, as it does on a real run.
 data Scene = Scene
   { name :: Text
   , frames :: NonEmpty Model
   , action :: Maybe Text
-  -- ^ A GAction to activate after the last frame, for a screen the model does not hold.
   , expand :: Bool
-  -- ^ Open every expander. An expander holds its own state, which no message can reach.
   , scroll :: Bool
-  -- ^ Send every scrolled area to its end, for a sheet that is taller than its window.
   }
 
--- | Every scene, by name. @scripts\/screenshots.sh@ asks the binary for this list rather than
--- repeating it, so a scene added here needs no second edit.
 scenes :: List Scene
 scenes =
   [ still "empty" []
@@ -66,11 +53,6 @@ scenes =
   ]
     <> map queueUnder (V.toList demoPalettes)
 
--- | The queue, once under each palette the tree holds. The name is
--- @queue-\<family\>-\<light|dark\>-\<variant\>@, the palette's own path through the tree; the mode
--- belongs in it, because everforest carries @hard@, @medium@ and @soft@ under both bases. The base
--- follows the palette's mode, because a dark palette under a light base is not a screen the
--- application ever shows.
 queueUnder :: Palette -> Scene
 queueUnder palette =
   still
@@ -82,7 +64,6 @@ baseFor = \case
   DarkPalette -> AlwaysDark
   LightPalette -> AlwaysLight
 
--- | Every palette the fixture listing names, in the listing's own order.
 demoPalettes :: Vector Palette
 demoPalettes = palettesFrom themeRoot paletteListing
 
@@ -99,15 +80,9 @@ lookupScene wanted = scenes & filter (\scene -> scene.name == wanted) & headOrNo
       [] -> Nothing
       x : _ -> Just x
 
--- * Scene builders
-
--- | One model, one render.
 still :: Text -> List Message -> Scene
 still name msgs = Scene {name, frames = NE.singleton (play msgs), action = Nothing, expand = False, scroll = False}
 
--- | Three models, the last two seconds apart, so the picture shows a measured rate and estimate.
--- The interface needs one render to build the row, a second for its first sample, and a third for a
--- second sample to divide by.
 running :: Text -> List Message -> Scene
 running name msgs =
   Scene
@@ -121,25 +96,19 @@ running name msgs =
     earlier = [EngineEvent first (Progress 6_100_000_000)]
     later = [Tick (addUTCTime 2 at), EngineEvent first (Progress 8_640_000_000)]
 
--- | The production 'update' builds every scene. A scene drops the commands that
--- 'update' asks for, so no engine, picker or file write can run under a screenshot.
 play :: List Message -> Model
 play msgs = foldl (\model msg -> fst (update msg model)) (initialModel at LightPalette) msgs
 
--- | The messages that put a fresh plan in the sheet, under the job id the model will mint.
 offered :: Job -> (JobSpec -> JobPlan) -> List Message
 offered job toPlan = [RequestPlan job, PlanComputed spec (Right (toPlan spec))]
   where
     spec = specFor first job
 
--- | The messages that offer a plan and then approve it.
 approved :: JobId -> Job -> (JobSpec -> JobPlan) -> List Message
 approved jid job toPlan =
   [RequestPlan job, PlanComputed spec (Right (toPlan spec)), Ui ConfirmPlan]
   where
     spec = specFor jid job
-
--- * The scenes themselves
 
 offloadDialogMessages :: List Message
 offloadDialogMessages =
@@ -218,7 +187,6 @@ sealMessages =
        , Ui DismissToast
        ]
 
--- | A sealed media source, a failed offload, a running offload and a verify that still waits its turn.
 queueMessages :: List Message
 queueMessages =
   approved first (sealJob mediaSource) sealPlan

@@ -1,4 +1,3 @@
--- | The detail pane's MHL history expander: one row per manifest generation.
 module MediaCopy.Gtk.Widgets.History
   ( HistoryView (..)
   , newHistoryView

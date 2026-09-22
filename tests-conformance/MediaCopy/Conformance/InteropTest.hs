@@ -18,7 +18,6 @@ tests tools =
     [ testCase "our generation follows theirs in the same history" (ourGenerationFollowsTheirsInTheSameHistory tools)
     ]
 
--- | Generation 1's chain entry is c4 and must survive our rewrite verbatim.
 ourGenerationFollowsTheirsInTheSameHistory :: Tools -> Assertion
 ourGenerationFollowsTheirsInTheSameHistory tools =
   withTempTree "mc3k-conformance" $ \work -> do
@@ -41,7 +40,6 @@ ourGenerationFollowsTheirsInTheSameHistory tools =
     assertOk "ascmhl info" info
     assertBool "info does not show two generations" (T.isInfixOf "Generation 2" info.out)
 
--- | The first c4 token of a chain file, empty when there is none.
 firstC4Of :: Text -> Text
 firstC4Of chainText = case T.splitOn "<c4>" chainText of
   (_ : rest : _) -> T.takeWhile (\c -> c /= '<') rest

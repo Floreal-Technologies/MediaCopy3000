@@ -1,13 +1,5 @@
 {-# LANGUAGE ImplicitParams #-}
 
--- | Counts what one job's worth of messages costs the window to paint.
---
--- The run builds the real window through 'buildWidgets' and drives the real 'render', so it
--- measures the production paint path and instruments nothing inside @src\/@. The message stream
--- models the engine's emissions rather than records them, and is the same before and after a
--- change, so the numbers compare. Every run appends a row to a results file and reports itself
--- against the last row with the same file count, the way @tasty-bench@ reads a baseline. Usage:
--- @render-bench [FILES] [RESULTS]@.
 module Main (main) where
 
 import Ascmhl.Path (RelPath)
@@ -46,7 +38,6 @@ import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
 import MediaCopy.Interface.Theme (PaletteMode (..), themeSections)
 import MediaCopy.Model
 
--- | The model mints this id for the first job, so the stream can name it before it exists.
 benchJob :: JobId
 benchJob = JobId 1
 
@@ -64,7 +55,6 @@ main = do
   app <-
     new
       Adw.Application
-      -- A bench run must not hand its start-up to an application that already runs.
       [ #applicationId := "eu.choutri.MediaCopy3000.RenderBench"
       , #flags := [Gio.ApplicationFlagsNonUnique]
       , On #activate (bench fileCount resultsPath ?self)
@@ -93,30 +83,23 @@ bench fileCount resultsPath app = do
   widgets <- buildWidgets app (apply themeAdapter) lightSections darkSections (\_intent -> pure ())
   loadCss Production
   Gtk.windowPresent widgets.window
-  -- The clock exists only once the window is realised, and the first render must not pay for the first layout.
   settle 500
   counters <- newCounters widgets.window
   let stream = streamOf (benchFiles fileCount)
   samples <- measure widgets stream
-  -- A frame the last render asked for lands after the loop that asked for it.
   settle 500
   result <- resultOf fileCount (length stream) counters samples
-  -- The baseline is read before this run is appended, or a run compares against itself.
   baseline <- readBaseline resultsPath fileCount
   report result baseline resultsPath
   appendResult resultsPath result
   Gtk.windowDestroy widgets.window
 
--- * The stream
-
--- | The files the bench copies. Nothing here touches a disk: every path and size is generated.
 benchFiles :: Int -> Vector (RelPath, FileSize)
 benchFiles fileCount = V.generate fileCount (\index -> (Fixtures.rel (nameOf index), sizeOf index))
   where
     nameOf index = "A001C" <> T.justifyRight 4 '0' (T.pack (show index)) <> "_260912_R1AB.mov"
     sizeOf index = fromIntegral (1_000_000_000 + index * 7_654_321)
 
--- | The messages that put one running offload of these files in front of the window.
 streamOf :: Vector (RelPath, FileSize) -> List Message
 streamOf files = setupMessages files <> copyMessages files <> [EngineEvent benchJob (JobFinished AllOk)]
 
@@ -131,7 +114,6 @@ setupMessages files =
     job = Fixtures.offloadJob UseHistory
     spec = Fixtures.specFor benchJob job
 
--- | The order below is the engine's own, so the model sees the revisions a real copy makes.
 copyMessages :: Vector (RelPath, FileSize) -> List Message
 copyMessages files = files & V.toList & zip [0 ..] & walk 0
   where
@@ -148,15 +130,11 @@ fileMessages path done =
   , EngineEvent benchJob (Progress done)
   ]
 
--- | The runtime ticks the clock once a second; ten files stand in for that second.
 tickAt :: Int -> List Message
 tickAt index
   | index `mod` 10 == 9 = [Tick (addUTCTime (fromIntegral index) Fixtures.at)]
   | otherwise = []
 
--- * The measurement
-
--- | What the toolkit did, as against what the bench asked for.
 data Counters = Counters
   { layouts :: IORef Int
   , paints :: IORef Int
@@ -175,9 +153,6 @@ newCounters window =
   where
     bump counter = modifyIORef' counter (\seen -> seen + 1)
 
--- | Each message goes through the production 'update'
--- and the production 'render', in the order and the manner
--- 'MediaCopy.Gtk.Runtime.dispatch' uses.
 measure :: Widgets -> List Message -> IO (List Word64)
 measure widgets stream = do
   samples <- newIORef []
@@ -192,22 +167,17 @@ measure widgets stream = do
   _final <- foldM step (initialModel Fixtures.at LightPalette) stream
   readIORef samples <&> reverse
 
--- | Runs the work the render queued, so its cost falls inside the sample that queued it.
 drain :: IO ()
 drain = do
   more <- GLib.mainContextIteration (Nothing @GLib.MainContext) False
   when more drain
 
--- | Lets the loop run for a while, for the frames a render asks for but does not wait on.
 settle :: Int -> IO ()
 settle milliseconds = do
   loop <- GLib.mainLoopNew Nothing False
   GLib.timeoutAdd GLib.PRIORITY_DEFAULT (fromIntegral milliseconds) (GLib.mainLoopQuit loop >> pure False)
   GLib.mainLoopRun loop
 
--- * The result
-
--- | One run's numbers. 'Nothing' for a frame count that the display did not offer.
 data Result = Result
   { files :: Int
   , messages :: Int
@@ -248,12 +218,9 @@ percentile sorted quantile
   where
     place = min (V.length sorted - 1) (floor (quantile * fromIntegral (V.length sorted)))
 
--- * The results file
-
 resultsHeader :: Text
 resultsHeader = "timestamp,files,messages,renders,layout,after_paint,total_ns,mean_ns,p50_ns,p99_ns,max_ns"
 
--- | A run appends and never rewrites, so the file is the history of every run on this machine.
 appendResult :: FilePath -> Result -> IO ()
 appendResult path result = do
   exists <- doesFileExist path
@@ -280,7 +247,6 @@ rowOf stamp result =
   where
     number value = T.pack (show value)
 
--- | The last run recorded for this file count, if the file holds one.
 readBaseline :: FilePath -> Int -> IO (Maybe (Text, Result))
 readBaseline path fileCount = do
   exists <- doesFileExist path
@@ -328,8 +294,6 @@ readNumber raw = case reads (T.unpack raw) of
   (parsed, "") : _ -> Just parsed
   _ -> Nothing
 
--- * The report
-
 report :: Result -> Maybe (Text, Result) -> FilePath -> IO ()
 report result baseline path = do
   printf "render-bench  files=%d  messages=%d\n" result.files result.messages
@@ -339,7 +303,6 @@ report result baseline path = do
   printf "%-24s %12s %12s %11s\n" ("" :: String) ("this run" :: String) ("baseline" :: String) ("change" :: String)
   mapM_ (\metric -> printMetric metric) (metricsOf result (fmap (\pair -> snd pair) baseline))
 
--- | One line of the report. 'decimals' is 0 for a count and 3 for a duration in milliseconds.
 data Metric = Metric
   { name :: String
   , decimals :: Int
@@ -390,7 +353,6 @@ numberOf decimals = \case
   Nothing -> "n/a"
   Just value -> showFFloat (Just decimals) value ""
 
--- | A change is stated against the baseline, so a fall reads negative.
 changeOf :: Maybe Double -> Maybe Double -> String
 changeOf current baseline = case (current, baseline) of
   (Just now, Just before) | before /= 0 -> printf "%+.1f%%" ((now - before) / before * 100)

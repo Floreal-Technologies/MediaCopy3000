@@ -1,4 +1,3 @@
--- | The content pane of the selected job: heading, progress, counters, file list and actions.
 module MediaCopy.Gtk.Widgets.JobDetail
   ( JobDetail (..)
   , newJobDetail
@@ -53,7 +52,6 @@ import MediaCopy.Model (FileFilter (..), JobEntry (..), Model (..), UiMessage (.
 data JobDetail = JobDetail
   { root :: Gtk.Box
   , render :: Model -> Maybe JobEntry -> Double -> IO ()
-  -- ^ The rate is bytes per second and is 0 unless the selected job is the running one.
   }
 
 newJobDetail :: (UiMessage -> IO ()) -> IO JobDetail
@@ -62,7 +60,6 @@ newJobDetail dispatch = do
   progress <- newProgress
   counters <- newCounters
   history <- newHistoryView
-  -- `suppress` is True while a render writes the filter buttons, so that write alone never dispatches.
   suppress <- newIORef False
   filterButtons <- newFilterButtons suppress dispatch
   files <- newFileListPane
@@ -92,9 +89,6 @@ newJobDetail dispatch = do
           diffFileList files model state
   pure JobDetail {root, render}
 
--- * The heading
-
--- | What the job is, where it works, and what it checks its copies against.
 data Heading = Heading
   { title :: Gtk.Label
   , pathLine :: Gtk.Label
@@ -108,7 +102,6 @@ newHeading = do
   originsLine <- newLabel "" [#xalign := 0, #ellipsize := Pango.EllipsizeModeEnd] ["dim-label", "caption"]
   pure Heading {title, pathLine, originsLine}
 
--- | A job with nothing to say about originals hides the line rather than showing it empty.
 renderHeading :: Heading -> Maybe MhlHistory -> JobState -> IO ()
 renderHeading heading loaded state = do
   set heading.title [#label := jobLabel state.spec.job]
@@ -117,9 +110,6 @@ renderHeading heading loaded state = do
   set heading.originsLine [#label := fromMaybe "" origins]
   Gtk.widgetSetVisible heading.originsLine (isJust origins)
 
--- * The progress bar
-
--- | The bar, and the two lines of figures under it.
 data Progress = Progress
   { bar :: Gtk.ProgressBar
   , left :: Gtk.Label
@@ -144,9 +134,6 @@ renderProgress progress now state rate = do
   set progress.left [#label := progressLeftText state]
   set progress.right [#label := progressRightText now state rate]
 
--- * The counters
-
--- | The five figures the pane keeps over the file list.
 data Counters = Counters
   { box :: Gtk.Box
   , verified :: Gtk.Label
@@ -170,7 +157,6 @@ newCounters = do
 renderCounters :: Counters -> Maybe MhlHistory -> JobState -> IO ()
 renderCounters counters loaded state = do
   let counts = countOutcomes state
-  -- A replaced file was read back after its rewrite, so the pane counts it as verified.
   set counters.verified [#label := count (counts.verified + counts.replaced)]
   set counters.failed [#label := count counts.failed]
   set counters.missing [#label := count counts.missing]
@@ -179,36 +165,26 @@ renderCounters counters loaded state = do
   toggleClass counters.verified "success" (counts.verified + counts.replaced > 0)
   toggleClass counters.failed "error" (counts.failed > 0)
 
--- * The file list
-
--- | The rows, the columns over them, and what the list already shows.
 data FileListPane = FileListPane
   { list :: Gtk.ListBox
   , header :: Gtk.Box
   , scroll :: Gtk.ScrolledWindow
   , rows :: IORef (Map RelPath FileRow)
   , lastRendered :: IORef (Maybe (JobId, Int, FileFilter))
-  -- ^ The job, revision and filter the file list already shows.
   }
 
--- | The two filters, and the box that draws them as one control.
 data FilterButtons = FilterButtons
   { box :: Gtk.Box
   , allButton :: Gtk.ToggleButton
   , failedButton :: Gtk.ToggleButton
   }
 
--- | Linked toggle buttons, not an 'GI.Adw.ToggleGroup': that widget arrives in libadwaita 1.7,
--- above the floor the oldest supported distribution sets. See .tasks/lessons.md.
---
--- `suppress` is True while a render writes the buttons, so that write alone never dispatches.
 newFilterButtons :: IORef Bool -> (UiMessage -> IO ()) -> IO FilterButtons
 newFilterButtons suppress dispatch = do
   box <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #halign := Gtk.AlignStart]
   Gtk.widgetAddCssClass box "linked"
   allButton <- new Gtk.ToggleButton [#label := "All"]
   failedButton <- new Gtk.ToggleButton [#label := "Failed Only"]
-  -- One group, so the two buttons behave as one choice and never both stand on.
   Gtk.toggleButtonSetGroup failedButton (Just allButton)
   Gtk.boxAppend box allButton
   Gtk.boxAppend box failedButton
@@ -218,7 +194,6 @@ newFilterButtons suppress dispatch = do
   suppressing suppress (selectFilter buttons AllFiles)
   pure buttons
 
--- | A grouped button reports what it was turned on for, so one click dispatches once.
 reportFilter :: IORef Bool -> (UiMessage -> IO ()) -> Gtk.ToggleButton -> FileFilter -> IO ()
 reportFilter suppress dispatch button wanted =
   void $
@@ -227,7 +202,6 @@ reportFilter suppress dispatch button wanted =
         active <- Gtk.toggleButtonGetActive button
         when active (dispatch (SetFileFilter wanted))
 
--- | The button a filter stands for is the one a render turns on; the group turns the other off.
 selectFilter :: FilterButtons -> FileFilter -> IO ()
 selectFilter buttons = \case
   AllFiles -> Gtk.toggleButtonSetActive buttons.allButton True
@@ -258,13 +232,11 @@ newActionBar = do
   Gtk.boxAppend actions reportBtn
   pure actions
 
--- | Whether to walk the file list at all. A progress tick that moved no file walks nothing.
 diffFileList :: FileListPane -> Model -> JobState -> IO ()
 diffFileList files model state = do
   rendered <- readIORef files.lastRendered
   let wanted = (state.spec.jobId, state.revision, model.fileFilter)
   when (rendered /= Just wanted) $ do
-    -- Another job's rows go before this job's list is built, so no row outlives its job.
     when (fmap (\(jobId, _, _) -> jobId) rendered /= Just state.spec.jobId) (clearFileList files)
     writeIORef files.lastRendered (Just wanted)
     renderFileList files model state
@@ -279,7 +251,6 @@ renderFileList files model state = do
   writeIORef files.rows (Map.difference existing gone)
   V.imapM_ (syncFileRow files) visible
 
--- | Rows arrive in key order, so the index of a new path in the visible vector is its list position.
 syncFileRow :: FileListPane -> Int -> (RelPath, FileEntry) -> IO ()
 syncFileRow files index (path, entry) = do
   rows <- readIORef files.rows
@@ -335,7 +306,6 @@ visibleFiles wanted st = st.files & Map.toList & filter matches & V.fromList
       AllFiles -> True
       FailedOnly -> isFailure entry.status
 
--- | Only a job that appends to a folder's own history has one to show.
 historyFor :: Maybe MhlHistory -> JobState -> Maybe MhlHistory
 historyFor loaded state = case historyFolder state.spec.job of
   Nothing -> Nothing
@@ -352,13 +322,11 @@ pathLineText loaded state = case state.spec.job of
     folderLine =
       pathText (jobRoot state.spec.job) <> " · ascmhl/ chain: " <> chainText loaded
 
--- | Only an offload consults originals. Verify and seal have nothing to show here.
 originsLineText :: JobState -> Maybe Text
 originsLineText state
   | (kindUi (jobKind state.spec.job)).showsOriginals = fmap (\origin -> "Originals: " <> origin <> existingText state.spec.job) state.originsUsed
   | otherwise = Nothing
 
--- | Empty unless the job was told what to do with a partial destination.
 existingText :: Job -> Text
 existingText = \case
   Offload oj | Just choice <- oj.existingCopy -> "\nExisting copy: " <> pastOf choice
@@ -373,9 +341,6 @@ chainText = \case
   Nothing -> "—"
   Just loaded -> generationsText (V.length loaded.generations)
 
--- | This function never states an algorithm the job did not itself record. A job that
--- resolved originals hashed in one format, so it shows that. Any other job shows its latest
--- generation's.
 algoText :: Maybe MhlHistory -> JobState -> Text
 algoText loaded state = case state.originsAlgo of
   Just algo -> display algo

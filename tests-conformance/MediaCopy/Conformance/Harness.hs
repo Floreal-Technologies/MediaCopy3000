@@ -58,7 +58,6 @@ runEngineIO spec =
 offloadSpec :: FilePath -> FilePath -> IO JobSpec
 offloadSpec source parent = offloadSpecWith UseHistory source parent
 
--- | An offload with the seal switch as given, so a case can make the engine write to the media source.
 offloadSpecWith :: SealFirst -> FilePath -> FilePath -> IO JobSpec
 offloadSpecWith sealFirst source parent = do
   src <- osPathOf source

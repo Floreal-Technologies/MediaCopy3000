@@ -1,4 +1,3 @@
--- | The path a manifest entry names: relative to the folder the manifest sits in, and nothing else.
 module Ascmhl.Path
   ( RelPath (..)
   , mkRelPath
@@ -27,12 +26,7 @@ newtype RelPath = RelPath Text
 instance Display RelPath where
   displayBuilder (RelPath t) = displayBuilder t
 
--- | Accepts a path that is relative, not empty, and free of any @..@ component. A manifest is
--- portable, so the check never asks the host what an absolute path looks like: it refuses a leading
--- slash of either kind, a drive letter, and a @..@ between slashes of either kind. Windows
--- @isAbsolute@ says no to @/etc/passwd@, and 'relToOsPath' joins by the host's rules, so a Windows
--- host reads @..\\x@ as an escape. A POSIX name such as @back\\slash.mxf@ passes.
---
+-- |
 -- >>> mkRelPath "card/a.mxf"
 -- Just (RelPath "card/a.mxf")
 -- >>> mkRelPath ""

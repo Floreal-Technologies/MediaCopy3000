@@ -21,7 +21,6 @@ tests tools =
     , testCase "a seal-first offload leaves a media source the reference verifies" (aSealFirstOffloadSealsTheMediaSource tools)
     ]
 
--- | The tree of the design document: a nested directory, an empty directory and a root file.
 buildSampleTree :: FilePath -> IO ()
 buildSampleTree root = do
   writeTreeFile (root </> "A" </> "B" </> "f2.txt") "yy"
@@ -78,8 +77,6 @@ aCorruptedFileFailsTheReferenceVerify tools =
     writeTreeFile (dest </> "top.txt") "ZZZ"
     verifyFolder tools dest >>= assertFails "ascmhl-debug verify on a corrupted file"
 
--- | The seal pass writes the only manifest an offload ever puts on the media source. The tree holds
--- an empty directory, the case the reference tool and this project once disagreed on.
 aSealFirstOffloadSealsTheMediaSource :: Tools -> Assertion
 aSealFirstOffloadSealsTheMediaSource tools =
   withTempTree "mc3k-conformance" $ \work -> do

@@ -1,4 +1,3 @@
--- | One generation: the manifest that describes a tree, and the chain entry that names it.
 module MediaCopy.Engine.Generation
   ( writeGeneration
   , requireNextGeneration
@@ -36,8 +35,6 @@ import MediaCopy.Engine.Config
 import MediaCopy.Engine.Violation (PlanViolation (..), orThrow)
 import MediaCopy.Mhl.Store
 
--- | A manifest describes the tree it sits inside, so the rows come from
--- 'planned.directories' and from no other generation's set.
 writeGeneration
   :: (FileSystem :> es, Hasher :> es, Emit :> es, Error PlanViolation :> es, Reader JobFormat :> es, Reader ToolInfo :> es, Reader JobInstant :> es)
   => PlannedGeneration
@@ -67,8 +64,6 @@ writeGeneration planned patterns files = do
           entries
       txt = renderManifest manifest
       bytes = TE.encodeUtf8 txt
-  -- The write makes @ascmhl\/@ on its way, so the manifest is the first thing that needs the folder.
-  -- The write is atomic, so no reader ever sees a half-written generation.
   writeTextAtomically planned.manifest txt
   mh <- hashBytes chainFormat bytes
   nameRel <- orThrow (maybe (Left (ManifestNameUnusable planned.manifest)) Right (mkRelPath (pathText (takeFileName planned.manifest))))
@@ -77,7 +72,6 @@ writeGeneration planned patterns files = do
       (\e -> backfillChainEntry planned.folder e >>= orThrow . first (HistoryFaultAt planned.folder))
       (orderedChainEntries chain)
   let chain' = appendGeneration Chain {entries = V.fromList backfilled} planned.number nameRel mh
-  -- The chain follows the manifest, so a chain never names a manifest that is not there yet.
   writeTextAtomically (chainPath planned.folder) (renderChain chain')
   emit (MhlWritten planned.manifest)
 
@@ -86,9 +80,6 @@ dirEntryFor root t (path, pair) = do
   mtime <- mtimeOf (relToOsPath root path)
   pure (directoryEntry path mtime (dirHash t pair.content pair.structure))
 
--- | The same check for a folder and the number its chain must be about to give. The plan named the
--- generation the operator approved, so a history that moved since then fails the job rather than
--- writes a manifest nobody saw.
 requireNextGeneration :: OsPath -> Int -> Chain -> Either PlanViolation ()
 requireNextGeneration folder number chain
   | found == number = Right ()
@@ -96,15 +87,11 @@ requireNextGeneration folder number chain
   where
     found = 1 + highestGeneration chain
 
--- | Every manifest entry the engine builds carries exactly one hash.
 firstHash :: HashEntry -> Either PlanViolation Hash
 firstHash e = case e.hashes V.!? 0 of
   Just mh -> Right mh.hash
   Nothing -> Left (EntryWithoutHash e.path)
 
--- | The recorded entries are the job's own account of itself, so ordering them must never drop
--- one. 'orderedEntries' places every file, so this costs nothing and still names the fault if that
--- stops being true.
 requirePlaced :: Vector HashEntry -> Vector ManifestEntry -> Either PlanViolation ()
 requirePlaced files entries = case missing of
   [] -> Right ()

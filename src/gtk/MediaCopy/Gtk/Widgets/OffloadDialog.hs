@@ -1,4 +1,3 @@
--- | The "New Offload" dialog: one source folder and a list of destinations.
 module MediaCopy.Gtk.Widgets.OffloadDialog
   ( OffloadDialog
   , newOffloadDialog
@@ -47,7 +46,6 @@ newOffloadDialog window dispatch = do
   onDialogClosed shell.dialog openCell (dispatch CloseOffloadDialog)
   pure OffloadDialog {draftCell, openCell}
 
--- | What a draft paint writes: the source line, the destination list, and the button that leaves.
 data DraftForm = DraftForm
   { sourceRow :: Adw.ActionRow
   , destGroup :: Adw.PreferencesGroup
@@ -73,8 +71,6 @@ newSourceGroup dispatch = do
   Adw.preferencesGroupAdd sourceGroup sourceRow
   pure (sourceGroup, sourceRow)
 
--- | An activatable row, not an 'Adw.ButtonRow': that row arrives in libadwaita 1.6, above the
--- floor the oldest supported distribution sets. See .tasks/lessons.md.
 newDestGroup :: (UiMessage -> IO ()) -> IO (Adw.PreferencesGroup, Adw.ActionRow)
 newDestGroup dispatch = do
   destGroup <-
@@ -99,7 +95,6 @@ newDestGroup dispatch = do
 renderDraft :: DraftForm -> (UiMessage -> IO ()) -> Maybe OffloadDraft -> IO ()
 renderDraft form dispatch = mapM_ $ \draft -> do
   renderSourceRow form.sourceRow draft.mediaSource
-  -- The render lifts the add button out and puts it back, so it always sits below the destinations.
   Adw.preferencesGroupRemove form.destGroup form.addRow
   renderActionRows form.destRows (InGroup form.destGroup) (draft.destinations & V.fromList & V.imap (destRow dispatch))
   Adw.preferencesGroupAdd form.destGroup form.addRow

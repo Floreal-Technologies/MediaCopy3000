@@ -101,9 +101,6 @@ sampleHash = Hash XXH64 "ef46db3751d8e999"
 samplePlan :: Vector Finding -> JobPlan
 samplePlan = samplePlanWithFree 1_000_000
 
--- | The same plan at a chosen free-space reading. Written as an argument rather than a record
--- update. 'targets' names a field of 'OffloadFacts' too, and a one-field record update cannot
--- say which type it means.
 samplePlanWithFree :: Int64 -> Vector Finding -> JobPlan
 samplePlanWithFree free findings =
   JobPlan
@@ -149,7 +146,6 @@ sourceMissingBlocks = do
 
 destinationWithForeignFileBlocks :: Assertion
 destinationWithForeignFileBlocks = do
-  -- The one case that reads a file system: it proves the two walks and the free-space read reach the decision.
   ref <-
     newIORef
       ( emptyMemFS
@@ -171,9 +167,6 @@ insufficientSpaceBlocks = do
 chainNamesNoManifestBlocks :: Assertion
 chainNamesNoManifestBlocks = do
   let job = offloadJob [osp|/media-source|] [[osp|/ssd1|]] UseHistory
-      -- A chain file that parses and names nothing: 'resolveOriginals' answers 'ChainEmpty'.
-      -- Written out rather than updated, because 'originals' names a field of 'OffloadJob' too and
-      -- a one-field record update cannot say which type it means.
       facts =
         OffloadFacts
           { sourceTree = Just (treeOf [(RelPath "a.mxf", 2)] [])
@@ -199,8 +192,6 @@ sealOfSealedFolderWarns = do
   assertBool "expected AlreadySealed" (AlreadySealed `elem` codesOf plan)
   planBlocked plan @?= False
 
--- | The pure case above hands 'ChainEmpty' to the decider. This one seeds the disk the store reads:
--- a chain file that parses and names no generation, next to a file to copy.
 chainNamesNoManifestBlocksThroughTheStore :: Assertion
 chainNamesNoManifestBlocksThroughTheStore = do
   ref <-
@@ -213,8 +204,6 @@ chainNamesNoManifestBlocksThroughTheStore = do
   assertBool "expected ChainNamesNoManifest" (ChainNamesNoManifest `elem` codesOf plan)
   planBlocked plan @?= True
 
--- | The pure case above hands a sealed chain to the decider. This one seeds a real history, the
--- reference manifest and its chain, and lets the store find the generation.
 sealOfSealedFolderWarnsThroughTheStore :: Assertion
 sealOfSealedFolderWarnsThroughTheStore = do
   manifest <- TIO.readFile "tests/fixtures/ascmhl/0001_A002R2EC_2026-05-09_170200.mhl"
@@ -242,11 +231,8 @@ sealFirstPlansASealPass = do
   fmap (\pass -> pass.bytes) sealing.sealPass @?= Just 900
   fmap (\pass -> V.length pass.steps) sealing.sealPass @?= Just 1
   fmap (\pass -> pass.onFailure) sealing.sealPass @?= Just StopBeforeCopy
-  -- The seal reads the media source again. It writes nothing to the destination, so the payload is unchanged.
   sealing.totalBytes @?= plain.totalBytes
 
--- | The property the deleted pure case once carried: the gatherer and the walk order a tree the
--- same way twice. Nested and top-level names, so the ordering has something to get wrong.
 twoWalksOverOneFileSystemAgree :: Assertion
 twoWalksOverOneFileSystemAgree = do
   ref <-
@@ -263,8 +249,6 @@ twoWalksOverOneFileSystemAgree = do
   first @?= second
   V.length first.steps @?= 4
 
--- | The destination carries the media source's history, so its generation is numbered after it,
--- and after the seal pass when there is one. The race check reads the media source either way.
 destinationGenerationFollowsTheSourceHistory :: Assertion
 destinationGenerationFollowsTheSourceHistory = do
   let source = [osp|/media-source|]
@@ -291,11 +275,9 @@ destinationNumbers plan = case plan.execution of
   CopyInto copy -> copy.generations & V.toList & map (\planned -> planned.number)
   RecordAt _ -> []
 
--- | The media source every partial case copies: two files, one directory.
 partialSource :: Tree
 partialSource = treeOf [(RelPath "A/1.mxf", 9000), (RelPath "b.txt", 2)] [RelPath "A"]
 
--- | A destination root that exists and holds the given walk.
 partialTarget :: Tree -> Chain -> TargetFacts
 partialTarget held chain =
   TargetFacts
@@ -361,7 +343,6 @@ prefixChainPasses = do
 
 writeModesFollowTheChoiceAndTheSize :: Assertion
 writeModesFollowTheChoiceAndTheSize = do
-  -- b.txt is there at the right size, A/1.mxf is there at the wrong size.
   let held = treeOf [(RelPath "A/1.mxf", 10), (RelPath "b.txt", 2)] [RelPath "A"]
       resume = partialPlan (Just Resume) held emptyChain emptyChain
       replace = partialPlan (Just Replace) held emptyChain emptyChain
@@ -383,7 +364,6 @@ reuseWithRecordedOriginalReadsNoSource = do
           , sourceHistory = Right (Just (sealedChain, recorded))
           }
       plan = decideOffload (specOf (Offload job)) job facts
-  -- Every step reuses and has a recorded hash: only the destination bytes are read.
   plan.bytesToRead @?= 9002
   plan.totalBytes @?= 9002
 
@@ -407,19 +387,16 @@ chainWithC4 value =
 codesOf :: JobPlan -> List FindingCode
 codesOf plan = plan.findings & V.toList & map (\finding -> finding.code)
 
--- | A walk's answer, written out. The files are already in the order 'walk' gives them.
 treeOf :: List (RelPath, FileSize) -> List RelPath -> Tree
 treeOf files dirs = Tree {files = V.fromList files, dirs = V.fromList dirs}
 
 emptyChain :: Chain
 emptyChain = Chain {entries = V.empty}
 
--- | One generation, as a seal leaves it.
 sealedChain :: Chain
 sealedChain =
   Chain {entries = V.singleton ChainEntry {sequenceNr = 1, path = RelPath "0001_media-source_2020-01-01_000000.mhl", c4 = Nothing, unknown = V.empty}}
 
--- | A destination that is not there yet, with room to spare or not.
 freshTarget :: OsPath -> Int64 -> TargetFacts
 freshTarget parent free =
   TargetFacts
@@ -429,7 +406,6 @@ freshTarget parent free =
     , existing = Nothing
     }
 
--- | A media source with no history of its own. A case that needs one writes 'OffloadFacts' out.
 offloadFacts :: Maybe Tree -> Vector TargetFacts -> OffloadFacts
 offloadFacts sourceTree targets =
   OffloadFacts {sourceTree, targets, originals = Right Nothing, sourceHistory = Right Nothing}
@@ -451,11 +427,9 @@ verifySpec folder = specOf (VerifyFolder VerifyJob {folder})
 sealSpec :: OsPath -> JobSpec
 sealSpec folder = specOf (SealMediaSource SealJob {folder})
 
--- | What one destination holds for one source file before the job.
 data Held = NotHeld | PartOf Int | Same | Flipped | OtherSize
   deriving stock (Eq, Show)
 
--- | One destination the operator picks. 'held' is 'Nothing' for a destination that is not there yet.
 data Destination = Destination {parent :: OsPath, held :: Maybe (List Held)}
   deriving stock (Show)
 
@@ -486,7 +460,6 @@ genDestination files index = do
   held <- Gen.maybe (traverse (\file -> genHeld (snd file)) files)
   pure Destination {parent = unsafeEncodeUtf ("/ssd" <> show index), held}
 
--- | A 'Flipped' draw for an empty file becomes 'Same', because a flip of no bytes grows it.
 genHeld :: ByteString -> Gen Held
 genHeld bs =
   Gen.frequency
@@ -497,7 +470,6 @@ genHeld bs =
     , (1, pure OtherSize)
     ]
 
--- | Seeds the double as the scenario says. A held destination that holds nothing exists as a directory.
 seedScenario :: Scenario -> MemFS
 seedScenario scenario = foldr seedDestination (foldr seedSource emptyMemFS scenario.files) scenario.destinations
   where
@@ -515,7 +487,6 @@ seedScenario scenario = foldr seedDestination (foldr seedSource emptyMemFS scena
            Flipped -> withFile target (flipFirst bs) fs
            OtherSize -> withFile target (bs <> "x") fs
 
--- | A copy of the same length that no hash can match. An empty file has no first byte, so it grows.
 flipFirst :: ByteString -> ByteString
 flipFirst bs = case BS.uncons bs of
   Nothing -> "y"
@@ -524,11 +495,9 @@ flipFirst bs = case BS.uncons bs of
 mediaSource :: OsPath
 mediaSource = [osp|/media-source|]
 
--- | The double spells every key with @\/@, whatever the host separator is, so the property does too.
 memPath :: OsPath -> RelPath -> OsPath
 memPath root (RelPath t) = root <> [osp|/|] <> unsafeEncodeUtf (T.unpack t)
 
--- | The double's spelling of 'destinationPath' for the media source this property offloads.
 destinationRoot :: OsPath -> OsPath
 destinationRoot parent = parent <> [osp|/media-source|]
 
@@ -547,11 +516,9 @@ planAndEngineAgree = withTests 400 $ property $ do
   annotateShow plan.findings
   annotateShow plan.steps
   assert (not (planBlocked plan))
-  -- The seal is what gives the offload its recorded originals, the one state that can skip a source read.
   when scenario.sealed (assert (V.any isRecordedCopy plan.steps))
   (_, evs) <- evalIO (runEngine ref (executePlan defaultToolInfo plan))
   annotateShow evs
-  -- A plan accounts for every byte the engine reads, except the ones a mismatch adds.
   lastProgress evs === Just (plan.bytesToRead + rewriteBytes scenario)
   lastEvent evs === Just (JobFinished AllOk)
   fs <- evalIO (readIORef ref)
@@ -565,7 +532,6 @@ planAndEngineAgree = withTests 400 $ property $ do
     let replaced = statusesOf (fst file) evs & filter isReplacedStatus & length
     replaced === (if fst file `elem` reusedMismatches scenario then 1 else 0)
 
--- | Every file some destination reuses and cannot match, which the engine copies again.
 flippedReuses :: Scenario -> List (RelPath, ByteString)
 flippedReuses scenario
   | scenario.choice /= Just Resume = []
@@ -582,12 +548,9 @@ flippedReuses scenario
 reusedMismatches :: Scenario -> List RelPath
 reusedMismatches scenario = map fst (flippedReuses scenario)
 
--- | What a mismatch adds to the engine's reading and no plan can predict: the engine reads the source
--- again to rewrite that one destination, then reads the new copy back.
 rewriteBytes :: Scenario -> Int64
 rewriteBytes scenario = sum (map (\file -> 2 * fromIntegral (BS.length (snd file))) (flippedReuses scenario))
 
--- | The class where a needless source read would show: every write reuses and the hash is recorded.
 allReuseWithRecordedOriginal :: Scenario -> Bool
 allReuseWithRecordedOriginal scenario =
   scenario.sealed
@@ -605,7 +568,6 @@ lastEvent evs = fmap snd (V.unsnoc evs)
 runEngine :: IORef MemFS -> Eff '[Emit, Time, Hasher, FileSystem, IOE] a -> IO (a, Vector JobEvent)
 runEngine ref body = runEff (runFileSystemMem ref (runHasherIO (runTime (runEmitCollect body))))
 
--- | 'Progress' carries the bytes read so far, so the last one is every byte the job read.
 lastProgress :: Vector JobEvent -> Maybe Int64
 lastProgress evs =
   evs
@@ -628,7 +590,6 @@ isReplacedStatus = \case
   Done (Replaced _) -> True
   _ -> False
 
--- | The paths the newest manifest under @root\/ascmhl@ names, sorted.
 manifestPaths :: OsPath -> MemFS -> Maybe (List RelPath)
 manifestPaths root fs = do
   newest <- newestManifestIn root fs

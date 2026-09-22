@@ -34,8 +34,6 @@ sampleTree =
     )
     (V.fromList [RelPath "A", RelPath "A/B", RelPath "Empty"])
 
--- | The fixtures hold hashes that decode, so a report here is a fault in the test, not in the code
--- under test.
 runHashes :: JobFormat -> DirNode -> IO (DirHashes, Vector (RelPath, DirHashes))
 runHashes fmt node =
   runEff (runHasherIO (runErrorNoCallStack @DirectoryHashError (directoryHashes (hashBytes fmt) node))) >>= \case

@@ -1,4 +1,3 @@
--- | The seeded run behind the images in @manual/@.
 module MediaCopy.Gtk.Screenshot
   ( Startup (..)
   , defaultStartup
@@ -22,16 +21,10 @@ import MediaCopy.Model (Model)
 
 data Startup = Startup
   { frames :: List Model
-  -- ^ The run shows these models in order
   , action :: Maybe Text
-  -- ^ A GAction to activate after the run shows the frames, for a screen the
-  -- model does not hold.
   , shot :: Maybe FilePath
-  -- ^ Where to save a picture of the window. The window closes after the save.
   , expand :: Bool
-  -- ^ Open every expander before the run takes the picture.
   , scroll :: Bool
-  -- ^ Send every scrolled area to its end before the run takes the picture.
   }
 
 defaultStartup :: Startup
@@ -58,8 +51,6 @@ seeded window app showFrame startup = case startup.frames of
       when startup.scroll (scrollToEnd window)
       mapM_ (\path -> void (GLib.timeoutAdd GLib.PRIORITY_DEFAULT settleMs (takeShot path))) startup.shot
       pure False
-    -- An overlay scrollbar shows itself when its content is laid out and fades two seconds later,
-    -- over one more. A shot before the fade ends catches a different frame of it every run.
     settleMs = 3_500
     takeShot path = do
       outcome <- saveWindowPng window path
@@ -67,7 +58,6 @@ seeded window app showFrame startup = case startup.frames of
       Gtk.windowDestroy window
       pure False
 
--- | @app.about@ gets to the application and @win.something@ gets to the window. No other name exists.
 activateNamed :: Adw.ApplicationWindow -> Adw.Application -> Text -> IO ()
 activateNamed window app full = case T.breakOn "." full of
   ("app", rest) -> Gio.actionGroupActivateAction app (T.drop 1 rest) Nothing
@@ -92,8 +82,6 @@ saveWindowPng window path = do
       saved <- Gdk.textureSaveToPng texture path
       pure (if saved then Right () else Left (T.pack ("the file could not be written: " <> path)))
 
--- | Opens every expander in the window. An expander holds its own state, not
--- the model's, so no other way gets a screenshot of an open one.
 expandAll :: (Gtk.IsWidget widget) => widget -> IO ()
 expandAll widget = do
   asWidget <- Gtk.toWidget widget
@@ -101,7 +89,6 @@ expandAll widget = do
     set expander [#expanded := True]
   children asWidget >>= mapM_ expandAll
 
--- | Sends every scrolled area to its own end.
 scrollToEnd :: (Gtk.IsWidget widget) => widget -> IO ()
 scrollToEnd widget = do
   asWidget <- Gtk.toWidget widget

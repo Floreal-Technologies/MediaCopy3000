@@ -35,7 +35,6 @@ readsAnXxh64History tools = readsAHistoryIn tools "xxh64" (Hash XXH64 "26c7827d8
 readsAnMd5History :: Tools -> Assertion
 readsAnMd5History tools = readsAHistoryIn tools "md5" (Hash MD5 "5d41402abc4b2a76b9719d911017c592")
 
--- | The tree carries a zero-byte file, whose <path> the reference writes with no size attribute.
 readsAHistoryIn :: Tools -> Text -> Hash -> Assertion
 readsAHistoryIn tools format expected =
   withTempTree "mc3k-conformance" $ \work -> do
@@ -65,7 +64,6 @@ verifiesAFolderTheReferenceCreated tools =
       ("verify reported a failure: " <> show (V.toList events))
       (not (any (\event -> isFailureEvent event) (V.toList events)))
 
--- | Reads what the reference wrote, manifest by manifest, with our own parser.
 readManifestsOf :: FilePath -> IO (Vector Manifest)
 readManifestsOf folder = do
   files <- mhlFilesIn folder

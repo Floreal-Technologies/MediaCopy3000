@@ -1,9 +1,3 @@
-/* Everforest Light Medium
- *
- * Palette: https://github.com/sainnhe/everforest (palette.md, light medium)
- * The application picks this file from the Preferences dialog; it overrides the libadwaita colour
- * variables, so every rule in `styles.css` follows it without an edit.
- */
 :root {
   --window-bg-color: #EFEBD4;
   --window-fg-color: #5C6A72;

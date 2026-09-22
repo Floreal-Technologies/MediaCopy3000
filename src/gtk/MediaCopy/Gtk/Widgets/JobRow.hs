@@ -1,4 +1,3 @@
--- | One sidebar row: kind icon, job name, phase line and progress bar.
 module MediaCopy.Gtk.Widgets.JobRow
   ( JobRow (..)
   , newJobRow
@@ -19,7 +18,6 @@ import MediaCopy.Domain.Job (JobId (..), JobPhase (..), JobResult (..), JobSpec 
 import MediaCopy.Gtk.Widgets.Common (nameAccessible, newCell, newLabel, paddedBox, renderCell, toggleClass)
 import MediaCopy.Interface.Wording (KindUi (..), count, humanRate, kindUi, quietText)
 
--- | A row carries its job's id as its widget name, so a selection says which job it picked.
 rowName :: JobId -> Text
 rowName (JobId n) = "job-" <> T.pack (show n)
 
@@ -33,8 +31,6 @@ readJobId digits = case TR.decimal digits of
   Right (n, rest) | T.null rest -> Just (JobId n)
   _ -> Nothing
 
--- | Everything a sidebar row shows. Nothing else can make one look different, so a row
--- that reads the same needs no paint.
 data RowView = RowView
   { icon :: Text
   , label :: Text
@@ -48,8 +44,6 @@ data RowView = RowView
 data JobRow = JobRow
   { row :: Gtk.ListBoxRow
   , update :: UTCTime -> JobState -> Double -> IO ()
-  -- ^ The rate is bytes per second and is 0 for every job that does not run. The time is the clock
-  -- the model carries, which the row ages to tell a slow phase from a stopped one.
   }
 
 newJobRow :: JobState -> IO JobRow
@@ -78,7 +72,6 @@ newJobRow state = do
     toggleClass sub "error" view.bad
     toggleClass bar "error" view.bad
   let update now current rate = renderCell cell (rowView now current rate)
-  -- A row that has just been made shows no age, whatever the clock says elsewhere.
   update state.lastMovedAt state 0
   pure JobRow {row, update}
 
@@ -93,7 +86,6 @@ rowView now state rate =
     , bad = isBad state.phase
     }
 
--- | The line a job's row in the sidebar carries.
 phaseText :: UTCTime -> JobState -> Double -> Text
 phaseText now state rate = case state.phase of
   Queued -> "Queued"

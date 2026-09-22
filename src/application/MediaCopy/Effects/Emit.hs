@@ -25,7 +25,6 @@ runEmitIO :: (IOE :> es) => (JobEvent -> IO ()) -> Eff (Emit : es) a -> Eff es a
 runEmitIO sink = interpret_ $ \case
   Emit ev -> liftIO (sink ev)
 
--- | Collects emitted events in order, for tests.
 runEmitCollect :: Eff (Emit : es) a -> Eff es (a, Vector JobEvent)
 runEmitCollect action = do
   (a, evs) <- reinterpret_ (runState []) (\case Emit ev -> modify (\xs -> ev : xs)) action

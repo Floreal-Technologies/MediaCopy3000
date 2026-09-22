@@ -118,27 +118,20 @@ countsEachCategory = do
 
 appendsTheSourceBasename :: Assertion
 appendsTheSourceBasename =
-  -- The expected value is joined the same way, so the test holds under either separator.
   destinationPath [osp|/mnt/ssd/Day03|] [osp|/media/CARD_B/B003_C011|] @?= [osp|/mnt/ssd/Day03|] </> [osp|B003_C011|]
 
--- | The age the window reads counts from the last sign of movement, so a byte count
--- carries its own instant into the stamp.
 aByteCountStampsTheLivenessTime :: Assertion
 aByteCountStampsTheLivenessTime = do
   let later = addUTCTime 30 sampleSpec.createdAt
       st = foldEvent later (Progress 5) (newJobState sampleSpec)
   st.lastMovedAt @?= later
 
--- | A manifest reaches the disk at the end of its phase. A stamp there would reset the age after
--- the wait it should have measured. 'ManifestWriting' stamps at the start of that phase instead.
 aManifestLeavesTheLivenessTimeAlone :: Assertion
 aManifestLeavesTheLivenessTimeAlone = do
   let later = addUTCTime 30 sampleSpec.createdAt
       st = foldEvent later (MhlWritten [osp|/d/ascmhl/x.mhl|]) (newJobState sampleSpec)
   st.lastMovedAt @?= sampleSpec.createdAt
 
--- | Each generation opens its own window, so the age reads that destination's wait and
--- not the sum of the waits before it.
 aManifestStartStampsTheLivenessTime :: Assertion
 aManifestStartStampsTheLivenessTime = do
   let later = addUTCTime 30 sampleSpec.createdAt
@@ -146,15 +139,12 @@ aManifestStartStampsTheLivenessTime = do
   st.lastMovedAt @?= later
   st.doing @?= Just WritingManifest
 
--- | A job that stopped must never read as one still at work, whether or not its reader checks the
--- phase first.
 anEndClearsWhatTheJobHadInHand :: Assertion
 anEndClearsWhatTheJobHadInHand = do
   let writing = fold ManifestWriting (newJobState sampleSpec)
   (fold (JobFinished AllOk) writing).doing @?= Nothing
   (fold (JobFailed "boom") writing).doing @?= Nothing
 
--- | A test that says nothing about the clock folds its events at one instant.
 fold :: JobEvent -> JobState -> JobState
 fold = foldEvent sampleSpec.createdAt
 

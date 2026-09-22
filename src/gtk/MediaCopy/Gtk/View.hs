@@ -1,11 +1,3 @@
--- | The window shell components:
---
--- * header bar;
--- * toast overlay;
--- * split view;
--- * sidebar rows;
--- * detail pane;
--- * dialogs.
 module MediaCopy.Gtk.View
   ( Widgets (..)
   , buildWidgets
@@ -44,24 +36,17 @@ data Sample = Sample
   , rate :: Double
   }
 
--- | The window and the one function that paints a model into it.
 data Widgets = Widgets
   { window :: Adw.ApplicationWindow
   , render :: Model -> IO ()
   }
 
--- | 'applyTheme' dresses the window.
 buildWidgets
   :: Adw.Application
-  -- ^ The application
   -> (Appearance -> PaletteMode -> IO ())
-  -- ^ the @applyTheme@ callback
   -> Vector ThemeSection
-  -- ^ Light sections
   -> Vector ThemeSection
-  -- ^ Dark sections
   -> (UiMessage -> IO ())
-  -- ^ The message dispatcher
   -> IO Widgets
 buildWidgets app applyTheme lightSections darkSections dispatch = do
   window <- newAppWindow app
@@ -83,7 +68,6 @@ buildWidgets app applyTheme lightSections darkSections dispatch = do
   paintPreferences <- newPreferences app window lightSections darkSections dispatch
   closeConfirm <- newCloseConfirm window dispatch
   let render current = do
-        -- The stylesheet goes on before the widgets are painted, so no frame shows the theme it left.
         renderCell themeCell (current.appearance, current.desktopBase)
         rate <- renderSidebar sidebar current
         let selected = selectedEntry current
@@ -107,7 +91,6 @@ newAppWindow app =
     , #title := "MediaCopy 3000"
     ]
 
--- | The header bar's three actions and the primary menu, in a toolbar that holds nothing under them yet.
 newHeaderToolbar :: Gio.Menu -> IO Adw.ToolbarView
 newHeaderToolbar menuModel = do
   toolbar <- new Adw.ToolbarView []
@@ -115,7 +98,6 @@ newHeaderToolbar menuModel = do
   headerAction headerBar "win.new-offload" ["suggested-action"]
   headerAction headerBar "win.verify" []
   headerAction headerBar "win.seal" []
-  -- The primary menu. 'primary' is what makes F10 open it.
   menuButton <-
     new
       Gtk.MenuButton
@@ -129,7 +111,6 @@ newHeaderToolbar menuModel = do
   Adw.toolbarViewAddTopBar toolbar headerBar
   pure toolbar
 
--- | The two faces of the content pane: the selected job, and the page shown when there is none.
 newContentStack :: JobDetail -> IO (Gtk.Stack, Adw.NavigationPage)
 newContentStack detail = do
   contentStack <- new Gtk.Stack []
@@ -146,8 +127,6 @@ newContentStack detail = do
   set jobPage [#widthRequest := 360]
   pure (contentStack, jobPage)
 
--- | Below this width the window cannot show the sidebar and the job together, so the split view
--- stacks them.
 addNarrowBreakpoint :: Adw.ApplicationWindow -> Adw.NavigationSplitView -> IO ()
 addNarrowBreakpoint window splitView = do
   narrow <- Adw.breakpointConditionParse "max-width: 620sp"
@@ -156,7 +135,6 @@ addNarrowBreakpoint window splitView = do
   void $ on breakpoint #unapply $ set splitView [#collapsed := False]
   Adw.applicationWindowAddBreakpoint window breakpoint
 
--- | The dismissal lands after the current paint, never inside it.
 newToastCell :: Adw.ToastOverlay -> (UiMessage -> IO ()) -> IO (Cell (Maybe Text))
 newToastCell toastOverlay dispatch =
   newCell $ \message ->
@@ -168,9 +146,6 @@ newToastCell toastOverlay dispatch =
       )
       message
 
--- * The sidebar
-
--- | The list of jobs, the rows it shows, and what a render needs to move them without dispatching.
 data Sidebar = Sidebar
   { list :: Gtk.ListBox
   , rows :: IORef (Map JobId JobRow)
@@ -181,8 +156,6 @@ data Sidebar = Sidebar
 
 newSidebar :: (UiMessage -> IO ()) -> IO (Sidebar, Adw.NavigationPage)
 newSidebar dispatch = do
-  -- `suppress` is True while a render moves the sidebar's rows, so a
-  -- selection the render itself caused never dispatches.
   suppress <- newIORef False
   list <-
     new
@@ -202,8 +175,6 @@ newSidebar dispatch = do
   selection <- newSelectionCell list rows
   pure (Sidebar {list, rows, lastBytes, suppress, selection}, page)
 
--- | The closure reads the row map itself, so the cell needs only the choice. A job id is never
--- reused, so a row the cell recorded as selected is the row that still carries that id.
 newSelectionCell :: Gtk.ListBox -> IORef (Map JobId JobRow) -> IO (Cell (Maybe JobId))
 newSelectionCell list rows =
   newCell $ \case
@@ -212,8 +183,6 @@ newSelectionCell list rows =
       current <- readIORef rows
       mapM_ (\jobRow -> Gtk.listBoxSelectRow list (Just jobRow.row)) (Map.lookup jobId current)
 
--- | Every row change and the selection happen under `suppress`, because removing the
--- selected row or selecting another one emits `rowSelected`. Returns the selected job's rate.
 renderSidebar :: Sidebar -> Model -> IO Double
 renderSidebar sidebar current = suppressing sidebar.suppress $ do
   existing <- readIORef sidebar.rows
@@ -234,20 +203,17 @@ renderSidebar sidebar current = suppressing sidebar.suppress $ do
           pure rate
       )
       kept
-  -- The cell holds the choice the list shows, so a job whose row is gone reads as none.
   let chosen = case current.selected of
         Nothing -> Nothing
         Just jobId -> if Map.member jobId rows then Just jobId else Nothing
   renderCell sidebar.selection chosen
   pure (fromMaybe 0 (current.selected >>= \jobId -> Map.lookup jobId rates))
 
--- | Only the running job moves bytes, so no other row asks for a rate.
 rateFor :: Sidebar -> Model -> JobId -> JobState -> IO Double
 rateFor sidebar current jobId state
   | current.running == Just jobId = throughput sidebar.lastBytes current.now jobId state.bytesDone
   | otherwise = pure 0
 
--- | A sample less than half a second old is too close to measure, so the last rate stands.
 throughput :: IORef (Map JobId Sample) -> UTCTime -> JobId -> Int64 -> IO Double
 throughput lastBytes now jobId bytes = do
   samples <- readIORef lastBytes

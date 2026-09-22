@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Builds the Windows icon from the application's SVG.
-# The .ico is tracked, so this script runs only when the SVG changes.
 set -euo pipefail
 
 SVG=assets/eu.choutri.MediaCopy3000.svg

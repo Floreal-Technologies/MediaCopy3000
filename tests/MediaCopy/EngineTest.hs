@@ -8,6 +8,7 @@ import Ascmhl.Hash (Hash (..), HashAlgo (..))
 import Ascmhl.Path (RelPath (..), pathText)
 import Ascmhl.Read (parseChain, parseManifest)
 import Ascmhl.Types
+import Control.Exception (Exception (..), asyncExceptionFromException, asyncExceptionToException, throwIO, try)
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BC
 import Data.Function ((&))
@@ -57,7 +58,11 @@ tests =
         , testCase "keeps the old final when an overwrite fails" keepsTheOldFinalWhenAnOverwriteFails
         , testCase "a rename that fails keeps the old final on an overwrite" renameFailureKeepsTheOldFinalOnOverwrite
         , testCase "a read-back that fails after publish keeps the new copy, flagged" readBackFailureAfterPublishKeepsTheNewCopyFlagged
+        , testCase "a read-back that fails after publish keeps a new file, flagged" readBackFailureAfterPublishKeepsANewFileFlagged
+        , testCase "a rename that fails at the second destination keeps the first copy" renameFailureOnTheSecondDestinationKeepsTheFirstCopy
         , testCase "a rename that fails on a new file leaves no name" renameFailureOnANewFileLeavesNoName
+        , testCase "a cancel before the rename leaves no name" cancelBeforeTheRenameLeavesNoName
+        , testCase "a cancel after the rename keeps the copy" cancelAfterTheRenameKeepsTheCopy
         , testCase "a manifest write that fails fails the job after the copies" manifestWriteFailureFailsTheJobAfterTheCopies
         ]
     , testGroup
@@ -94,8 +99,6 @@ copiesEveryFileToEveryDestinationAndVerifies = do
         && any (\k -> [osp|ascmhl_chain.xml|] `isSuffixOf` k) mhlKeys
     )
   statusesOf (RelPath "A/1.mxf") evs @?= [Copying, Flushing, Publishing, Verifying, Done Ok]
-  -- Each destination opens its own manifest window before its manifest lands. So the age the
-  -- window reads is that destination's wait, not the two added together.
   manifestPhases evs @?= ["start", "written", "start", "written"]
 
 reportsAHashMismatchWhenADestinationReadIsCorrupted :: Assertion
@@ -125,7 +128,6 @@ runOffloadWith ref dests existingCopy =
 runOffload :: IORef MemFS -> List OsPath -> IO (Vector JobEvent)
 runOffload ref dests = runOffloadWith ref dests Nothing
 
--- | The destination already holds b.txt with the right bytes and A/1.mxf as a part file.
 reusesAMatchingDestinationFile :: Assertion
 reusesAMatchingDestinationFile = do
   ref <-
@@ -134,15 +136,16 @@ reusesAMatchingDestinationFile = do
           & withFile [osp|/media-source/A/1.mxf|] (BS.replicate 9000 1)
           & withFile [osp|/media-source/b.txt|] "hi"
           & withFile [osp|/ssd1/media-source/b.txt|] "hi"
+          & withFile [osp|/ssd1/media-source/b.txt.mc3k-part|] "h"
           & withFailOnOpen [osp|/ssd1/media-source/b.txt.mc3k-part|]
           & withFile [osp|/ssd1/media-source/A/1.mxf.mc3k-part|] (BS.replicate 400 1)
       )
   evs <- runResume ref Resume
   V.last evs @?= JobFinished AllOk
   fs <- readIORef ref
+  Map.member [osp|/ssd1/media-source/b.txt.mc3k-part|] fs.files @?= False
   fmap fst (Map.lookup [osp|/ssd1/media-source/A/1.mxf|] fs.files) @?= Just (BS.replicate 9000 1)
   Map.member [osp|/ssd1/media-source/A/1.mxf.mc3k-part|] fs.files @?= False
-  -- Every Copy op opens with Copying, whatever the modes of its writes are.
   statusesOf (RelPath "b.txt") evs @?= [Copying, Verifying, Done Ok]
   statusesOf (RelPath "A/1.mxf") evs @?= [Copying, Flushing, Publishing, Verifying, Done Ok]
 
@@ -159,8 +162,6 @@ replacesAMismatchedDestinationFile = do
   fs <- readIORef ref
   fmap fst (Map.lookup [osp|/ssd1/media-source/b.txt|] fs.files) @?= Just "hi"
   assertBool "expected exactly one Replaced for b.txt" (length (filter isReplaced (statusesOf (RelPath "b.txt") evs)) == 1)
-  -- A rewrite is a whole second copy, so it reports every state a first copy reports. The first
-  -- Verifying is the reuse check that found the mismatch; the outcome is asserted above.
   filter (not . isDone) (statusesOf (RelPath "b.txt") evs)
     @?= [Copying, Verifying, Copying, Flushing, Publishing, Verifying]
 
@@ -216,6 +217,77 @@ readBackFailureAfterPublishKeepsTheNewCopyFlagged = do
   actions <- actionsOfLatestManifestIn [osp|/ssd1/media-source/ascmhl/|] ref
   actions @?= Just [FailedAction]
 
+readBackFailureAfterPublishKeepsANewFileFlagged :: Assertion
+readBackFailureAfterPublishKeepsANewFileFlagged = do
+  ref <-
+    newIORef
+      ( emptyMemFS
+          & withFile [osp|/media-source/a.mxf|] "data"
+          & withFailOnOpen [osp|/ssd1/media-source/a.mxf|]
+      )
+  evs <- runOffload ref [[osp|/ssd1|]]
+  V.last evs @?= JobFinished (WithFailures 1)
+  fs <- readIORef ref
+  fmap fst (Map.lookup [osp|/ssd1/media-source/a.mxf|] fs.files) @?= Just "data"
+  Map.member [osp|/ssd1/media-source/a.mxf.mc3k-part|] fs.files @?= False
+  actions <- actionsOfLatestManifestIn [osp|/ssd1/media-source/ascmhl/|] ref
+  actions @?= Just [FailedAction]
+
+renameFailureOnTheSecondDestinationKeepsTheFirstCopy :: Assertion
+renameFailureOnTheSecondDestinationKeepsTheFirstCopy = do
+  ref <-
+    newIORef
+      ( emptyMemFS
+          & withFile [osp|/media-source/a.mxf|] "data"
+          & withFailOnRename [osp|/ssd2/media-source/a.mxf|]
+      )
+  evs <- runOffload ref [[osp|/ssd1|], [osp|/ssd2|]]
+  V.last evs @?= JobFinished (WithFailures 1)
+  fs <- readIORef ref
+  fmap fst (Map.lookup [osp|/ssd1/media-source/a.mxf|] fs.files) @?= Just "data"
+  Map.member [osp|/ssd2/media-source/a.mxf|] fs.files @?= False
+  Map.member [osp|/ssd1/media-source/a.mxf.mc3k-part|] fs.files @?= False
+  Map.member [osp|/ssd2/media-source/a.mxf.mc3k-part|] fs.files @?= False
+  first <- actionsOfLatestManifestIn [osp|/ssd1/media-source/ascmhl/|] ref
+  first @?= Just [FailedAction]
+  second <- actionsOfLatestManifestIn [osp|/ssd2/media-source/ascmhl/|] ref
+  second @?= Just [FailedAction]
+
+data CancelJob = CancelJob
+  deriving stock (Show)
+
+instance Exception CancelJob where
+  toException = asyncExceptionToException
+  fromException = asyncExceptionFromException
+
+runCancelledAt :: FileStatus -> IO MemFS
+runCancelledAt status = do
+  ref <- newIORef (emptyMemFS & withFile [osp|/media-source/a.mxf|] "data")
+  let sink = \case
+        FileStatusChanged _ s | s == status -> throwIO CancelJob
+        _ -> pure ()
+      spec =
+        JobSpec
+          { jobId = JobId 1
+          , job = Offload OffloadJob {source = [osp|/media-source|], destinations = NE.fromList [[osp|/ssd1|]], sealFirst = UseHistory, existingCopy = Nothing}
+          , createdAt = epoch
+          }
+  result <- try @CancelJob (runEff (runFileSystemMem ref (runHasherIO (runTime (runEmitIO sink (runJob defaultToolInfo spec))))))
+  assertBool "expected the cancel to reach the caller" (either (const True) (const False) result)
+  readIORef ref
+
+cancelBeforeTheRenameLeavesNoName :: Assertion
+cancelBeforeTheRenameLeavesNoName = do
+  fs <- runCancelledAt Flushing
+  Map.member [osp|/ssd1/media-source/a.mxf|] fs.files @?= False
+  Map.member [osp|/ssd1/media-source/a.mxf.mc3k-part|] fs.files @?= False
+
+cancelAfterTheRenameKeepsTheCopy :: Assertion
+cancelAfterTheRenameKeepsTheCopy = do
+  fs <- runCancelledAt Verifying
+  fmap fst (Map.lookup [osp|/ssd1/media-source/a.mxf|] fs.files) @?= Just "data"
+  Map.member [osp|/ssd1/media-source/a.mxf.mc3k-part|] fs.files @?= False
+
 renameFailureOnANewFileLeavesNoName :: Assertion
 renameFailureOnANewFileLeavesNoName = do
   ref <-
@@ -266,7 +338,6 @@ recordsFailedWhenTheSourceChangedAfterSealing = do
   V.last evs @?= JobFinished (WithFailures 1)
   actions <- actionsOfLatestManifestIn [osp|/dest/vol/ascmhl/|] ref
   actions @?= Just [FailedAction]
-  -- The value is the seal's own hash, never the changed file's 5cc5640faafe2c0e.
   values <- latestManifestHashesIn [osp|/dest/vol/ascmhl/|] ref <&> fmap (\hs -> map (\mh -> mh.hash.value) hs)
   values @?= Just ["26c7827d889f6da3"]
 
@@ -277,7 +348,6 @@ hashesInTheAlgorithmOfTheOriginals = do
   _ <- runOffload' ref
   algos <- latestManifestHashesIn [osp|/dest/vol/ascmhl/|] ref <&> fmap (\hs -> map (\mh -> mh.hash.algo) hs)
   algos @?= Just [MD5]
-  -- Only a comparison that matched gives 'Verified', so both legs must hash in md5.
   actions <- actionsOfLatestManifestIn [osp|/dest/vol/ascmhl/|] ref
   actions @?= Just [Verified]
 
@@ -289,7 +359,6 @@ sealsTheMediaSourceFirstAndRecordsVerified = do
   fs <- readIORef ref
   let mediaSourceHistory = Map.keys (Map.filterWithKey (\k _ -> [osp|/vol/ascmhl/|] `isPrefixOf` k) fs.files)
   assertBool "the media source holds one generation and its chain" (length mediaSourceHistory == 2)
-  -- The job checked the copy against the generation that it wrote itself.
   actions <- actionsOfLatestManifestIn [osp|/dest/vol/ascmhl/|] ref
   actions @?= Just [Verified]
 
@@ -298,13 +367,11 @@ stopsBeforeCopyingWhenTheSealFails = do
   ref <- newIORef (emptyMemFS & withTextFile [osp|/vol/ascmhl/0001_vol_2026-05-09_170200.mhl|] wrongSealFixture)
   modifyIORef' ref (withFile [osp|/vol/A002C001.MXF|] (BC.pack "hello"))
   evs <- runSealFirstOffload ref StopBeforeCopy
-  -- The sentence the manual quotes, pinned here in full.
   V.last evs @?= JobFailed "the seal failed for 1 of 1 files; nothing was copied"
   fs <- readIORef ref
   let copied = Map.keys (Map.filterWithKey (\k _ -> [osp|/dest/|] `isPrefixOf` k) fs.files)
       mediaSourceHistory = Map.keys (Map.filterWithKey (\k _ -> [osp|/vol/ascmhl/|] `isPrefixOf` k) fs.files)
   copied @?= []
-  -- The media source keeps the seal that found the fault. The job stopped, but it did not discard the record.
   assertBool "the media source holds both generations and its chain" (length mediaSourceHistory == 3)
 
 runSealFirstOffload :: IORef MemFS -> OnSealFailure -> IO (Vector JobEvent)
@@ -323,7 +390,6 @@ runSealFirstOffload ref policy =
       , createdAt = epoch
       }
 
--- | A media source that another tool sealed. The recorded hash does not match the file that the test writes.
 wrongSealFixture :: Text
 wrongSealFixture =
   """
@@ -360,7 +426,6 @@ runOffload' ref =
       , createdAt = epoch
       }
 
--- | A media source that another tool sealed in md5. The mtime is MemFS's epoch, so the manifest describes the file that the test writes.
 md5SealFixture :: Text
 md5SealFixture =
   """
@@ -458,8 +523,6 @@ sealsAgainRecordingVerifiedAndFailed = do
   actions <- actionsOfLatestManifestIn [osp|/vol/ascmhl/|] ref
   actions @?= Just [FailedAction, Verified]
 
--- | After a seal and an offload, the destination holds the card's generation byte for byte, its own
--- second generation, and a chain that names both.
 carriesTheMediaSourceHistoryIntoTheDestination :: Assertion
 carriesTheMediaSourceHistoryIntoTheDestination = do
   ref <- newIORef (emptyMemFS & withFile [osp|/vol/A002C001.MXF|] (BC.pack "hello"))
@@ -494,7 +557,6 @@ isMhlWritten :: JobEvent -> Bool
 isMhlWritten (MhlWritten _) = True
 isMhlWritten _ = False
 
--- | The first hash of each file entry of the newest manifest under the given `ascmhl` directory, in path order.
 latestManifestHashesIn :: OsPath -> IORef MemFS -> IO (Maybe (List ManifestHash))
 latestManifestHashesIn prefix ref = do
   fs <- readIORef ref
@@ -514,7 +576,6 @@ latestManifestHashesIn prefix ref = do
             & Just
             & pure
 
--- | The actions of the newest manifest under the given `ascmhl` directory, in path order.
 actionsOfLatestManifestIn :: OsPath -> IORef MemFS -> IO (Maybe (List HashAction))
 actionsOfLatestManifestIn prefix ref =
   latestManifestHashesIn prefix ref <&> \hashes -> fmap (\hs -> map (\mh -> mh.action) hs) hashes
@@ -577,8 +638,6 @@ runJobEvents ref spec = do
   (_, evs) <- runEff (runFileSystemMem ref (runHasherIO (runTime (runEmitCollect (runJob defaultToolInfo spec)))))
   pure evs
 
--- | The manifest events alone, in emission order, as words. The path an 'MhlWritten' carries is not
--- what these tests ask about, so it does not reach the expected value.
 manifestPhases :: Vector JobEvent -> List String
 manifestPhases events = mapMaybe phaseOf (V.toList events)
   where
@@ -587,7 +646,6 @@ manifestPhases events = mapMaybe phaseOf (V.toList events)
       MhlWritten _ -> Just "written"
       _ -> Nothing
 
--- | The statuses reported for one file, in emission order.
 statusesOf :: RelPath -> Vector JobEvent -> List FileStatus
 statusesOf target events = mapMaybe matchStatus (V.toList events)
   where

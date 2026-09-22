@@ -1,4 +1,3 @@
--- | What the engine found self-contradictory in a plan that planning already passed.
 module MediaCopy.Engine.Violation
   ( PlanViolation (..)
   , orThrow
@@ -17,23 +16,16 @@ import System.OsPath (OsPath)
 import MediaCopy.Domain.DirectoryHash (DirectoryHashError)
 import MediaCopy.Domain.History (HistoryError)
 
--- | Every one of these means the plan and the engine disagree about the same job. A plan
--- that planning accepted can never produce one. They are faults of this code, not of a media source.
 data PlanViolation
-  = -- | 'planBlocked' lets only a settled plan through, so nothing can reach a missing format.
-    PlanFormatMissing
+  = PlanFormatMissing
   | EntryWithoutHash RelPath
   | EntriesNotPlaced (Vector RelPath)
   | OriginalsUnresolved HistoryError
   | GenerationRaced OsPath Int Int
-  | -- | The engine named the manifest, so a name that is not a relative path is the engine's fault.
-    ManifestNameUnusable OsPath
-  | -- | The domain's own error, rendered by the domain, so the sentence exists once.
-    HashUndecodable DirectoryHashError
-  | -- | A history this code already read, or just wrote, cannot be read now.
-    HistoryFaultAt OsPath HistoryError
-  | -- | The seal pass wrote a generation into the media source, so its history cannot be absent.
-    OriginalsMissingAfterSeal OsPath
+  | ManifestNameUnusable OsPath
+  | HashUndecodable DirectoryHashError
+  | HistoryFaultAt OsPath HistoryError
+  | OriginalsMissingAfterSeal OsPath
   deriving stock (Eq, Show)
 
 instance Display PlanViolation where
@@ -62,7 +54,5 @@ instance Display PlanViolation where
     OriginalsMissingAfterSeal source ->
       "ASC MHL: the seal wrote no history under " <> displayBuilder (pathText source)
 
--- | A pure decision reports its failure. This is the only place where one becomes the job's
--- failure.
 orThrow :: (Error PlanViolation :> es) => Either PlanViolation a -> Eff es a
 orThrow = either (\violation -> throwError violation) pure

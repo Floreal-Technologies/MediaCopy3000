@@ -78,8 +78,6 @@ m0 = initialModel at LightPalette
 run :: List Message -> Model -> (Model, List Command)
 run msgs m = foldl (\(mm, cs) msg -> let (mm', cs') = update msg mm in (mm', cs <> cs')) (m, []) msgs
 
--- | A job never gets to the engine without a plan. A test that wants a running job must
--- supply one, and it supplies the one the planner settles for that kind.
 planned :: JobId -> Job -> Message
 planned jid job = PlanComputed spec (Right (planOf job spec))
   where
@@ -91,8 +89,6 @@ planOf = \case
   VerifyFolder _ -> verifyPlan
   SealMediaSource _ -> sealPlan
 
--- | The picked folders are the fixture's own, so the job the model mints out of the draft is the
--- job the plan was made for. 'awaitingPlan' compares the whole spec, so the two must agree.
 offloadFlow' :: Int -> List Message
 offloadFlow' n =
   [ Ui OpenOffloadDialog
@@ -109,7 +105,6 @@ offloadFlow n = offloadFlow' n <> [Ui ConfirmPlan]
 enqueueOffload :: List Message
 enqueueOffload = offloadFlow 1
 
--- | The plan computed before the choice changed is never the plan the operator approves.
 sealChoiceReplansTheSameJob :: Assertion
 sealChoiceReplansTheSameJob = do
   let (m1, _) = run (offloadFlow' 1) m0
@@ -119,7 +114,6 @@ sealChoiceReplansTheSameJob = do
   m2.nextId @?= m1.nextId
   m3.planPhase @?= m2.planPhase
 
--- | The plan computed before the choice changed is never the plan the operator approves.
 existingCopyChoiceReplansTheSameJob :: Assertion
 existingCopyChoiceReplansTheSameJob = do
   let (m1, _) = run (offloadFlow' 1) m0
@@ -145,7 +139,6 @@ queuesTheSecondJob = do
   length (filter isStart cmds) @?= 1
   m.queue @?= [JobId 2]
 
--- | The model plans the next job again before it runs, so the command is a replan and not a start.
 startsTheNextJobWhenTheRunningOneFinishes :: Assertion
 startsTheNextJobWhenTheRunningOneFinishes = do
   let (m1, _) = run (offloadFlow 1 <> offloadFlow 2) m0
@@ -279,10 +272,8 @@ confirmOnEmptyQueueStartsAtOnce = do
   model.running @?= Just (JobId 1)
   (model.jobs Map.! JobId 1).state.phase @?= Running
   length (filter isStart cmds) @?= 1
-  -- The planPhase asked for the one plan. The confirmation must not ask for another.
   length (filter isComputePlan cmds) @?= 1
 
--- | A job whose plan fails must not hold the engine slot.
 failedReplanFailsTheJobAndStartsTheNext :: Assertion
 failedReplanFailsTheJobAndStartsTheNext = do
   let (m1, _) = run (offloadFlow 1 <> offloadFlow 2 <> offloadFlow 3) m0

@@ -1,4 +1,3 @@
--- | What a job records about the tool that made it.
 module MediaCopy.Engine.Config
   ( ToolInfo (..)
   , defaultToolInfo

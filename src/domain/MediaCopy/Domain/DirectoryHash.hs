@@ -23,7 +23,6 @@ import Data.Vector qualified as V
 import Effectful
 import Effectful.Error.Static (Error, throwError)
 
--- | The one fault the rollup can meet: a hash value that does not decode under its own format.
 newtype DirectoryHashError = HashUndecodableValue Text
   deriving stock (Eq, Show)
 
@@ -31,7 +30,6 @@ instance Display DirectoryHashError where
   displayBuilder (HashUndecodableValue value) =
     "ASC MHL: undecodable hash value: " <> displayBuilder value
 
--- | The root carries the empty path and the empty name.
 data DirNode = DirNode
   { path :: RelPath
   , name :: Text
@@ -49,7 +47,6 @@ data DirHashes = DirHashes
 buildTree :: Vector (RelPath, Hash) -> Vector RelPath -> DirNode
 buildTree files dirs = nodeFor (RelPath "") ""
   where
-    -- The append order decides sibling order before the sort, so both groupings must agree on it.
     groupByParent :: List (Text, b) -> Map Text (List b)
     groupByParent keyed =
       keyed
@@ -86,27 +83,22 @@ buildTree files dirs = nodeFor (RelPath "") ""
     baseOf p = case T.breakOnEnd "/" p of
       (_, after) -> after
 
--- | Appendix G: the function sorts the hash strings, decodes each one, and hashes the concatenation.
 hashOfHashList :: (Error DirectoryHashError :> es) => (ByteString -> Eff es Hash) -> Vector Hash -> Eff es Hash
 hashOfHashList hashWith hashes = do
   let sorted = hashes & V.toList & sortOn (\h -> h.value)
   chunks <- traverse (\h -> requireBytes h) sorted
   hashWith (BS.concat chunks)
 
--- | A hash decodes under its own format. The domain reports a value that does not; it
--- throws nothing, because the domain runs no IO.
 requireBytes :: (Error DirectoryHashError :> es) => Hash -> Eff es ByteString
 requireBytes h = case digestBytes h of
   Nothing -> throwError (HashUndecodableValue h.value)
   Just bytes -> pure bytes
 
--- | A child's name bytes, then its hash bytes, with no separator.
 perChild :: (Error DirectoryHashError :> es) => (ByteString -> Eff es Hash) -> Text -> Hash -> Eff es Hash
 perChild hashWith childName h = do
   bytes <- requireBytes h
   hashWith (TE.encodeUtf8 childName <> bytes)
 
--- | Each strict descendant directory gives one row, in post-order, and the root gives none.
 directoryHashes
   :: (Error DirectoryHashError :> es)
   => (ByteString -> Eff es Hash)
@@ -114,8 +106,6 @@ directoryHashes
   -> Eff es (DirHashes, Vector (RelPath, DirHashes))
 directoryHashes hashWith node = do
   subResults <- traverse (\sub -> directoryHashes hashWith sub) (V.toList node.subdirs)
-  -- This line pairs a subdirectory and its result once, so no later step can pair them
-  -- differently.
   let paired = zip (V.toList node.subdirs) subResults
       childRows = V.concat (map (\(sub, result) -> snd result <> V.singleton (sub.path, fst result)) paired)
       childContents = V.fromList (map (\(_, result) -> (fst result).content) paired)

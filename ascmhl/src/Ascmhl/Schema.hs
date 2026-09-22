@@ -1,16 +1,8 @@
--- | The ASC MHL v2.0 vocabulary: every element and attribute name the format uses, and the two
--- namespaces it uses them in.
---
--- The reader and the writer name a thing from here and nowhere else, so a spelling cannot drift.
--- Import it qualified.
 module Ascmhl.Schema
-  ( -- * Namespaces
-    manifestNs
+  ( manifestNs
   , chainNs
   , supportedVersion
   , isSupportedVersion
-
-    -- * Manifest elements
   , hashlist
   , creatorinfo
   , creationdate
@@ -28,11 +20,7 @@ module Ascmhl.Schema
   , content
   , structure
   , hashFormatOrder
-
-    -- * Chain elements
   , ascmhldirectory
-
-    -- * Attributes
   , version
   , size
   , lastmodificationdate
@@ -55,12 +43,9 @@ manifestNs = "urn:ASC:MHL:v2.0"
 chainNs :: Text
 chainNs = "urn:ASC:MHL:DIRECTORY:v2.0"
 
--- | What a manifest this project writes puts in its @version@ attribute.
 supportedVersion :: Text
 supportedVersion = "2.0"
 
--- | This project reads the whole 2.x line and refuses everything else, because a later
--- major revision can spell the same element differently.
 isSupportedVersion :: Text -> Bool
 isSupportedVersion v = "2." `T.isPrefixOf` v
 
@@ -91,8 +76,6 @@ roothash = "roothash"
 ignore :: Text
 ignore = "ignore"
 
--- | The child of @\<ignore\>@. It carries its parent's name because @pattern@ is a keyword under
--- @PatternSynonyms@.
 ignorePattern :: Text
 ignorePattern = "pattern"
 
@@ -114,9 +97,6 @@ content = "content"
 structure :: Text
 structure = "structure"
 
--- | The order @HashType@ declares its hash formats in. It is a sequence, so a manifest that writes
--- them in another order is not schema-valid. The four formats this project implements come from
--- 'Ascmhl.Hash'; the two it only carries through a rewrite are literals.
 hashFormatOrder :: Vector Text
 hashFormatOrder = V.fromList [display C4, display MD5, display SHA1, "xxh128", "xxh3", display XXH64]
 

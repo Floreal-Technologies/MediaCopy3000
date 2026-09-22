@@ -120,7 +120,6 @@ jobs:
     name: 9.14.1 on windows-latest
     runs-on: windows-latest
     steps:
-    # Before the checkout. Otherwise git writes CRLF and the MSYS2 tools fail on it.
     - name: Keep the line endings the repository uses
       run: git config --global core.autocrlf input
 
@@ -132,9 +131,6 @@ jobs:
       with:
         ghc-version: '9.14.1'
 
-    # Into the MSYS2 that GHCup uses. The runner image installs GHCup with
-    # GHCUP_MSYS2=C:\msys64, so GHCup's MSYS2 is the pre-installed one. A second MSYS2 beside
-    # it is what the Cabal manual names as the source of undecipherable errors.
     - name: Install the GTK stack into GHCup's MSYS2
       shell: pwsh
       run: |
@@ -155,7 +151,6 @@ jobs:
       run: |
         $msys = if ($env:GHCUP_MSYS2) { $env:GHCUP_MSYS2 } else { 'C:\msys64' }
         $ucrt = "$msys\ucrt64"
-        # GITHUB_PATH and GITHUB_ENV reach the next step, and cabal runs in this one.
         $env:PATH = "$ucrt\bin;$env:PATH"
         $env:PKG_CONFIG_PATH = "$ucrt\lib\pkgconfig"
         "$ucrt\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
@@ -182,8 +177,6 @@ jobs:
     - name: Test
       run: cabal test core-test ascmhl-test
 
-    # Prints the libadwaita version the build resolved, and the number of libraries the
-    # installer has to carry. Both are wanted when the packaging job is read.
     - name: Report what the build resolved
       shell: pwsh
       run: |
@@ -378,7 +371,6 @@ jobs:
         run: |
           $msys = if ($env:GHCUP_MSYS2) { $env:GHCUP_MSYS2 } else { 'C:\msys64' }
           $ucrt = "$msys\ucrt64"
-          # GITHUB_PATH and GITHUB_ENV reach the next step, and cabal runs in this one.
           $env:PATH = "$ucrt\bin;$env:PATH"
           $env:PKG_CONFIG_PATH = "$ucrt\lib\pkgconfig"
           "$ucrt\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
@@ -405,7 +397,6 @@ jobs:
         shell: pwsh
         run: ./scripts/package.ps1 -Version 0.1.0
 
-      # No elevation. A per-user package that needs an administrator is a broken package.
       - name: Install it
         shell: pwsh
         run: |
@@ -414,8 +405,6 @@ jobs:
           $exe = "$env:LOCALAPPDATA\Programs\MediaCopy 3000\mediacopy3000.exe"
           if (-not (Test-Path $exe)) { Get-Content install.log -Tail 40; throw "not installed at $exe" }
 
-      # app/Main.hs answers --help itself and exits 0 without opening a window, so this
-      # works on a runner with no screen.
       - name: Smoke test
         shell: pwsh
         run: |

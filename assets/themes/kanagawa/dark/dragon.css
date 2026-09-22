@@ -1,9 +1,3 @@
-/* Kanagawa Dragon
- *
- * Palette: https://github.com/rebelot/kanagawa.nvim (lua/kanagawa/colors.lua, dragon)
- * The application picks this file from the Preferences dialog; it overrides the libadwaita colour
- * variables, so every rule in `styles.css` follows it without an edit.
- */
 :root {
   --window-bg-color: #181616;
   --window-fg-color: #c5c9c5;

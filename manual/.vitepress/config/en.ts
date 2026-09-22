@@ -1,11 +1,5 @@
 import type { DefaultTheme, UserConfig } from "vitepress"
 
-// The English locale. Its pages are in `manual/en/`, and the rewrite in `index.ts` serves them at
-// the root, so every link below starts at `/`.
-//
-// VitePress 1.6.4 cannot load this file by itself. `index.ts` imports it. The official VitePress
-// site lets the tool find the same file by its folder, an API that arrived after this version.
-
 export default {
   description: "Verified media offload and ASC MHL verification for videographers",
 

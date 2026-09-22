@@ -31,30 +31,20 @@ import MediaCopy.Domain.Plan
 -- $setup
 -- >>> import Ascmhl.Path (RelPath (..))
 
--- | One destination the operator picked, and everything the plan read about it.
 data TargetFacts = TargetFacts
   { root :: OsPath
-  -- ^ Where the copy lands: 'destinationPath' of the folder the operator picked and the media source.
   , freeBytes :: Maybe Int64
-  -- ^ The parent's, because the root is a folder the job will create. 'Nothing' when the call failed.
   , history :: Either HistoryError (Maybe Chain)
-  -- ^ The destination's own chain. It gives the generation number, never the directory listing.
-  -- 'Right' 'Nothing' when the destination holds no history yet.
   , existing :: Maybe Tree
-  -- ^ What the root already holds. 'Nothing' when the root is not there.
   }
 
--- | What one path a destination holds means against the media source.
 data EntryKind = HeldFinal FileSize | PartOfSource | Foreign
 
--- | What a destination root already holds, named by the media source's paths.
 data Held = Held
   { finals :: Map RelPath FileSize
   , firstForeign :: Maybe RelPath
-  -- ^ The smallest path, file or directory, that the media source does not hold.
   }
 
--- | Every destination path gets exactly one kind, so a part file of a source file is neither held nor foreign.
 heldOf :: Set RelPath -> Set RelPath -> Tree -> Held
 heldOf sourceFiles sourceDirs tree = Held {finals, firstForeign}
   where
@@ -70,7 +60,6 @@ heldOf sourceFiles sourceDirs tree = Held {finals, firstForeign}
       [] -> Nothing
       offenders -> Just (minimum offenders)
 
--- | The destination chain must be a subset of the source chain by name, and agree on every c4 both carry.
 chainCheck :: Map RelPath ChainEntry -> Chain -> Maybe Finding
 chainCheck sourceByPath destChain =
   destChain.entries
@@ -91,7 +80,6 @@ data Classified = Classified
   , findings :: List Finding
   }
 
--- | A root that holds only ignored names reads as 'Fresh', so a stray @.DS_Store@ never asks for a choice.
 classify :: Maybe ExistingCopy -> Set RelPath -> Set RelPath -> Map RelPath ChainEntry -> TargetFacts -> Classified
 classify choice sourceFiles sourceDirs sourceByPath target = case target.existing of
   Nothing -> plain Absent
@@ -115,9 +103,7 @@ classify choice sourceFiles sourceDirs sourceByPath target = case target.existin
     free = target.freeBytes
     plain state = Classified {target = Target {root = target.root, freeBytes = free, state}, finals = Map.empty, findings = []}
 
--- | What the engine does with one file at one destination. Only 'Resume' on a file of the media
--- source's own size spares the copy.
---
+-- |
 -- >>> modeFor Nothing Map.empty (RelPath "a.mxf", 10)
 -- WriteNew
 -- >>> modeFor (Just Resume) (Map.fromList [(RelPath "a.mxf", 10)]) (RelPath "a.mxf", 10)
@@ -132,7 +118,6 @@ modeFor choice finals (path, size) = case (Map.lookup path finals, choice) of
   (Just there, Just Resume) | there == size -> Reuse
   (Just _, _) -> Overwrite
 
--- | Space in bytes each destination must have room for.
 neededPerDest :: Int -> Vector PlanStep -> Vector Int64
 neededPerDest count steps =
   V.accumulate (+) (V.replicate count 0) (V.concatMap needs steps)
@@ -146,7 +131,6 @@ targetFinding needed target = case target.freeBytes of
     | free < needed -> Just Finding {severity = Blocker, code = InsufficientSpace, detail = pathText target.root}
     | otherwise -> Nothing
 
--- | The plan names the file a copy publishes and the part file beside it.
 writesFor :: Maybe ExistingCopy -> Vector (OsPath, Map RelPath FileSize) -> (RelPath, FileSize) -> Vector PlannedWrite
 writesFor choice dests pair =
   V.map (\(dest, finals) -> let final = relToOsPath dest (fst pair) in PlannedWrite {final, temp = partPath final, mode = modeFor choice finals pair}) dests

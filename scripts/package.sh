@@ -1,18 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-#
-# Usage: scripts/package.sh -v <version>|head [format...]
-#   -v: required. A version such as 1.2.3, or "head".
-#   formats: deb rpm pacman flatpak tarball (Linux), osxpkg (macOS)
-#   With no format, the script builds every fpm format for the host OS.
-#   The script builds flatpak only on request. flatpak needs
-#   flatpak-builder and the GNOME runtime.
-#
-# The output goes to dist-package/out/.
-#
-# Every tool call, tar and the others, must work under GNU and macOS.
-
 usage() {
   echo "usage: scripts/package.sh -v <version>|head [format...]"
   echo "  -v   mandatory; version label for the package file name:"
@@ -92,7 +80,6 @@ fi
 
 ARCH="$(uname -m)"
 
-# Minimum supported OS per package format.
 min_os_for() {
   case "$1" in
     deb) echo "ubuntu-$(. /etc/os-release && echo "${VERSION_ID%%.*}")" ;;
@@ -118,8 +105,6 @@ install_file() {
   install -m "$mode" "$src" "$dst"
 }
 
-# The palettes keep their place under the data directory, because the run reads the tree by its
-# shape: <family>/<light|dark>/<name>.css, and the family's own family.json beside them.
 install_themes() {
   local data_dir="$1" file
   while IFS= read -r file; do

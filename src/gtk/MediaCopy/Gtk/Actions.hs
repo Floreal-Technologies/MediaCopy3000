@@ -1,4 +1,3 @@
--- | Every action the window offers. The accelerators, menu items and shortcut rows come from it.
 module MediaCopy.Gtk.Actions
   ( actionLabel
   , actionButton
@@ -23,7 +22,6 @@ import GI.Gtk qualified as Gtk
 import MediaCopy.Model
 import Paths_mediacopy3000 (version)
 
--- | A group of the keyboard-shortcuts window.
 data Section = JobsSection | NavigationSection | GeneralSection
   deriving stock (Eq, Show)
 
@@ -33,31 +31,22 @@ instance Display Section where
     NavigationSection -> "Navigation"
     GeneralSection -> "General"
 
--- | What an action does.
 data Effect = Send UiMessage | ShowAbout
 
--- | One row of 'actionTable' is the only source of an action's name,
--- keys, label, row and enabled rule.
 data ActionSpec = ActionSpec
   { name :: Maybe Text
-  -- ^ 'Nothing' for a keyboard convention the toolkit implements without an action, such as F10.
   , label :: Text
   , accels :: List Text
   , section :: Maybe Section
-  -- ^ 'Nothing' keeps the row out of the shortcuts window.
   , effect :: Maybe Effect
-  -- ^ 'Nothing' when the toolkit already provides the action, such as @win.show-help-overlay@.
   , enabled :: Maybe (Model -> Bool)
-  -- ^ 'Nothing' for an action the model never disables.
   }
 
--- | An action whose enabled state follows the model.
 data Gated = Gated
   { action :: Gio.SimpleAction
   , rule :: Model -> Bool
   }
 
--- | Every action, its label and its accelerator. The header bar reads it too.
 actionTable :: Vector ActionSpec
 actionTable =
   V.fromList
@@ -69,8 +58,7 @@ actionTable =
     , (always "win.clear-finished" "Clear Finished" [] Nothing (Just (Send ClearFinished))) {enabled = Just hasFinishedJobs}
     , always "win.next-job" "Next Job" ["<Control>Page_Down"] (Just NavigationSection) (Just (Send SelectNextJob))
     , always "win.previous-job" "Previous Job" ["<Control>Page_Up"] (Just NavigationSection) (Just (Send SelectPreviousJob))
-    , -- The Preferences dialog installs @app.preferences@ itself, because it owns whether it is open.
-      always "app.preferences" "Preferences" ["<Control>comma"] (Just GeneralSection) Nothing
+    , always "app.preferences" "Preferences" ["<Control>comma"] (Just GeneralSection) Nothing
     , always "app.about" "About MediaCopy 3000" [] Nothing (Just ShowAbout)
     , always "win.show-help-overlay" "Keyboard Shortcuts" ["<Control>question"] (Just GeneralSection) Nothing
     , always "window.close" "Close Window" ["<Control>w"] (Just GeneralSection) Nothing
@@ -78,34 +66,27 @@ actionTable =
     , (always "" "Main Menu" ["F10"] (Just GeneralSection) Nothing) {name = Nothing}
     ]
 
--- | A row for an action the model never disables.
 always :: Text -> Text -> List Text -> Maybe Section -> Maybe Effect -> ActionSpec
 always actionName label accels section effect =
   ActionSpec {name = Just actionName, label, accels, section, effect, enabled = Nothing}
 
--- | Get the label for the given action.
 actionLabel :: Text -> Text
 actionLabel wanted =
   actionTable
     & V.find (\spec -> spec.name == Just wanted)
     & maybe wanted (\spec -> spec.label)
 
--- | Get the button from the provided action
 actionButton :: Text -> List Text -> IO Gtk.Button
 actionButton actionName classes = do
   button <- new Gtk.Button [#label := actionLabel actionName, #actionName := actionName]
   mapM_ (\klass -> Gtk.widgetAddCssClass button klass) classes
   pure button
 
--- | Add an action button to a header bar
 headerAction :: Adw.HeaderBar -> Text -> List Text -> IO ()
 headerAction header actionName classes = do
   button <- actionButton actionName classes
   Adw.headerBarPackStart header button
 
--- | Installs every action, the shortcuts window and the primary menu. Returns
--- the menu and the render that keeps each gated action's enabled state in step
--- with the model.
 installActions :: Adw.Application -> Adw.ApplicationWindow -> (UiMessage -> IO ()) -> IO (Gio.Menu, Model -> IO ())
 installActions app window dispatch = do
   gated <- V.foldM (\acc spec -> installOne app window dispatch acc spec) [] actionTable
@@ -159,7 +140,6 @@ buildMenu = do
   Gio.menuAppendSection menu Nothing general
   pure menu
 
--- | A menu row's label is its action's label, so the menu cannot drift from the table.
 menuRow :: Gio.Menu -> Text -> IO ()
 menuRow menu actionName = Gio.menuAppend menu (Just (actionLabel actionName)) (Just actionName)
 
@@ -179,7 +159,6 @@ addGroup section wanted = do
     V.mapM_ (\spec -> addShortcut group spec) rows
     Gtk.shortcutsSectionAddGroup section group
 
--- | A named row shows the key GTK really bound. A nameless row can only state its own.
 addShortcut :: Gtk.ShortcutsGroup -> ActionSpec -> IO ()
 addShortcut group spec = do
   shortcut <- case spec.name of
@@ -187,7 +166,6 @@ addShortcut group spec = do
     Nothing -> new Gtk.ShortcutsShortcut [#title := spec.label, #accelerator := T.unwords spec.accels]
   Gtk.shortcutsGroupAddShortcut group shortcut
 
--- | The icon name is the application id, which is what the desktop file installs.
 presentAbout :: Adw.ApplicationWindow -> IO ()
 presentAbout window = do
   dialog <-

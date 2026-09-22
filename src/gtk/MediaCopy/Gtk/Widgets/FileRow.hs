@@ -1,4 +1,3 @@
--- | One row of the detail pane's file list: name, size, state icon and state text.
 module MediaCopy.Gtk.Widgets.FileRow
   ( FileRow (..)
   , newFileRow
@@ -42,7 +41,6 @@ newFileRow path = do
   Gtk.boxAppend body dot
   Gtk.boxAppend body status
   row <- new Gtk.ListBoxRow [#child := body, #activatable := False]
-  -- A render walks every file, so a row that reads the same must cost nothing to paint.
   cell <- newCell $ \(fileSize, fileStatus) -> do
     set size [#label := humanBytes fileSize]
     set status [#label := display fileStatus]
@@ -57,7 +55,6 @@ statusIcon = \case
   Pending -> "radio-symbolic"
   (Hashing; Copying; Flushing; Publishing; Verifying) -> "content-loading-symbolic"
   Done Ok -> "emblem-ok-symbolic"
-  -- The engine reports a new file as `Done New`, never as an in-progress status.
   Done New -> "document-new-symbolic"
   (Done (HashMismatch _); Done Missing; Done (IoError _)) -> "dialog-error-symbolic"
   Done (Replaced _) -> "view-refresh-symbolic"

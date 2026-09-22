@@ -37,10 +37,7 @@ newtype FormatError = MixedFormats (List HashAlgo)
 instance Display FormatError where
   displayBuilder (MixedFormats mixed) = displayBuilder (mixedMessage mixed)
 
--- | The format the job will write in. The files the job touches decide it; the rest of the
--- recorded hashes decide it only when those files carry none; a preference decides it when nothing
--- else does.
---
+-- |
 -- >>> settleFormat Map.empty Set.empty
 -- Right (JobFormat XXH64)
 -- >>> settleFormat (Map.fromList [(RelPath "a.mxf", Hash {algo = MD5, value = "0f"})]) (Set.fromList [RelPath "a.mxf"])
@@ -54,7 +51,6 @@ settleFormat expected present = case (algosOf (Map.restrictKeys expected present
   ([algo], _) -> Right (JobFormat algo)
   (mixed@(_ : _ : _), _) -> Left (MixedFormats mixed)
   ([], [algo]) -> Right (JobFormat algo)
-  -- No file this job will touch carries a recorded hash, so a preference exchanges no media source's format.
   ([], _) -> Right (JobFormat preferredAlgo)
 
 mixedMessage :: List HashAlgo -> Text

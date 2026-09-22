@@ -1,9 +1,3 @@
-/* Catppuccin Frappé
- *
- * Palette: https://github.com/catppuccin/palette (palette.json, frappe)
- * The application picks this file from the Preferences dialog; it overrides the libadwaita colour
- * variables, so every rule in `styles.css` follows it without an edit.
- */
 :root {
   --window-bg-color: #303446;
   --window-fg-color: #c6d0f5;

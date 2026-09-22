@@ -32,7 +32,6 @@ saysNothingWhileTheJobMoves :: Assertion
 saysNothingWhileTheJobMoves =
   quietText (addUTCTime 0.4 at) (inState Flushing) @?= Nothing
 
--- | The clock ticks once a second, so one missed tick is jitter and two is a fact.
 speaksAtTheThreshold :: Assertion
 speaksAtTheThreshold = do
   quietText (addUTCTime 1.9 at) (inState Flushing) @?= Nothing
@@ -43,15 +42,11 @@ namesTheStateOfTheFileInHand = do
   quietText (addUTCTime 14 at) (inState Publishing) @?= Just "Naming the copy · 14 s"
   quietText (addUTCTime 245 at) (inState Copying) @?= Just "Copying · 4 min 05 s"
 
--- | Between two files, and before the first while the job resolves the originals, the job kind's
--- verb would name a copy that is not happening.
 saysNothingWithNoFileInHand :: Assertion
 saysNothingWithNoFileInHand = do
   quietText (addUTCTime 25 at) planned @?= Nothing
   quietText (addUTCTime 25 at) (inState (Done Ok)) @?= Nothing
 
--- | The end of a job writes the manifest and synchronises it, which moves no byte of the copy and
--- belongs to no file. It is the one phase without a file that names itself.
 namesTheManifestPhase :: Assertion
 namesTheManifestPhase = do
   let writing = foldEvent at ManifestWriting (inState (Done Ok))
@@ -61,7 +56,6 @@ namesTheManifestPhase = do
 at :: UTCTime
 at = UTCTime (fromGregorian 2026 9 15) 0
 
--- | A planned offload that has reported nothing about a file yet.
 planned :: JobState
 planned = foldEvent at (Planned (PlannedWork (V.singleton (RelPath "A/1.mxf", 100)) 300)) (newJobState spec)
 

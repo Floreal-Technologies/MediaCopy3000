@@ -1,13 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  The MSI. scripts/package.ps1 stages the files and generates staged-files.wxs,
-  which defines the ComponentGroup this file references.
-
-  The install is per-user, so no step asks for elevation. A videographer on a
-  locked-down edit-bay machine can install it without an administrator.
--->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-  <!-- The upgrade code identifies the product across every version. It must never change. -->
   <Package
       Name="MediaCopy 3000"
       Manufacturer="Feriel Choutri de Tarlé"
@@ -38,10 +30,6 @@
       <ComponentRef Id="StartMenuShortcut" />
     </Feature>
 
-    <!--
-      A per-user component cannot use a file as its key path, so the shortcut's
-      key path is a registry value under HKCU.
-    -->
     <Component Id="StartMenuShortcut" Directory="ShortcutFolder" Guid="*">
       <Shortcut Id="AppShortcut"
                 Name="MediaCopy 3000"

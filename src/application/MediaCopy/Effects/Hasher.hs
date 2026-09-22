@@ -1,4 +1,3 @@
--- | The hasher effect, and the mutable state each algorithm keeps while it runs.
 module MediaCopy.Effects.Hasher
   ( Hasher
   , HasherState
@@ -28,9 +27,6 @@ import Foreign.C.Types (CULLong (..))
 
 import MediaCopy.Domain.JobFormat (JobFormat, formatAlgo)
 
--- | The state closes over its own algorithm, so 'stateOf' is the one place that chooses by
--- 'HashAlgo' and a new algorithm cannot be half-added. 'finish' spends the state: a later feed, or
--- a second finish, is a named failure and never a quietly wrong hash.
 data HasherState = HasherState
   { feedH :: ByteString -> IO ()
   , finishH :: IO Hash
@@ -50,12 +46,9 @@ feed st bs = send (Feed st bs)
 finish :: (Hasher :> es) => HasherState -> Eff es Hash
 finish st = send (Finish st)
 
--- | One hasher of the format, for the length of the action. The state needs no release: it owns
--- nothing but its own memory.
 withHasher :: (Hasher :> es) => JobFormat -> (HasherState -> Eff es a) -> Eff es a
 withHasher fmt use = send (NewHasher fmt) >>= use
 
--- | One fresh hasher of the format, fed once.
 hashBytes :: (Hasher :> es) => JobFormat -> ByteString -> Eff es Hash
 hashBytes fmt bytes = withHasher fmt (\hasher -> feed hasher bytes >> finish hasher)
 
@@ -69,7 +62,6 @@ runHasherIO action =
           Finish st -> liftIO (unspent "finish" st >> writeIORef st.spent True >> st.finishH)
       )
 
--- | This is the only gate on a spent state, so no caller reads one hash twice.
 unspent :: String -> HasherState -> IO ()
 unspent what st = do
   done <- readIORef st.spent
@@ -78,7 +70,6 @@ unspent what st = do
 xxh64StateBytes :: Int
 xxh64StateBytes = 128
 
--- | Allocates fresh mutable state for the algorithm, unspent.
 newHasherState :: HashAlgo -> IO HasherState
 newHasherState algo = newIORef False >>= \flag -> stateOf flag algo
 
@@ -92,7 +83,6 @@ stateOf spent = \case
         { spent
         , feedH = \bs -> do
             BU.unsafeUseAsCStringLen bs (\(buf, len) -> c_xxh64_update_safe st buf (fromIntegral len))
-            -- Keeps the pinned state array alive during the safe call.
             touch mba
         , finishH = do
             CULLong w <- c_xxh64_digest st
@@ -103,7 +93,6 @@ stateOf spent = \case
   SHA1 -> newIORef SHA1.init <&> \ref -> ctxHasher spent ref SHA1.update (\ctx -> Hash SHA1 (toHex (SHA1.finalize ctx)))
   C4 -> newIORef SHA512.init <&> \ref -> ctxHasher spent ref SHA512.update (\ctx -> Hash C4 (c4FromSha512 (SHA512.finalize ctx)))
 
--- | The shape the cryptohash-* packages share: an immutable context carried in an 'IORef'.
 ctxHasher :: IORef Bool -> IORef ctx -> (ctx -> ByteString -> ctx) -> (ctx -> Hash) -> HasherState
 ctxHasher spent ref update done =
   HasherState

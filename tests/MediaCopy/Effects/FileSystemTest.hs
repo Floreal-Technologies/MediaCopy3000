@@ -1,4 +1,5 @@
 {-# LANGUAGE ExplicitLevelImports #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE QuasiQuotes #-}
 
 module MediaCopy.Effects.FileSystemTest (tests) where
@@ -18,13 +19,13 @@ import Effectful (Eff, IOE, liftIO, runEff, (:>))
 import Effectful.Exception (throwIO, trySync)
 import System.Directory.OsPath qualified as Dir
 import System.File.OsPath qualified as FileIO
-import System.OsPath (OsPath, decodeFS, (</>))
+import System.OsPath (OsPath, decodeFS, takeDirectory, (</>))
 import splice System.OsPath (osp)
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import MediaCopy.Domain.Plan (PlannedWrite (..), WriteMode (..))
-import MediaCopy.Effects.FileSystem (FileSystem, ReadCache (..), runFileSystemIO, streamFile, writeTemps)
+import MediaCopy.Effects.FileSystem (FileSystem, ReadCache (..), removeTemps, runFileSystemIO, streamFile, writeTemps)
 import MediaCopy.Test.InMemoryFS
 
 tests :: TestTree
@@ -37,11 +38,39 @@ tests =
     , testCase "the disk runs the flush hook once, after the last chunk" diskFlushesAfterTheLastChunk
     , testCase "the double streams a file past one chunk in pieces" doubleStreamsInPieces
     , testCase "a cold read gives the same bytes as a warm read" coldReadMatchesWarmRead
+    , testCase "the double removes the temps and keeps every final" doubleRemovesTempsOnly
+    , testCase "the disk removes the temps and keeps every final" diskRemovesTempsOnly
     ]
 
--- | The port promises that a failure removes every temp the call made.
--- The hook fails on the first chunk, after every temp was opened.
--- 'True' when the failure reached the caller.
+doubleRemovesTempsOnly :: Assertion
+doubleRemovesTempsOnly = do
+  let writes = writesUnder [osp|/d1|] [osp|/d2|]
+      seeded = foldr (\w fs -> fs & withFile w.final "copy" & withFile w.temp "part") emptyMemFS writes
+  ref <- newIORef seeded
+  runEff (runFileSystemMem ref (removeTemps writes))
+  fs <- readIORef ref
+  Map.keys fs.files @?= [[osp|/d1/a.mxf|], [osp|/d2/a.mxf|]]
+
+diskRemovesTempsOnly :: Assertion
+diskRemovesTempsOnly = do
+  tmp <- Dir.getTemporaryDirectory
+  let dir = tmp </> [osp|mediacopy3000-removetemps-test|]
+      writes = writesUnder (dir </> [osp|d1|]) (dir </> [osp|d2|])
+  present <- Dir.doesDirectoryExist dir
+  when present (Dir.removeDirectoryRecursive dir)
+  ( do
+      V.forM_ writes $ \w -> do
+        Dir.createDirectoryIfMissing True (takeDirectory w.final)
+      V.forM_ writes $ \w -> do
+        FileIO.writeFile w.final "copy"
+        FileIO.writeFile w.temp "part"
+      runEff (runFileSystemIO 4 (removeTemps writes))
+      finals <- traverse (\w -> Dir.doesFileExist w.final) writes
+      temps <- traverse (\w -> Dir.doesFileExist w.temp) writes
+      (finals, temps) @?= ([True, True], [False, False])
+    )
+    `finally` Dir.removeDirectoryRecursive dir
+
 failingWrite :: (FileSystem :> es) => OsPath -> Vector PlannedWrite -> Eff es Bool
 failingWrite source writes =
   trySync (writeTemps source writes (pure ()) (\_chunk -> throwIO (userError "hook failed"))) <&> isLeft
@@ -67,7 +96,6 @@ diskRemovesTempsOnFailure = do
   ( do
       sourcePath <- decodeFS source
       BS.writeFile sourcePath "payload"
-      -- Four bytes per chunk, so the hook fails with bytes still to come.
       failed <- runEff (runFileSystemIO 4 (failingWrite source writes))
       failed @?= True
       leftovers <- traverse (\w -> Dir.doesFileExist w.temp) (V.toList writes)
@@ -75,9 +103,6 @@ diskRemovesTempsOnFailure = do
     )
     `finally` Dir.removeDirectoryRecursive dir
 
--- | The port promises the flush hook runs once: after the last chunk, before the writers close,
--- with only the per-device synchronise left to follow. 'True' marks a chunk and 'False' the flush,
--- so the trace shows where the hook fell.
 flushTrace :: (FileSystem :> es, IOE :> es) => IORef (List Bool) -> OsPath -> Vector PlannedWrite -> Eff es ()
 flushTrace seen source writes =
   writeTemps
@@ -87,7 +112,6 @@ flushTrace seen source writes =
     (\_chunk -> liftIO (modifyIORef' seen (True :)))
     & void
 
--- | A trace is well formed when every chunk came before the one flush.
 flushCameLast :: List Bool -> Assertion
 flushCameLast trace = do
   length (filter not trace) @?= 1
@@ -114,13 +138,11 @@ diskFlushesAfterTheLastChunk = do
       sourcePath <- decodeFS source
       BS.writeFile sourcePath "payload"
       seen <- newIORef []
-      -- Four bytes per chunk, so the payload arrives in more than one piece.
       runEff (runFileSystemIO 4 (flushTrace seen source writes))
       readIORef seen >>= flushCameLast . reverse
     )
     `finally` Dir.removeDirectoryRecursive dir
 
--- | One copy of @a.mxf@ into each of two destinations, temp beside final.
 writesUnder :: OsPath -> OsPath -> Vector PlannedWrite
 writesUnder d1 d2 =
   V.fromList
@@ -128,8 +150,6 @@ writesUnder d1 d2 =
     , PlannedWrite {temp = d2 </> [osp|a.mxf.part|], final = d2 </> [osp|a.mxf|], mode = WriteNew}
     ]
 
--- | A file past the double's chunk size reaches the hook in more than one piece, and the pieces
--- are the file. The engine's hashing and copying paths therefore run over several chunks in-memory.
 doubleStreamsInPieces :: Assertion
 doubleStreamsInPieces = do
   let content = BS.replicate 9000 7
@@ -140,8 +160,6 @@ doubleStreamsInPieces = do
   assertBool "expected more than one chunk" (length chunks > 1)
   BS.concat chunks @?= content
 
--- | A read past the cache answers the bytes the file holds, the same bytes a cached read answers.
--- The bytes agree; whether they came from the device is not something a test on one host can see.
 coldReadMatchesWarmRead :: Assertion
 coldReadMatchesWarmRead = do
   tmp <- Dir.getTemporaryDirectory

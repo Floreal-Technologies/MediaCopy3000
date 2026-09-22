@@ -13,7 +13,6 @@ tests =
     "Interface.Theme"
     [testCase "the dark list holds the sections the manual gives" darkListHoldsTheDocumentedSections]
 
--- | The rows of @manual\/en\/appearance.md@, the @Dark palette@ line of the list table.
 darkListHoldsTheDocumentedSections :: Assertion
 darkListHoldsTheDocumentedSections =
   map named (V.toList (themeSections DarkPalette (palettesFrom "assets/themes" paletteListing)))

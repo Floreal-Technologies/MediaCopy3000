@@ -1,29 +1,5 @@
 #Requires -Version 7
 
-<#
-.SYNOPSIS
-  Stages mediacopy3000.exe with everything it needs at run time, then builds an MSI.
-
-.DESCRIPTION
-  scripts/package.sh does this job for Linux and macOS. That file is a POSIX shell
-  script, so Windows gets its own. The two share no code.
-
-  The staged tree is the contract with packaging/windows/mediacopy3000.wxs:
-
-    dist-package/windows/
-      mediacopy3000.exe
-      *.dll                                      the closure, minus C:\Windows
-      lib/gdk-pixbuf-2.0/2.10.0/loaders.cache
-      lib/gdk-pixbuf-2.0/2.10.0/loaders/*.dll
-      share/glib-2.0/schemas/gschemas.compiled
-      share/icons/{Adwaita,hicolor}/...
-      etc/fonts/...
-      share/mediacopy3000/assets/{styles.css,themes/}
-
-.EXAMPLE
-  ./scripts/package.ps1 -Version 0.1.0
-#>
-
 param(
     [string]$Version = '0.0.0',
     [string]$Ucrt,
@@ -59,8 +35,6 @@ function Assert-Tool {
     if (-not (Test-Path $Path)) { throw "missing tool: $Path" }
 }
 
-# --- stage -------------------------------------------------------------------
-
 if (Test-Path $Stage) { Remove-Item -Recurse -Force $Stage }
 New-Item -ItemType Directory -Path $Stage -Force | Out-Null
 
@@ -70,8 +44,6 @@ if (-not $found) { throw 'mediacopy3000.exe not found under dist-newstyle; run c
 $exe = $found.FullName
 Copy-Into $exe "$Stage/mediacopy3000.exe"
 
-# The closure of DLLs, minus the ones Windows itself provides.
-# ntldd -R prints lines of the form "name => path (base)"; the path is what we want.
 Assert-Tool "$Ucrt\bin\ntldd.exe"
 $dlls = & "$Ucrt\bin\ntldd.exe" -R $exe |
     ForEach-Object { if ($_ -match '=>\s+(\S.*?)\s+\(') { $Matches[1] } } |
@@ -83,7 +55,6 @@ foreach ($dll in $dlls) {
 Write-Host "bundled $($dlls.Count) DLLs"
 if ($dlls.Count -lt 20) { throw "only $($dlls.Count) DLLs resolved; ntldd output was not understood" }
 
-# gdk-pixbuf loaders, and the cache that names them.
 $loaders = "$Stage/lib/gdk-pixbuf-2.0/2.10.0/loaders"
 New-Item -ItemType Directory -Path $loaders -Force | Out-Null
 Copy-Item "$Ucrt/lib/gdk-pixbuf-2.0/2.10.0/loaders/*.dll" $loaders -Force
@@ -91,21 +62,16 @@ Assert-Tool "$Ucrt\bin\gdk-pixbuf-query-loaders.exe"
 & "$Ucrt\bin\gdk-pixbuf-query-loaders.exe" |
     Out-File -FilePath "$Stage/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache" -Encoding ascii
 
-# GSettings schemas.
 Copy-Into "$Ucrt/share/glib-2.0/schemas/gschemas.compiled" `
     "$Stage/share/glib-2.0/schemas/gschemas.compiled"
 
-# Icon themes, with their caches.
 foreach ($theme in 'Adwaita', 'hicolor') {
     Copy-Into "$Ucrt/share/icons/$theme" "$Stage/share/icons/$theme"
     & "$Ucrt\bin\gtk4-update-icon-cache.exe" --force --quiet "$Stage/share/icons/$theme"
 }
 
-# fontconfig.
 Copy-Into "$Ucrt/etc/fonts" "$Stage/etc/fonts"
 
-# The application's own data, where besideExecutable in src/gtk/MediaCopy/Gtk/Assets.hs
-# looks for it. The check is there because another shape starts and shows no style.
 $appAssets = "$Stage/share/mediacopy3000/assets"
 Copy-Into 'assets/styles.css' "$appAssets/styles.css"
 Copy-Into 'assets/themes' "$appAssets/themes"
@@ -115,12 +81,6 @@ foreach ($required in "$appAssets/styles.css", "$appAssets/themes") {
 
 Write-Host "staged into $Stage"
 if ($SkipMsi) { return }
-
-# --- harvest -----------------------------------------------------------------
-
-# The staged tree holds a few hundred files, so the component list is generated.
-# The shape is nested Directory elements under INSTALLFOLDER, one Component per file,
-# and a ComponentGroup of ComponentRefs. That construct is stable across WiX 3, 4 and 5.
 
 $fragmentPath = 'packaging/windows/staged-files.wxs'
 $stageFull = (Resolve-Path $Stage).Path
@@ -173,9 +133,6 @@ $fragment += '</Wix>'
 $fragment | Out-File -FilePath $fragmentPath -Encoding utf8
 Write-Host "harvested $($refs.Count) files into $fragmentPath"
 
-# --- build -------------------------------------------------------------------
-
-# WiX 7 is a .NET tool. The runner image carries only WiX 3.14, so install it.
 dotnet tool install --global wix --version 7.0.0
 if ($LASTEXITCODE -ne 0) {
     dotnet tool update --global wix --version 7.0.0

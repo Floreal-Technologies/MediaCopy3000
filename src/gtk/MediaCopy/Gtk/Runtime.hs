@@ -46,16 +46,13 @@ import MediaCopy.Interface.Wording (noHistoryText)
 import MediaCopy.Model
 import MediaCopy.Report (renderPlanText)
 
--- |  All the data needed by the runtime.
 data Runtime = Runtime
   { modelRef :: IORef Model
   , widgets :: Widgets
   , engine :: IORef (Maybe (JobId, Async ()))
-  -- ^ One job at a time.
   , themeAdapter :: ThemeAdapter
   }
 
--- | Entrypoint of the GUI.
 start :: Startup -> IO ()
 start startup = do
   environment <- readEnvironment
@@ -69,7 +66,6 @@ start startup = do
   status <- Gio.applicationRun app Nothing
   when (status /= 0) (exitWith (ExitFailure (fromIntegral status)))
 
--- | A second activation presents the window that exists. It builds no other window.
 activate :: IORef (Maybe Runtime) -> Environment -> Startup -> Adw.Application -> IO ()
 activate runtimeRef environment startup app =
   readIORef runtimeRef >>= \case
@@ -88,32 +84,26 @@ buildAndPresent runtimeRef environment startup app = do
   desktop <- readDesktopBase themeAdapter
   modelRef <- newIORef (initialModel startedAt desktop)
   engine <- newIORef Nothing
-  -- The widgets need a dispatcher and the dispatcher needs the runtime that holds them.
   let dispatchNow msg =
         readIORef runtimeRef >>= \case
           Nothing -> pure ()
           Just runtime -> dispatch runtime msg
-  -- The interface can only express an intent. Every other message comes from here.
   (lightSections, darkSections) <- loadThemeSections environment
   widgets <- buildWidgets app (apply themeAdapter) lightSections darkSections (\intent -> dispatchNow (Ui intent))
   loadCss environment
   let runtime = Runtime {modelRef, widgets, engine, themeAdapter}
   writeIORef runtimeRef (Just runtime)
-  -- The idle queue keeps the report out of the notification 'apply' itself
-  -- causes.
   onDesktopBase themeAdapter (\observed -> postMessage runtime (DesktopBase observed))
   installCloseRequest widgets.window dispatchNow
   installTicker startup dispatchNow
   model <- readIORef modelRef
   widgets.render model
   Gtk.windowPresent widgets.window
-  -- A frame is a whole model, and a render dresses the window from it.
   let showFrame frame = do
         writeIORef modelRef frame
         widgets.render frame
   seeded widgets.window app showFrame startup
 
--- | Main-thread entry point. GTK signal handlers already run on the GTK thread.
 dispatch :: Runtime -> Message -> IO ()
 dispatch runtime msg = do
   old <- readIORef runtime.modelRef
@@ -122,13 +112,10 @@ dispatch runtime msg = do
   runtime.widgets.render current
   mapM_ (\cmd -> guarded runtime (runCommand runtime cmd)) cmds
 
--- | `postMessage` is the only entry into the model from a worker thread.
 postMessage :: Runtime -> Message -> IO ()
 postMessage runtime msg =
   void (GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE (dispatch runtime msg >> pure False))
 
---  | An IO failure inside a GTK callback can abort the process, so it becomes a
--- toast instead.
 guarded :: Runtime -> IO () -> IO ()
 guarded runtime action =
   try @SomeException action >>= \case
@@ -146,29 +133,23 @@ runCommand runtime = \case
   CancelRunning jobId ->
     readIORef runtime.engine >>= \case
       Just (held, worker)
-        -- 'cancel' waits for the thread to finish, and the GTK loop must not.
         | held == jobId -> void (async (cancel worker))
       _ -> pure ()
   LoadHistory jobId folder -> loadHistory runtime jobId folder
   WriteFile path text -> writeFile' path (encodeUtf8 text)
-  -- 'windowDestroy', not 'windowClose': the handler that asked for this blocks a close.
   CloseWindow -> Gtk.windowDestroy runtime.widgets.window
 
--- | The palettes the asset tree holds, split into the two lists the Preferences dialog shows.
 loadThemeSections :: Environment -> IO (Vector ThemeSection, Vector ThemeSection)
 loadThemeSections environment = do
   palettes <- loadPalettes environment
   pure (themeSections LightPalette palettes, themeSections DarkPalette palettes)
 
--- | The window never closes itself: the close becomes a message, and the handler blocks the close.
 installCloseRequest :: Adw.ApplicationWindow -> (Message -> IO ()) -> IO ()
 installCloseRequest window dispatchNow =
   void $ on window #closeRequest $ do
     dispatchNow (Ui RequestClose)
     pure True
 
--- | A seeded run holds the clock still, because a tick resamples the copy rate against bytes that
--- cannot move. The picture then loses the rate the seed gives it.
 installTicker :: Startup -> (Message -> IO ()) -> IO ()
 installTicker startup dispatchNow =
   when (null startup.frames) $
@@ -193,8 +174,6 @@ openSaveDialog runtime title suggested toMessage = do
   Gtk.fileDialogSave dialog (Just runtime.widgets.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
     guarded runtime (sendPicked runtime toMessage (Gtk.fileDialogSaveFinish dialog result))
 
--- | Starts the engine on a plan. A second thread behind it frees the slot and reports a failure
--- the engine could not report itself.
 startJob :: Runtime -> JobPlan -> IO ()
 startJob runtime plan = do
   let spec = plan.spec
@@ -203,9 +182,6 @@ startJob runtime plan = do
   let sink event = postMessage runtime (EngineEvent spec.jobId event)
   previous <- readIORef runtime.engine
   worker <- async $ do
-    -- At most one engine runs at a time. The model frees its slot on the terminal event,
-    -- which the engine emits before it unwinds. As a result, the engine before this one can still
-    -- close its handles.
     mapM_ (\held -> void (waitCatch (snd held))) previous
     withEventLog spec (renderPlanText spec plan) $ \logPath logLine -> do
       forM_ logPath (\p -> sink (LogOpened p))
@@ -228,7 +204,6 @@ loadHistory runtime jobId folder = void $ async $ do
     Right Nothing -> postMessage runtime (ShowToast (noHistoryText folder))
     Right (Just hist) -> postMessage runtime (HistoryLoaded jobId hist)
 
--- | The plan phase runs off the GTK thread, because 'walk' on a full media source takes seconds.
 planWorker :: Runtime -> JobSpec -> IO ()
 planWorker runtime spec =
   void $ async $ do
@@ -239,20 +214,16 @@ planWorker runtime spec =
         Nothing -> postMessage runtime (PlanComputed spec (Left (T.pack (displayException err))))
       Right plan -> postMessage runtime (PlanComputed spec (Right plan))
 
--- | Only the job that filled the slot can empty it, so a job that started meanwhile stays.
 clearWhen :: JobId -> Maybe (JobId, Async ()) -> Maybe (JobId, Async ())
 clearWhen finished held = case held of
   Just (jobId, _) | jobId == finished -> Nothing
   _ -> held
 
--- | The model already marks a cancelled job, so its `AsyncCancelled` needs no event.
 wasCancelled :: SomeException -> Bool
 wasCancelled err = case fromException err of
   Just AsyncCancelled -> True
   Nothing -> False
 
--- | GTK marks the file as nullable up to 4.14, so we have to account for
--- versions that provided on Ubuntu 24 **and** 26
 class PickedFile file where
   pickedFile :: file -> Maybe Gio.File
 

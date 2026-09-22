@@ -1,4 +1,3 @@
--- | The plan sheet: what a job will do, shown before it starts.
 module MediaCopy.Gtk.Widgets.PlanSheet
   ( PlanSheet
   , newPlanSheet
@@ -54,7 +53,6 @@ newPlanSheet window dispatch = do
   onDialogClosed shell.dialog openCell (dispatch DiscardPlan)
   pure PlanSheet {phaseCell, openCell}
 
--- | Everything a phase paint writes: the shell it titles, the stack it turns, and the ready body.
 data Sheet = Sheet
   { dialog :: Adw.Dialog
   , startBtn :: Gtk.Button
@@ -64,13 +62,10 @@ data Sheet = Sheet
   , body :: ReadyBody
   }
 
--- | The sheet's three faces, in the order the stack holds them.
 newStackPages :: Gtk.ScrolledWindow -> IO (Gtk.Stack, Adw.StatusPage)
 newStackPages ready = do
   stack <- new Gtk.Stack []
   planningPage <- new Adw.StatusPage [#title := "Reading the Folder…", #description := "No file has been changed"]
-  -- Gtk.Spinner, not Adw.Spinner: the latter arrives in libadwaita 1.6, above the floor the
-  -- oldest supported distribution sets. See .tasks/lessons.md.
   spinner <-
     new
       Gtk.Spinner
@@ -107,9 +102,6 @@ renderPhase sheet phase = case phase of
     set sheet.saveBtn [#sensitive := True]
     Gtk.stackSetVisibleChildName sheet.stack "ready"
 
--- * The ready body
-
--- | What the sheet shows once a plan is made: one group per part of it, and the rows each group holds.
 data ReadyBody = ReadyBody
   { scroll :: Gtk.ScrolledWindow
   , summaryGroup :: Adw.PreferencesGroup
@@ -164,10 +156,6 @@ renderReadyBody body plan = do
   renderActionRows body.scriptRows (InExpander body.scriptExpander) (scriptOf plan)
   renderSealChoice body.seal plan
 
--- * The seal choice
-
--- | The "Before Copying" group. `suppress` is True while a render writes the switches,
--- so a programmatic write never dispatches.
 data SealControls = SealControls
   { group :: Adw.PreferencesGroup
   , sealSwitch :: Adw.SwitchRow
@@ -200,22 +188,18 @@ newSealGroup dispatch = do
   void (on replaceButton #toggled (reportExistingChoice seal dispatch))
   pure seal
 
--- | The two switches are one choice, so both read both before they report it.
 reportSealChoice :: SealControls -> (UiMessage -> IO ()) -> IO ()
 reportSealChoice seal dispatch = unlessSuppressed seal.suppress $ do
   sealing <- get seal.sealSwitch #active
   anyway <- get seal.policySwitch #active
   dispatch (SetSealFirst (choiceOf sealing anyway))
 
--- | Two buttons are one choice. Only the active one reports.
 reportExistingChoice :: SealControls -> (UiMessage -> IO ()) -> IO ()
 reportExistingChoice seal dispatch = unlessSuppressed seal.suppress $ do
   resume <- get seal.resumeButton #active
   replace <- get seal.replaceButton #active
   if resume then dispatch (SetExistingCopy Resume) else when replace (dispatch (SetExistingCopy Replace))
 
--- | A render writes the switches with dispatch suppressed, so it never looks like an
--- operator's press.
 renderSealChoice :: SealControls -> JobPlan -> IO ()
 renderSealChoice seal plan = case plan.spec.job of
   Offload oj -> do
@@ -257,11 +241,9 @@ sealSubtitle plan = case plan.sealPass of
     | plan.generations == 0 -> "the media source has no history; sealing records its hashes before a byte is copied"
     | otherwise -> "the media source already holds " <> count plan.generations <> " generations, which the copies are checked against"
 
--- | A blocker is what stops the job, so it is never below a warning.
 orderedFindings :: JobPlan -> Vector Finding
 orderedFindings plan = blockers plan <> V.filter (\finding -> finding.severity == Warning) plan.findings
 
--- | The three rows of the sheet's "This job" group.
 summaryOf :: JobPlan -> Vector Row
 summaryOf plan =
   V.fromList
@@ -275,7 +257,6 @@ formatText plan = case plan.format of
   Nothing -> "not settled"
   Just fmt -> display (formatAlgo fmt) <> " · originals: " <> plan.originsUsed
 
--- | The plan's own tally, so the operator reads what will happen and not only how much of it.
 stepCounts :: JobPlan -> Text
 stepCounts plan =
   plan.steps
@@ -284,7 +265,6 @@ stepCounts plan =
     & map (\pair -> fst pair <> " " <> count (snd pair))
     & T.intercalate " · "
 
--- | A copy step reads as its heaviest write: an overwrite anywhere names it, else a reuse everywhere, else a copy.
 stepName :: PlanStep -> Text
 stepName step = case step.op of
   Copy _
@@ -295,11 +275,9 @@ stepName step = case step.op of
   ReportNew -> "record"
   ReportMissing -> "missing"
 
--- | The bound keeps the group at about thirty widgets, whatever the size of the media source.
 scriptSample :: Int
 scriptSample = 20
 
--- | What the engine will do, for a developer who reads a plan. The operator never sees this group.
 scriptOf :: JobPlan -> Vector Row
 scriptOf plan =
   V.fromList
@@ -314,7 +292,6 @@ scriptOf plan =
     <> V.map (\step -> stepRow step) (V.take scriptSample plan.steps)
     <> overflowRow (V.length plan.steps)
 
--- | Each planned generation records its own tree, so the row shows one count for each of them.
 directoriesText :: JobPlan -> Text
 directoriesText plan =
   plannedGenerations plan
@@ -327,7 +304,6 @@ executionText plan = case plan.execution of
   CopyInto copy -> display copy.process <> " · source: " <> pathText copy.source <> " · originals: " <> plan.originsUsed <> carriedText copy.carried
   RecordAt record -> display record.process <> " · folder: " <> pathText record.folder
 
--- | Nothing when no history is carried, so a plain offload's row reads as before.
 carriedText :: Int -> Text
 carriedText carried
   | carried <= 0 = ""
@@ -380,7 +356,6 @@ findingRow finding =
     { cssClass = Just (case finding.severity of Blocker -> "error"; Warning -> "warning")
     }
 
--- | A group with no rows says nothing, so this function hides it rather than leaves an empty frame.
 renderRows :: Adw.PreferencesGroup -> IORef (Vector Adw.ActionRow) -> Vector Row -> IO ()
 renderRows group rowsRef wanted = do
   renderActionRows rowsRef (InGroup group) wanted

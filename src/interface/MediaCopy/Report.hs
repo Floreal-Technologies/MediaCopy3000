@@ -34,7 +34,6 @@ renderReport st plan mhlHist =
     & TB.toLazyText
     & TL.toStrict
 
--- | The job and its plan as text, for the command line and the sheet's save button. The report's body uses the same pieces.
 renderPlanText :: JobSpec -> JobPlan -> Text
 renderPlanText spec plan =
   ( field "Job" (display (jobKind spec.job))
@@ -51,7 +50,6 @@ line text = TB.fromText (text <> "\n")
 field :: Text -> Text -> Builder
 field label value = line (label <> ": " <> value)
 
--- | Every line of a saved report, in order.
 renderBody :: JobState -> Maybe JobPlan -> Builder
 renderBody st plan =
   field "Job" (display (jobKind st.spec.job))
@@ -65,7 +63,6 @@ renderBody st plan =
     <> renderOrigins st.originsUsed
     <> renderLog st.logPath
 
--- | What the job planned to do, above what it did.
 renderPlan :: JobPlan -> Builder
 renderPlan plan =
   line "Plan"
@@ -94,7 +91,6 @@ renderSealPass pass =
         <> display pass.onFailure
     )
 
--- | A report of a failed job still names the manifest the job meant to write.
 renderGeneration :: PlannedGeneration -> Builder
 renderGeneration planned =
   field
@@ -159,7 +155,6 @@ renderOrigins = \case
 renderLog :: Maybe OsPath -> Builder
 renderLog = maybe mempty (\p -> field "Log" (pathText p))
 
--- | 'Map.toList' is already in path order, so the failure list needs no sort of its own.
 renderFailures :: JobState -> Builder
 renderFailures st =
   let failures = Map.toList st.files & filter (\pair -> isFailure (snd pair).status)

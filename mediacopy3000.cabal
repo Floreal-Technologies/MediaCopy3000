@@ -8,7 +8,6 @@ author: Feriel Choutri de Tarlé
 maintainer: feriel@choutri.eu
 category: Distribution
 build-type: Simple
--- Every file the application resolves at run time through Paths_mediacopy3000.
 data-files:
   assets/styles.css
   assets/themes/**/*.css
@@ -50,8 +49,6 @@ common options
 
   default-language: GHC2024
 
--- The domain: what a job, a plan, a finding and a job format are. It knows the manifest format
--- and nothing about files, hashing or screens.
 library domain
   import: options
   hs-source-dirs: src/domain
@@ -78,8 +75,6 @@ library domain
     time,
     vector,
 
--- The application: the engine that runs a plan, the ports it runs through, and the repository
--- that reads and writes a folder's history.
 library application
   import: options
   hs-source-dirs: src/application
@@ -124,8 +119,6 @@ library application
     vector,
     xxhash-ffi ^>=0.3,
 
-  -- The three calls no portable library answers: one stat per directory entry, a writer
-  -- synchronised to the device before it closes, and a directory synchronised after a rename. One module, written twice.
   if os(windows)
     hs-source-dirs: src/application-windows
     build-depends: Win32
@@ -133,8 +126,6 @@ library application
     hs-source-dirs: src/application-posix
     build-depends: unix
 
--- The operator's side: the presentation model, the report and the appearance. Toolkit-free;
--- the GTK library is the adapter that draws it.
 library interface
   import: options
   hs-source-dirs: src/interface
@@ -230,8 +221,6 @@ library
     time,
     vector,
 
-  -- The floor is the oldest supported distribution, because the gi-* packages generate their
-  -- bindings from the GIR of the machine that builds them. See .tasks/lessons.md.
   pkgconfig-depends:
     gtk4 >=4.14,
     libadwaita-1 >=1.5,
@@ -258,7 +247,6 @@ executable mediacopy3000
     text,
     time,
 
--- Counts what one job's worth of messages costs the window to paint. Not part of `just test`.
 executable render-bench
   import: options
   ghc-options:

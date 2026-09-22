@@ -34,9 +34,7 @@ statEntry path = do
   pure
     Entry
       { isDirectory = directory
-      , -- Windows holds no FIFO, socket or device node in the file system namespace, so
-        -- everything that is neither a directory nor a reparse point is a regular file.
-        isRegularFile = not directory && not reparse
+      , isRegularFile = not directory && not reparse
       , isSymbolicLink = reparse
       , size = fromIntegral (File.fadFileSize attrs)
       }
@@ -63,7 +61,6 @@ syncDirectory dir = do
       Nothing
   File.flushFileBuffers h `finally` File.closeHandle h
 
--- | Reads the file with @FILE_FLAG_NO_BUFFERING@: buffer aligned to the volume's sector, requests a multiple of it, the last read short. A volume that refuses the flag is read through a buffered handle.
 readCold :: Int -> OsPath -> (ByteString -> IO ()) -> IO ()
 readCold chunkSize path onChunk = do
   path' <- decodeFS path
@@ -82,7 +79,6 @@ readCold chunkSize path onChunk = do
         File.oPEN_EXISTING
         (File.fILE_FLAG_NO_BUFFERING .|. File.fILE_FLAG_SEQUENTIAL_SCAN)
         Nothing
-    -- A read shorter than the request is the last one. Another at that offset is unaligned, and the flag refuses it.
     feedUnbuffered sector h =
       let aligned = max sector (chunkSize - chunkSize `mod` sector)
       in allocaBytesAligned aligned sector $ \buf -> do
@@ -94,7 +90,6 @@ readCold chunkSize path onChunk = do
                  when (n == fromIntegral aligned) loop
            loop
 
--- | The alignment is the volume's sector size, and a volume that refuses the question answers 4096.
 sectorSize :: String -> IO Int
 sectorSize path' = do
   answer <- try @IOException (File.getDiskFreeSpace (Just (takeDrive path')))

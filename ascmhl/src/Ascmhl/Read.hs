@@ -4,7 +4,6 @@ module Ascmhl.Read
   , parseMhlTime
   ) where
 
--- The only exception here is the one 'parseText' reports at the library edge.
 import Control.Exception (SomeException, displayException)
 import Data.Bifunctor (first)
 import Data.Foldable (traverse_)
@@ -41,7 +40,6 @@ parseDoc t =
     (\e -> displayException @SomeException e & T.pack & (\msg -> "ASC MHL: " <> msg))
     (fromDocument <$> parseText def (TL.fromStrict t))
 
--- | First text content of the first child element with this local name.
 childText :: Text -> Cursor -> Maybe Text
 childText local c = listToMaybe (c $/ laxElement local &/ content)
 
@@ -53,7 +51,6 @@ localName c = case node c of
   NodeElement e -> Just (nameLocalName e.elementName)
   _ -> Nothing
 
--- | An element name as it reads in a message.
 angled :: Text -> Text
 angled name = "<" <> name <> ">"
 
@@ -65,10 +62,6 @@ require what value = case value of
 readIntegral :: (Integral a) => Text -> Maybe a
 readIntegral t = either (const Nothing) (\(n, rest) -> if T.null rest then Just n else Nothing) (TR.decimal t)
 
--- | Requires the cursor's element to be the given root, in the given namespace. A document that
--- declares a namespace must declare this one, so this project refuses a later revision of the
--- format rather than reads it as this one. A document that declares no namespace is still valid,
--- because every element under the root matches on its local name.
 requireRoot :: Text -> Text -> Cursor -> Either Text ()
 requireRoot ns name c = case node c of
   NodeElement e
@@ -88,15 +81,11 @@ hashElement hc = do
   let raw = T.strip (T.concat (hc $/ content))
   pure (Hash algo ((algoSpec algo).readValue raw))
 
--- | Every attribute except the ones the caller already read into a field of its own. The name is
--- kept whole, so an attribute of another tool's namespace goes back under that namespace.
 attributesExcept :: List Text -> Cursor -> Map Name Text
 attributesExcept known hc = case node hc of
   NodeElement e -> Map.filterWithKey (\name _ -> nameLocalName name `notElem` known) e.elementAttributes
   _ -> Map.empty
 
--- | What this project did not read, it keeps, as the very node it read. A drop or a
--- rewrite edits another tool's record of its own work.
 childrenExcept :: (Text -> Bool) -> Cursor -> Vector Node
 childrenExcept known c =
   kids
@@ -104,7 +93,6 @@ childrenExcept known c =
     & map (\child -> node child)
     & V.fromList
   where
-    -- This code names the axis result before the conversion. '$/' and '&' on one line is a precedence trap.
     kids = c $/ anyElement
 
 parseManifest :: Text -> Either Text Manifest
@@ -124,7 +112,6 @@ parseManifest txt = do
         fromMaybe
           ProcessInPlace
           (listToMaybe (root $/ laxElement Schema.processinfo) >>= childText Schema.process >>= processFromName)
-      -- This code names the axis result before the conversion. '&/' and '&' on one line is a precedence trap.
       patternList = root $/ laxElement Schema.processinfo &/ laxElement Schema.ignore &/ laxElement Schema.ignorePattern &/ content
       ignorePatterns = V.fromList patternList
       creatorUnknown =
@@ -144,7 +131,6 @@ parseManifest txt = do
       , unknown = childrenExcept (\local -> local `elem` [Schema.creatorinfo, Schema.processinfo, Schema.hashes]) root
       }
 
--- | An unknown child of <hashes> is not an error. The parser skips it.
 parseEntry :: Cursor -> Either Text (Maybe ManifestEntry)
 parseEntry c = case localName c of
   Just local
@@ -157,7 +143,6 @@ parseFileEntry c = do
   pathC <- require (angled Schema.path) (listToMaybe (c $/ laxElement Schema.path))
   let pathValue = T.concat (pathC $/ content)
   path <- maybe (Left ("ASC MHL: path is not relative: " <> pathValue)) Right (mkRelPath pathValue)
-  -- The reference omits size for a zero-byte file, so an absent attribute means zero.
   let size = fromMaybe 0 (attr Schema.size pathC >>= readIntegral)
   lastModified <- require Schema.lastmodificationdate (attr Schema.lastmodificationdate pathC >>= parseMhlTime)
   let hashes = V.fromList (mapMaybe (\hc -> manifestHashOf hc) (c $/ anyElement))
@@ -201,7 +186,6 @@ parseDirEntry c = do
       , unknown = childrenExcept (\local -> local `elem` [Schema.path, Schema.content, Schema.structure]) c
       }
 
--- | Pairs a <content> child with the <structure> child of the same element name. An unpaired hash is an error.
 dirHashesOf :: Text -> Cursor -> Either Text (Vector DirHash)
 dirHashesOf label c = do
   paired <- traverse (\pair -> withStructure pair) contents

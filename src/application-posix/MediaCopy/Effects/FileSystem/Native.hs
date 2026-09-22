@@ -40,7 +40,6 @@ statEntry path = do
       , size = fromIntegral (PosixFiles.fileSize status)
       }
 
--- | Synchronise a writer to the device, then close it.
 syncAndClose :: Handle -> IO ()
 syncAndClose h = do
   fd <- PosixIO.handleToFd h `onException` hClose h
@@ -51,11 +50,8 @@ syncDirectory dir = do
   fd <- PosixPathIO.openFd (getOsString dir) PosixIO.ReadOnly PosixIO.defaultFileFlags
   PosixUnistd.fileSynchronise fd `finally` PosixIO.closeFd fd
 
--- | Best-effort read of the file from the device.
--- Linux drops its cached pages first, macOS turns the cache off for the descriptor.
 readCold :: Int -> OsPath -> (ByteString -> IO ()) -> IO ()
 readCold chunkSize path onChunk = do
-  -- The descriptor is the caller's only handle on the file until 'fdToHandle' takes it over.
   h <- bracketOnError open PosixIO.closeFd (\fd -> void (try @IOException (bypassCache fd)) >> PosixIO.fdToHandle fd)
   feedAll h `finally` hClose h
   where
@@ -65,12 +61,10 @@ readCold chunkSize path onChunk = do
 #if defined(darwin_HOST_OS)
 foreign import ccall unsafe "fcntl" c_fcntl :: CInt -> CInt -> CInt -> IO CInt
 
--- | @F_NOCACHE@ is 48 on Darwin
 bypassCache :: Fd -> IO ()
 bypassCache (Fd fd) = throwErrnoIfMinus1_ "fcntl F_NOCACHE" (c_fcntl fd 48 1)
 #else
 
--- | Linux drops the file's cached pages, so the next read reaches the device.
 bypassCache :: Fd -> IO ()
 bypassCache fd = Fcntl.fileAdvise fd 0 0 Fcntl.AdviceDontNeed
 #endif

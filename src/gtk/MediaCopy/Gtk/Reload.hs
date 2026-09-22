@@ -1,5 +1,3 @@
--- | The application stylesheet: loaded at start-up, and watched for live reload
--- in a development run (@MC3K_ENV=dev@).
 module MediaCopy.Gtk.Reload
   ( loadCss
   ) where
@@ -20,7 +18,6 @@ import MediaCopy.Gtk.Assets (resolveAsset)
 import MediaCopy.Gtk.Environment (Environment (Development))
 import MediaCopy.Gtk.Log (logLine)
 
--- | Loads the stylesheet for the display. A development run watches the file as well.
 loadCss :: Environment -> IO ()
 loadCss environment = do
   provider <- Gtk.cssProviderNew
@@ -43,10 +40,8 @@ watchCss provider path =
       pendingReload <- newIORef Nothing
       on monitor #changed $ \_file _otherFile eventType ->
         when (eventType `elem` reloadEvents) (scheduleReload provider path pendingReload)
-      -- The monitor must outlive this scope. Nothing else holds a reference to it.
       void (disownObject monitor)
 
--- | Debounce events with a 200ms delay
 scheduleReload :: Gtk.CssProvider -> FilePath -> IORef (Maybe Word32) -> IO ()
 scheduleReload provider path pendingReload = do
   pending <- readIORef pendingReload

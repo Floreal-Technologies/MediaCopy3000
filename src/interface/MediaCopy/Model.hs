@@ -40,8 +40,6 @@ import MediaCopy.Report (renderPlanText, renderReport)
 data FileFilter = AllFiles | FailedOnly
   deriving stock (Eq, Show)
 
--- | 'mediaSource' is the folder the operator picked to read. The job that comes out of it calls the same
--- folder its 'source'. Two names for one path, because the draft is a choice and the job is a plan.
 data OffloadDraft = OffloadDraft
   { mediaSource :: Maybe OsPath
   , destinations :: List OsPath
@@ -54,18 +52,13 @@ emptyDraft = OffloadDraft {mediaSource = Nothing, destinations = []}
 draftReady :: OffloadDraft -> Bool
 draftReady draft = isJust draft.mediaSource && not (null draft.destinations)
 
--- | 'Ready' holds the plan that the operator sees. Only 'ConfirmPlan' reads it.
 data PlanPhase = Idle | Planning JobSpec | Ready JobPlan | PlanError Text
   deriving stock (Eq, Show)
 
--- | One job and everything the window knows about it. A plan and a history belong to
--- their job, so they go when it goes.
 data JobEntry = JobEntry
   { state :: JobState
   , plan :: Maybe JobPlan
-  -- ^ The plan the operator approved, replaced by the replan the engine runs.
   , history :: Maybe MhlHistory
-  -- ^ What 'LoadHistory' read back, for a job that records a folder's own history.
   }
   deriving stock (Eq, Generic, Show)
 
@@ -76,12 +69,10 @@ data Model = Model
   , selected :: Maybe JobId
   , nextId :: JobId
   , draft :: Maybe OffloadDraft
-  -- ^ The offload dialog is open exactly while a draft stands.
   , fileFilter :: FileFilter
   , planPhase :: PlanPhase
   , appearance :: Appearance
   , desktopBase :: PaletteMode
-  -- ^ Under a held base, 'resolveTheme' ignores this value, so a stale reading never changes what the window wears.
   , toast :: Maybe Text
   , now :: UTCTime
   , closeConfirm :: Bool
@@ -106,8 +97,6 @@ initialModel t desktop =
     , closeConfirm = False
     }
 
--- | What the operator can ask for. A widget gets one of these and nothing else. No part
--- of the interface can announce an engine event or a plan that it did not compute.
 data UiMessage
   = PickSource
   | AddDestination
@@ -137,8 +126,6 @@ data UiMessage
   | DismissToast
   deriving stock (Eq, Show)
 
--- | Everything the model answers to: what the operator asked for, what a dialog came back with, what
--- the engine reported, and the clock.
 data Message
   = Ui UiMessage
   | SourcePicked OsPath
@@ -172,7 +159,6 @@ update msg model = case msg of
     | any (\draft -> p `elem` draft.destinations) model.draft -> (model, [])
     | otherwise ->
         (model & #draft % _Just % #destinations %~ (\dests -> dests <> [p]), [])
-  -- The model holds the job, its plan and its history, so it renders the report itself.
   ReportTargetPicked jid p -> case Map.lookup jid model.jobs of
     Nothing -> (model, [])
     Just entry -> (model, [WriteFile p (renderReport entry.state entry.plan entry.history)])
@@ -187,12 +173,10 @@ update msg model = case msg of
     | otherwise -> case Map.lookup jid model.jobs of
         Nothing -> (model, [])
         Just entry ->
-          -- The event, not the toast, says that the job ended. A command must never ride on a presentation string.
           let model1 = model {jobs = Map.insert jid entry {state = foldEvent model.now ev entry.state} model.jobs}
               refresh = historyRefresh jid entry.state.spec.job ev
           in if isTerminalEvent ev
                then
-                 -- A job that ends by itself takes the close question with it. The alert never outlives its subject.
                  let ended = model1 {running = Nothing, toast = toastMessage entry.state.spec.job ev, closeConfirm = False}
                      (model2, cmds) = startNext ended
                  in (model2, refresh <> cmds)
@@ -201,7 +185,6 @@ update msg model = case msg of
     Nothing -> (model, [])
     Just entry -> (model {jobs = Map.insert jid entry {history = Just hist} model.jobs}, [])
   Tick t -> (model {now = t}, [])
-  -- This message reaches the model under 'FollowDesktop' alone, so our own force never reads back as the desktop's wish.
   DesktopBase wanted
     | wanted == model.desktopBase -> (model, [])
     | otherwise -> (model {desktopBase = wanted}, [])
@@ -214,7 +197,6 @@ updateUi msg model = case msg of
   RemoveDestination i -> (model & #draft % _Just % #destinations %~ (\dests -> deleteAt i dests), [])
   OpenOffloadDialog -> (model {draft = Just emptyDraft}, [])
   CloseOffloadDialog -> (model {draft = Nothing}, [])
-  -- The appearance is a render, not a command: the window wears what the model says it wears.
   SetBase wanted -> (model {appearance = model.appearance {base = wanted}}, [])
   SetPalette wanted -> (model {appearance = setPalette wanted model.appearance}, [])
   ReviewPlan -> reviewPlan model
@@ -238,7 +220,6 @@ updateUi msg model = case msg of
   SelectPreviousJob -> (model {selected = neighbour (-1) model}, [])
   ClearFinished -> clearFinished model
   SetFileFilter f -> (model {fileFilter = f}, [])
-  -- The window never closes itself. The model says whether a close needs an answer first.
   RequestClose
     | isJust model.running -> (model {closeConfirm = True}, [])
     | otherwise -> (model, [CloseWindow])
@@ -246,8 +227,6 @@ updateUi msg model = case msg of
   CancelClose -> (model {closeConfirm = False}, [])
   DismissToast -> (model {toast = Nothing}, [])
 
--- | A review needs a media source and one destination. A draft short of either asks for
--- nothing, so the operator stays in the dialog.
 reviewPlan :: Model -> (Model, List Command)
 reviewPlan model
   | Just draft <- model.draft
@@ -263,7 +242,6 @@ saveSelectedReport model = case selectedEntry model of
   Just entry ->
     (model, [OpenSaveDialog "Save Report" (jobLabel entry.state.spec.job <> "-report.txt") (ReportTargetPicked entry.state.spec.jobId)])
 
--- | The selection follows the jobs that stay, so a cleared job leaves nothing selected.
 clearFinished :: Model -> (Model, List Command)
 clearFinished model =
   let kept = Map.filter (\entry -> not (isTerminal entry.state.phase)) model.jobs
@@ -272,24 +250,20 @@ clearFinished model =
         _ -> Nothing
   in (model {jobs = kept, selected = selected'}, [])
 
--- | A confirmed close empties the queue, so no job starts in the moment before the window goes.
 confirmClose :: Model -> (Model, List Command)
 confirmClose model =
   let stop = maybe [] (\jid -> [CancelRunning jid]) model.running
   in (model {closeConfirm = False, running = Nothing, queue = []}, stop <> [CloseWindow])
 
--- | A phase write names the job, so no branch can write the phase and forget the map it lives in.
 setPhase :: JobId -> JobPhase -> Model -> Model
 setPhase jid phase model = model & #jobs % ix jid % #state % #phase .~ phase
 
--- | A stored plan names its job, so a replan cannot land on another job's entry.
 storePlan :: JobId -> JobPlan -> Model -> Model
 storePlan jid fresh model = model & #jobs % ix jid % #plan ?~ fresh
 
 phaseOf :: JobId -> Model -> Maybe JobPhase
 phaseOf jid model = Map.lookup jid model.jobs <&> \entry -> entry.state.phase
 
--- | A cancel names one job. It does not touch any other job in the queue.
 cancelJob :: JobId -> Model -> (Model, List Command)
 cancelJob jid model
   | model.running == Just jid =
@@ -301,7 +275,6 @@ cancelJob jid model
       (setPhase jid Cancelled model {planPhase = closedFor jid model}, [])
   | otherwise = (model, [])
 
--- | The order is the sidebar's order, which is the job map's key order.
 neighbour :: Int -> Model -> Maybe JobId
 neighbour offset model =
   let ordered = Map.keys model.jobs & V.fromList
@@ -318,13 +291,11 @@ neighbour offset model =
              Nothing -> Just jid
              Just next -> Just next
 
--- | A finished verify or seal wrote a new generation, so the model must read its history again.
 historyRefresh :: JobId -> Job -> JobEvent -> List Command
 historyRefresh jid job ev = case ev of
   JobFinished _ -> historyFolder job & maybe [] (\folder -> [LoadHistory jid folder])
   _ -> []
 
--- | The waiter decides where a plan goes. A plan that nobody awaits drops, like a stale 'EngineEvent'.
 planComputed :: JobSpec -> Either Text JobPlan -> Model -> (Model, List Command)
 planComputed spec outcome model
   | awaitingPlan model spec = case outcome of
@@ -332,20 +303,16 @@ planComputed spec outcome model
       Left message -> (model {planPhase = PlanError message}, [])
   | model.running == Just spec.jobId = case outcome of
       Right plan -> replanReady spec.jobId plan model
-      -- A job with no plan cannot run, and it must not hold the engine slot.
       Left message ->
         startNext
           (setPhase spec.jobId (Failed message) model {running = Nothing, toast = toastMessage spec.job (JobFailed message)})
   | otherwise = (model, [])
 
--- | The comparison covers the whole spec, so a plan that predates a change to the seal
--- choice never shows.
 awaitingPlan :: Model -> JobSpec -> Bool
 awaitingPlan model spec = case model.planPhase of
   Planning pending -> pending == spec
   _ -> False
 
--- | A changed offload choice re-plans under the same JobId, so the operator never approves a plan for the choice they left.
 replanIfChanged :: (OffloadJob -> Bool) -> (OffloadJob -> OffloadJob) -> Model -> (Model, List Command)
 replanIfChanged changed apply model = case planningSpec model of
   Just spec
@@ -355,13 +322,11 @@ replanIfChanged changed apply model = case planningSpec model of
         in (model {planPhase = Planning spec'}, [ComputePlan spec'])
   _ -> (model, [])
 
--- | A moved plan takes the sheet only when it is free. It never replaces a plan that the operator opened.
 offered :: JobPlan -> PlanPhase -> PlanPhase
 offered fresh phase = case phase of
   Idle -> Ready fresh
   _ -> phase
 
--- | A cancel closes only the sheet that showed that job's plan.
 closedFor :: JobId -> Model -> PlanPhase
 closedFor jid model = case planningSpec model of
   Just spec | spec.jobId == jid -> Idle
@@ -373,7 +338,6 @@ planningSpec model = case model.planPhase of
   Ready plan -> Just plan.spec
   _ -> Nothing
 
--- | An idle engine runs the plan that the operator just saw. A job that must wait gets a new plan when its turn comes.
 confirmPlan :: JobPlan -> Model -> (Model, List Command)
 confirmPlan plan model =
   let jid = plan.spec.jobId
@@ -392,7 +356,6 @@ confirmPlan plan model =
          (setPhase jid Running model1 {running = Just jid}, refresh <> [StartJob plan])
        else (model1 {queue = model1.queue <> [jid]}, refresh)
 
--- | A job only runs a plan that still describes the disk. A plan that moved goes back to the operator.
 replanReady :: JobId -> JobPlan -> Model -> (Model, List Command)
 replanReady jid fresh model
   | model.running /= Just jid = (model, [])
@@ -409,7 +372,6 @@ replanReady jid fresh model
                   (storePlan jid fresh model) {running = Nothing, planPhase = offered fresh model.planPhase}
               )
 
--- | The head of the queue gets a new plan before it runs, and holds the engine slot while that happens.
 startNext :: Model -> (Model, List Command)
 startNext model = case model.running of
   Just _ -> (model, [])

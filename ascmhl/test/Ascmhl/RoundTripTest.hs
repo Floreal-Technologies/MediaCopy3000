@@ -23,7 +23,6 @@ import Ascmhl.Read
 import Ascmhl.Types
 import Ascmhl.Write
 
--- | Unwraps a parse result. A Left fails the test.
 orFail :: (Show e) => Either e a -> IO a
 orFail e = either (\err -> assertFailure (show err)) pure e
 
@@ -91,7 +90,6 @@ followsNNNNFolderDateTimeMhl = do
   let t = UTCTime (fromGregorian 2026 5 9) (secondsToDiffTime (17 * 3600 + 120))
   manifestFileName 1 "A002R2EC" t @?= "0001_A002R2EC_2026-05-09_170200.mhl"
 
--- | The fixture's hash date. Every hash in the fixture carries it.
 fixtureHashDate :: UTCTime
 fixtureHashDate = UTCTime (fromGregorian 2026 5 9) (secondsToDiffTime (17 * 3600 + 120))
 
@@ -161,10 +159,8 @@ chainParsesAndRoundTripsTheFixture = do
       ChainEntry
         { sequenceNr = 1
         , path = RelPath "0001_A002R2EC_2026-05-09_170200.mhl"
-        , -- The fixture is a legacy chain. Its hash is xxh64, so it has no c4 and the parser keeps the entry whole.
-          c4 = Nothing
-        , -- The entry is kept as the very node it was read as, namespace included.
-          unknown =
+        , c4 = Nothing
+        , unknown =
             V.singleton
               ( NodeElement
                   ( Element
@@ -176,8 +172,6 @@ chainParsesAndRoundTripsTheFixture = do
         }
   parseChain (renderChain c) @?= Right c
 
--- | An element this project does not model comes back as it was read, its own namespace
--- included. A rewrite that re-namespaces it edits another tool's record of its own work.
 givesAForeignNamespaceBackUnchanged :: Assertion
 givesAForeignNamespaceBackUnchanged = do
   txt <- TIO.readFile "test/fixtures/ascmhl/ascmhl_chain_foreign.xml"
@@ -233,7 +227,6 @@ buildsOneGenerationPerManifest = do
   let MhlHistory gens = historyOf (V.singleton (1, m))
       gensList = V.toList gens
   map (\g -> g.number) gensList @?= [1]
-  -- A set of formats has no document order. It reads back in 'Ord HashAlgo', preferred format first.
   map (\g -> Set.toList g.algos) gensList @?= [[XXH64, MD5]]
   map (\g -> g.failures) gensList @?= [0]
 
@@ -245,11 +238,9 @@ rejectsEscapingPath = do
   assertBool "absolute path accepted" (isLeft (parseManifest absolute))
   assertBool ".. path accepted" (isLeft (parseManifest dotdot))
 
--- | The instant every built fixture carries.
 buildInstant :: UTCTime
 buildInstant = UTCTime (fromGregorian 2026 9 14) (secondsToDiffTime (9 * 3600))
 
--- | A row as one line, so a failure reads as an order and not as two records.
 entryLabels :: Vector ManifestEntry -> [Text]
 entryLabels entries =
   map
@@ -273,7 +264,6 @@ builtDir path =
 ordersAThreeLevelTreeBy65 :: Assertion
 ordersAThreeLevelTreeBy65 = do
   let files = V.fromList (map builtFile ["top.txt", "A/a1.mxf", "A/B/b1.mxf", "C/c1.mxf"])
-      -- Out of order on purpose: the order comes from the paths, not from the vector.
       dirs = V.fromList (map builtDir ["C", "A/B", "A"])
   entryLabels (orderedEntries files dirs)
     @?= [ "file A/B/b1.mxf"
@@ -301,7 +291,6 @@ roundTripsABuiltManifest = do
 appendGenerationKeepsOrderingAndSetsC4 :: Assertion
 appendGenerationKeepsOrderingAndSetsC4 = do
   let earlier = Hash C4 "c447Fm3BJZQ62765jMZJH4m28hrDM7Szbj9CUmj4F4gnvyDYXYz4WfnK2nYRhFvRgYEectEXYBYWLDpLo6XGNAfKdt"
-      -- The given chain sits in the wrong order, and generation 1 is a legacy entry with no c4.
       given =
         Chain
           ( V.fromList

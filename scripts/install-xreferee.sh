@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Installs the pinned xreferee release for `just xref`.
-# https://github.com/brandonchinn178/xreferee
 set -euo pipefail
 
 VERSION=1.1.1

@@ -1,4 +1,3 @@
--- | Where a bundled asset comes from.
 module MediaCopy.Gtk.Assets
   ( resolveAsset
   ) where

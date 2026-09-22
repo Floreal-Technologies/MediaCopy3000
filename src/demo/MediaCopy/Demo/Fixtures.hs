@@ -1,12 +1,5 @@
--- | The fixture world the screenshots and the model tests share.
---
--- One media source, two destinations, one instant, one history. Nothing here touches a disk: every
--- path is a literal and every fact is written by hand. Every plan comes from the planner: a fixture
--- states the facts a gathering would have read, and 'decideOffload' or 'decideGeneration' settles
--- the plan, so no fixture can show a plan the engine would refuse to run.
 module MediaCopy.Demo.Fixtures
-  ( -- * The instant, the paths and the media source
-    at
+  ( at
   , mediaSource
   , shuttle
   , archive
@@ -14,34 +7,22 @@ module MediaCopy.Demo.Fixtures
   , mediaSourceDirs
   , mediaSourceTree
   , totalBytes
-
-    -- * The jobs
   , offloadJob
   , offloadFrom
   , verifyJob
   , sealJob
   , specFor
-
-    -- * What the planner reads
   , offloadFactsReady
   , offloadFactsBlocked
   , verifyFacts
   , sealFacts
-
-    -- * What the planner settles
   , readyPlan
   , blockedPlan
   , partialPlan
   , verifyPlan
   , sealPlan
-
-    -- * The history a finished job shows
   , history
-
-    -- * The palettes the asset tree holds
   , paletteListing
-
-    -- * Small helpers
   , hashOf
   , osp
   , rel
@@ -70,9 +51,6 @@ import MediaCopy.Domain.Plan (JobPlan)
 import MediaCopy.Domain.Preflight (GenerationFacts (..), HistoryRule (..), OffloadFacts (..), TargetFacts (..), decideGeneration, decideOffload)
 import MediaCopy.Interface.Theme (FamilyInfo (..), FamilyListing (..), PaletteMode (..), ThemeListing (..))
 
--- * The instant, the paths and the media source
-
--- | This instant stamps every fixture, so two runs of the screenshot script make the same picture.
 at :: UTCTime
 at = UTCTime {utctDay = fromGregorian 2026 9 12, utctDayTime = secondsToDiffTime (14 * 3600 + 3 * 60)}
 
@@ -85,8 +63,6 @@ shuttle = osp "/Volumes/Shuttle-01/2026-09-12"
 archive :: OsPath
 archive = osp "/Volumes/Archive-A/2026-09-12"
 
--- | The files of the fixture media source. Every job reads the same one, so one set serves them all.
--- A scene indexes into this vector, so its order is the order the file rows appear in.
 mediaSourceFiles :: Vector (RelPath, FileSize)
 mediaSourceFiles =
   V.fromList
@@ -99,19 +75,14 @@ mediaSourceFiles =
     , (rel "A001M01.XML", 12_004)
     ]
 
--- | The folders the fixture media source holds.
 mediaSourceDirs :: Vector RelPath
 mediaSourceDirs = V.fromList [rel "Clips", rel "Sidecar"]
 
--- | The walk a gathering would have made. A 'Tree' holds its files in path order, which the scene's
--- own order is not, so the sort happens here and nowhere else.
 mediaSourceTree :: Tree
 mediaSourceTree = Tree {files = V.fromList (sortOn fst (V.toList mediaSourceFiles)), dirs = mediaSourceDirs}
 
 totalBytes :: FileSize
 totalBytes = V.sum (V.map snd mediaSourceFiles)
-
--- * The jobs
 
 offloadJob :: SealFirst -> Job
 offloadJob = offloadFrom mediaSource
@@ -135,14 +106,9 @@ sealJob folder = SealMediaSource SealJob {folder}
 specFor :: JobId -> Job -> JobSpec
 specFor jid job = JobSpec {jobId = jid, job, createdAt = at}
 
--- * What the planner reads
-
--- | The hashes the media source's own history holds: one for each file, all of one format. One
--- format settles the job's, and the copies then have something to check against.
 recordedHashes :: Map RelPath Hash
 recordedHashes = Map.fromList (V.toList (V.map (\pair -> (fst pair, hashOf "4f9a1c3b2d7e8051")) mediaSourceFiles))
 
--- | The media source already holds two generations, so the sheet can say what a third would add.
 sourceChain :: Chain
 sourceChain =
   chainFromListing
@@ -152,7 +118,6 @@ sourceChain =
         ]
     )
 
--- | The folder a verify job reads holds the three generations that 'history' shows.
 verifyChain :: Chain
 verifyChain =
   chainFromListing
@@ -163,18 +128,12 @@ verifyChain =
         ]
     )
 
--- | One destination as the plan reads it: the free bytes of the parent's device.
 destinationFacts :: Int64 -> Maybe Int64
 destinationFacts free = Just free
 
--- | One destination of the fixture offload. It has no history, so each records generation 1. The
--- root is the folder the operator picked, which a gathering appends the media source's name to
--- ('destinationPath'). The manual's pictures and sample report show the picked folder, so the
--- fixture keeps it.
 targetFacts :: OsPath -> Maybe Int64 -> Maybe Tree -> TargetFacts
 targetFacts root freeBytes existing = TargetFacts {root, freeBytes, history = Right Nothing, existing}
 
--- | A shuttle that is empty and an archive that the job will create. Nothing blocks this plan.
 offloadFactsReady :: OffloadFacts
 offloadFactsReady =
   OffloadFacts
@@ -188,7 +147,6 @@ offloadFactsReady =
     , sourceHistory = Right (Just (sourceChain, recordedHashes))
     }
 
--- | The same job against a shuttle that holds a folder and a file the card does not, and an archive that is too small. Two blockers: 'DestinationForeign' and 'InsufficientSpace'.
 offloadFactsBlocked :: OffloadFacts
 offloadFactsBlocked =
   offloadFactsReady
@@ -199,7 +157,6 @@ offloadFactsBlocked =
           ]
     }
 
--- | A folder that holds three generations, so a verify has a history to check against.
 verifyFacts :: GenerationFacts
 verifyFacts =
   GenerationFacts
@@ -208,7 +165,6 @@ verifyFacts =
     , history = Right (Just (verifyChain, recordedHashes))
     }
 
--- | A media source straight out of a camera: files, and no history at all.
 sealFacts :: GenerationFacts
 sealFacts =
   GenerationFacts
@@ -217,7 +173,6 @@ sealFacts =
     , history = Right Nothing
     }
 
--- | The shuttle holds the first four files of the card and a part file of the fifth. Nothing else.
 offloadFactsPartial :: OffloadFacts
 offloadFactsPartial =
   offloadFactsReady
@@ -236,8 +191,6 @@ offloadFactsPartial =
         , dirs = mediaSourceDirs
         }
 
--- * What the planner settles
-
 readyPlan :: JobSpec -> JobPlan
 readyPlan spec = decideOffload spec (offloadOf spec.job) offloadFactsReady
 
@@ -253,18 +206,11 @@ verifyPlan spec = decideGeneration spec RequireHistory verifyFacts
 sealPlan :: JobSpec -> JobPlan
 sealPlan spec = decideGeneration spec AllowFresh sealFacts
 
--- | The offload a plan fixture plans for. The plan follows its own spec, so the queue's other two
--- media sources get plans that name themselves. A spec of another kind is a fixture mistake, and
--- stops the process before a picture comes out.
 offloadOf :: Job -> OffloadJob
 offloadOf = \case
   Offload oj -> oj
   other -> error ("demo fixture asked for an offload plan of a " <> show (jobKind other) <> " job")
 
--- * The history a finished job shows
-
--- | Three generations: a seal, the transfer that copied it, and a verify. The reader derives each
--- row from the manifest, so the picture shows what a real read of a real history would show.
 history :: MhlHistory
 history =
   historyOf
@@ -275,7 +221,6 @@ history =
         ]
     )
 
--- | One generation's manifest, offset from 'at' by whole seconds.
 manifestAt :: ProcessKind -> Int -> Manifest
 manifestAt process offsetSeconds =
   newManifest
@@ -287,8 +232,6 @@ manifestAt process offsetSeconds =
   where
     t = addUTCTime (fromIntegral offsetSeconds) at
 
--- | Every file under the one recorded hash, and every folder under one directory hash. The reader
--- takes the generation's formats and its failure count from these rows.
 entriesAt :: UTCTime -> Vector ManifestEntry
 entriesAt t =
   orderedEntries
@@ -298,11 +241,6 @@ entriesAt t =
 treeHash :: UTCTime -> DirHash
 treeHash t = dirHash t (hashOf "1b7f0c9d2a4e6358") (hashOf "9e3d5a7c1f8b0246")
 
--- * The palettes the asset tree holds
-
--- | Every palette under @assets\/themes@, as the tree presents them. The application reads the tree
--- at run time and a fixture cannot, so the listing is repeated here. It must keep the tree's shape,
--- @\<family\>\/\<light|dark\>\/\<name\>.css@, with the family's own file beside them.
 paletteListing :: ThemeListing
 paletteListing =
   ThemeListing
@@ -347,13 +285,9 @@ paletteListing =
           ]
     }
 
--- * Small helpers
-
 hashOf :: Text -> Hash
 hashOf value = Hash {algo = XXH64, value}
 
--- | The paths are fixtures, so an unencodable path or an impossible relative path is a mistake
--- here and nowhere else. Both stop the process at once and never get to a screenshot.
 osp :: String -> OsPath
 osp = unsafeEncodeUtf
 

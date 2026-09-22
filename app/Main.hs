@@ -30,12 +30,8 @@ main = do
   args <- getArgs
   case args of
     first : _ | first `elem` ownArguments -> parseAndRun args
-    -- Every other argument reaches GTK untouched, which the desktop file needs for
-    -- @--gapplication-service@ and the toolkit needs for its own options.
     _ -> run Gui
 
--- | Every argument this project answers itself. A word that is not here belongs to GTK,
--- so a new command of our own goes in this list and in 'commandParser' together.
 ownArguments :: List String
 ownArguments =
   [ "plan"
@@ -45,8 +41,6 @@ ownArguments =
   ]
     <> completionArguments
 
--- | The flags optparse-applicative answers on its own, so a shell asking for completions reaches it
--- rather than opening a window.
 completionArguments :: List String
 completionArguments =
   [ "--bash-completion-index"
@@ -61,7 +55,6 @@ parseAndRun :: List String -> IO ()
 parseAndRun args =
   case execParserPure defaultPrefs commandInfo args of
     Success cmd -> run cmd
-    -- @--help@ is a failure to optparse with a success code; a wrong argument exits 2, as the manual says.
     Failure failure -> do
       let (message, code) = renderFailure failure "mediacopy3000"
       case code of
@@ -76,7 +69,6 @@ data Command
 
 run :: Command -> IO ()
 run = \case
-  -- The screenshot script asks for the scene names rather than repeating them.
   ListScenes -> mapM_ T.putStrLn sceneNames
   PlanOnly job -> planCommand job
   Gui -> do
@@ -94,7 +86,6 @@ commandParser =
   flag' ListScenes (long "list-scenes" <> help "Print the demo scene names, one per line, and exit")
     <|> hsubparser (command "plan" (info (PlanOnly <$> planParser) (progDesc "Print a plan without the window")))
 
--- | The three shapes the @plan@ command takes.
 planParser :: Parser Job
 planParser =
   hsubparser
@@ -121,14 +112,11 @@ offloadParser =
 folderArg :: Parser OsPath
 folderArg = argument pathReader (metavar "FOLDER")
 
--- | A path the host cannot encode is a usage error, so it exits 2 like a wrong flag.
 pathReader :: ReadM OsPath
 pathReader = eitherReader (\raw -> maybe (Left ("not a usable path: " <> raw)) Right (encodeUtf raw))
 
--- | Reads and prints; writes nothing. Exit 0 when the plan is ready, 1 when a blocker stands, 2 for a plan that could not be made.
 planCommand :: Job -> IO ()
 planCommand job = do
-  -- The plan holds characters above ASCII, which a C locale's handle would refuse.
   hSetEncoding stdout utf8
   hSetEncoding stderr utf8
   now <- getCurrentTime
@@ -140,9 +128,6 @@ planCommand job = do
       T.putStr (renderPlanText spec plan)
       exitWith (if planBlocked plan then ExitFailure 1 else ExitSuccess)
 
--- | A run with no @MC3K_DEMO@ in its environment starts the empty application, as always. With
--- one, it shows a fixture screen from @manual/@. If @MC3K_SHOT@ names a file, the run photographs
--- the screen and leaves.
 startup :: IO Startup
 startup =
   lookupEnv "MC3K_DEMO" >>= \case
