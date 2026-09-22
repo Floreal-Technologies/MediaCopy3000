@@ -14,7 +14,7 @@ import Data.Time (UTCTime)
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
-import MediaCopy.Domain.Job (JobId (..), JobPhase (..), JobResult (..), JobSpec (..), JobState (..), fractionOf, jobKind, jobLabel)
+import MediaCopy.Domain.Job (JobId (..), JobPhase (..), JobResult (..), JobSpec (..), JobState (..), failuresText, fractionOf, jobKind, jobLabel, rateOf)
 import MediaCopy.Gtk.Widgets.Common (nameAccessible, newCell, newLabel, paddedBox, renderCell, toggleClass)
 import MediaCopy.Interface.Wording (KindUi (..), count, humanRate, kindUi, quietText)
 
@@ -43,7 +43,7 @@ data RowView = RowView
 
 data JobRow = JobRow
   { row :: Gtk.ListBoxRow
-  , update :: UTCTime -> JobState -> Double -> IO ()
+  , update :: UTCTime -> JobState -> IO ()
   }
 
 newJobRow :: JobState -> IO JobRow
@@ -71,35 +71,35 @@ newJobRow state = do
     toggleClass bar "success" view.allOk
     toggleClass sub "error" view.bad
     toggleClass bar "error" view.bad
-  let update now current rate = renderCell cell (rowView now current rate)
-  update state.lastMovedAt state 0
+  let update now current = renderCell cell (rowView now current)
+  update state.lastMovedAt state
   pure JobRow {row, update}
 
-rowView :: UTCTime -> JobState -> Double -> RowView
-rowView now state rate =
+rowView :: UTCTime -> JobState -> RowView
+rowView now state =
   RowView
     { icon = (kindUi (jobKind state.spec.job)).icon
     , label = jobLabel state.spec.job
-    , phase = phaseText now state rate
+    , phase = phaseText now state
     , fraction = fractionOf state
     , allOk = isAllOk state.phase
     , bad = isBad state.phase
     }
 
-phaseText :: UTCTime -> JobState -> Double -> Text
-phaseText now state rate = case state.phase of
+phaseText :: UTCTime -> JobState -> Text
+phaseText now state = case state.phase of
   Queued -> "Queued"
   NeedsReview -> "Needs review"
-  Running -> runningText now state rate
+  Running -> runningText now state
   Finished AllOk -> "Finished · " <> count (Map.size state.files) <> " files · all OK"
-  Finished (WithFailures failures) -> "Finished · " <> count failures <> " failures"
+  Finished (WithFailures failures) -> "Finished · " <> failuresText failures
   Failed _ -> "Failed"
   Cancelled -> "Cancelled"
 
-runningText :: UTCTime -> JobState -> Double -> Text
-runningText now state rate
+runningText :: UTCTime -> JobState -> Text
+runningText now state
   | Just quiet <- quietText now state = quiet
-  | ui.showsProgress = ui.runningVerb <> " · " <> count (percentOf state) <> " % · " <> humanRate rate
+  | ui.showsProgress = ui.runningVerb <> " · " <> count (percentOf state) <> " % · " <> humanRate (rateOf state)
   | otherwise = ui.runningVerb <> "…"
   where
     ui = kindUi (jobKind state.spec.job)

@@ -5,20 +5,18 @@ module MediaCopy.Gtk.View
 
 import Control.Monad (void)
 import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
-import Data.IORef (IORef, modifyIORef', newIORef, readIORef, writeIORef)
-import Data.Int (Int64)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (isJust)
 import Data.Text (Text)
-import Data.Time (UTCTime, diffUTCTime)
 import Data.Vector (Vector)
 import GI.Adw qualified as Adw
 import GI.GLib qualified as GLib
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 
-import MediaCopy.Domain.Job (JobId, JobState (..))
+import MediaCopy.Domain.Job (JobId)
 import MediaCopy.Gtk.Actions (headerAction, installActions)
 import MediaCopy.Gtk.Widgets.CloseConfirm (newCloseConfirm, renderCloseConfirm)
 import MediaCopy.Gtk.Widgets.Common (Cell, flatNamed, newCell, renderCell, suppressing, unlessSuppressed)
@@ -29,12 +27,6 @@ import MediaCopy.Gtk.Widgets.PlanSheet (newPlanSheet, renderPlanSheet)
 import MediaCopy.Gtk.Widgets.Preferences (newPreferences)
 import MediaCopy.Interface.Theme (Appearance, PaletteMode, ThemeSection)
 import MediaCopy.Model (JobEntry (..), Model (..), UiMessage (..), selectedEntry)
-
-data Sample = Sample
-  { at :: UTCTime
-  , bytes :: Int64
-  , rate :: Double
-  }
 
 data Widgets = Widgets
   { window :: Adw.ApplicationWindow
@@ -69,10 +61,10 @@ buildWidgets app applyTheme lightSections darkSections dispatch = do
   closeConfirm <- newCloseConfirm window dispatch
   let render current = do
         renderCell themeCell (current.appearance, current.desktopBase)
-        rate <- renderSidebar sidebar current
+        renderSidebar sidebar current
         let selected = selectedEntry current
         Gtk.stackSetVisibleChildName contentStack (if isJust selected then "detail" else "empty")
-        detail.render current selected rate
+        detail.render current selected
         renderActions current
         renderOffloadDialog offloadDialog current
         renderPlanSheet planSheet current
@@ -149,7 +141,6 @@ newToastCell toastOverlay dispatch =
 data Sidebar = Sidebar
   { list :: Gtk.ListBox
   , rows :: IORef (Map JobId JobRow)
-  , lastBytes :: IORef (Map JobId Sample)
   , suppress :: IORef Bool
   , selection :: Cell (Maybe JobId)
   }
@@ -171,9 +162,8 @@ newSidebar dispatch = do
   page <- Adw.navigationPageNew scroll "Jobs"
   set page [#widthRequest := 260]
   rows <- newIORef Map.empty
-  lastBytes <- newIORef Map.empty
   selection <- newSelectionCell list rows
-  pure (Sidebar {list, rows, lastBytes, suppress, selection}, page)
+  pure (Sidebar {list, rows, suppress, selection}, page)
 
 newSelectionCell :: Gtk.ListBox -> IORef (Map JobId JobRow) -> IO (Cell (Maybe JobId))
 newSelectionCell list rows =
@@ -183,7 +173,7 @@ newSelectionCell list rows =
       current <- readIORef rows
       mapM_ (\jobRow -> Gtk.listBoxSelectRow list (Just jobRow.row)) (Map.lookup jobId current)
 
-renderSidebar :: Sidebar -> Model -> IO Double
+renderSidebar :: Sidebar -> Model -> IO ()
 renderSidebar sidebar current = suppressing sidebar.suppress $ do
   existing <- readIORef sidebar.rows
   let gone = Map.difference existing current.jobs
@@ -194,38 +184,8 @@ renderSidebar sidebar current = suppressing sidebar.suppress $ do
   mapM_ (\jobRow -> Gtk.listBoxAppend sidebar.list jobRow.row) added
   let rows = Map.union (Map.map fst kept) added
   writeIORef sidebar.rows rows
-  modifyIORef' sidebar.lastBytes (\samples -> Map.intersection samples current.jobs)
-  rates <-
-    Map.traverseWithKey
-      ( \jobId (jobRow, entry) -> do
-          rate <- rateFor sidebar current jobId entry.state
-          jobRow.update current.now entry.state rate
-          pure rate
-      )
-      kept
+  mapM_ (\(jobRow, entry) -> jobRow.update current.now entry.state) kept
   let chosen = case current.selected of
         Nothing -> Nothing
         Just jobId -> if Map.member jobId rows then Just jobId else Nothing
   renderCell sidebar.selection chosen
-  pure (fromMaybe 0 (current.selected >>= \jobId -> Map.lookup jobId rates))
-
-rateFor :: Sidebar -> Model -> JobId -> JobState -> IO Double
-rateFor sidebar current jobId state
-  | current.running == Just jobId = throughput sidebar.lastBytes current.now jobId state.bytesDone
-  | otherwise = pure 0
-
-throughput :: IORef (Map JobId Sample) -> UTCTime -> JobId -> Int64 -> IO Double
-throughput lastBytes now jobId bytes = do
-  samples <- readIORef lastBytes
-  case Map.lookup jobId samples of
-    Nothing -> do
-      writeIORef lastBytes (Map.insert jobId Sample {at = now, bytes, rate = 0} samples)
-      pure 0
-    Just previous -> do
-      let elapsed = realToFrac (diffUTCTime now previous.at) :: Double
-      if elapsed < 0.5
-        then pure previous.rate
-        else do
-          let measured = fromIntegral (bytes - previous.bytes) / elapsed
-          writeIORef lastBytes (Map.insert jobId Sample {at = now, bytes, rate = measured} samples)
-          pure measured

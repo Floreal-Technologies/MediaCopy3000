@@ -4,6 +4,7 @@ module MediaCopy.Interface.Wording
   , humanRate
   , humanEta
   , generationsText
+  , resultText
   , noHistoryText
   , quietText
   , KindUi (..)
@@ -19,7 +20,7 @@ import Data.Time (NominalDiffTime, UTCTime, diffUTCTime)
 import Numeric (showFFloat)
 import System.OsPath (OsPath)
 
-import MediaCopy.Domain.Job (Doing (..), JobKind (..), JobState (..), isDone)
+import MediaCopy.Domain.Job (Doing (..), JobKind (..), JobResult (..), JobState (..), failuresText, isDone)
 
 -- $setup
 -- >>> import System.OsPath (unsafeEncodeUtf)
@@ -123,6 +124,18 @@ pad2 n = T.justifyRight 2 '0' (count n)
 generationsText :: Int -> Text
 generationsText 1 = "1 generation"
 generationsText n = count n <> " generations"
+
+-- |
+-- >>> resultText SealKind AllOk
+-- "finished, all files sealed"
+-- >>> resultText OffloadKind (WithFailures 1)
+-- "finished with 1 failure"
+resultText :: JobKind -> JobResult -> Text
+resultText kind = \case
+  AllOk -> case kind of
+    (OffloadKind; VerifyKind) -> "finished, all files verified"
+    SealKind -> "finished, all files sealed"
+  WithFailures n -> "finished with " <> failuresText n
 
 -- |
 -- >>> noHistoryText (unsafeEncodeUtf "card")

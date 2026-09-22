@@ -17,6 +17,7 @@ import Data.Vector qualified as V
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
+import MediaCopy.Domain.Job (failuresText)
 import MediaCopy.Gtk.Widgets.Common (Cell, Row (..), RowHost (..), newCell, plainRow, renderActionRows, renderCell)
 import MediaCopy.Interface.Wording (count, generationsText)
 
@@ -72,5 +73,5 @@ generationSubtitle generation =
 
 failuresSuffix :: Int -> Text
 failuresSuffix failures
-  | failures > 0 = " · " <> count failures <> " failures"
+  | failures > 0 = " · " <> failuresText failures
   | otherwise = ""

@@ -22,7 +22,7 @@ import System.OsPath (OsPath, takeFileName)
 
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan
-import MediaCopy.Interface.Wording (count)
+import MediaCopy.Interface.Wording (count, resultText)
 
 renderReport :: JobState -> Maybe JobPlan -> Maybe MhlHistory -> Text
 renderReport st plan mhlHist =
@@ -58,7 +58,6 @@ renderBody st plan =
     <> foldMap (\ready -> renderPlan ready) plan
     <> renderResult (jobKind st.spec.job) st.phase
     <> renderCounts st
-    <> field "Bytes" (T.pack (show st.bytesTotal))
     <> renderManifests st.mhlPaths
     <> renderOrigins st.originsUsed
     <> renderLog st.logPath
@@ -119,8 +118,7 @@ renderResult kind phase = case phase of
   Queued -> field "Result" "queued"
   Running -> field "Result" "running"
   NeedsReview -> field "Result" "waiting for review"
-  Finished AllOk -> field "Result" (allOkText kind)
-  Finished (WithFailures n) -> field "Result" ("finished, " <> count n <> " failures")
+  Finished result -> field "Result" (resultText kind result)
   Failed msg -> field "Result" ("failed – " <> msg)
   Cancelled -> field "Result" "cancelled"
 
@@ -203,6 +201,5 @@ renderGenerationLine gen =
         <> "  "
         <> display gen.process
         <> "  "
-        <> count gen.failures
-        <> " failures"
+        <> failuresText gen.failures
     )

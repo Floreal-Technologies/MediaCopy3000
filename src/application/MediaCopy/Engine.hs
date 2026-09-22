@@ -21,6 +21,8 @@ import Data.Int (Int64)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Display (display)
@@ -75,7 +77,7 @@ data JobProgress = JobProgress
 
 data PassTally = PassTally
   { entries :: Vector HashEntry
-  , failures :: Int
+  , failedPaths :: Set RelPath
   }
 
 data FileStepResult = FileStepResult
@@ -330,7 +332,7 @@ runOffloadPlan
   -> Eff es ()
 runOffloadPlan plan copy = do
   sealed <- case plan.sealPass of
-    Nothing -> pure (Just emptyTally)
+    Nothing -> pure (Just PassTally {entries = V.empty, failedPaths = Set.empty})
     Just pass -> runSealPass plan.ignorePatterns copy.source pass
   forM_ sealed $ \sealTally -> do
     recorded <- originsForCopy plan copy
@@ -341,7 +343,7 @@ runOffloadPlan plan copy = do
       when (copy.carried > 0) $
         void (carryHistory copy.source planned.folder >>= orThrow . first (HistoryFaultAt copy.source))
       writeGeneration planned plan.ignorePatterns copied.entries
-    emit (JobFinished (resultOf (sealTally.failures + copied.failures)))
+    emit (JobFinished (resultOf (sealTally.failedPaths <> copied.failedPaths)))
 
 originsForCopy
   :: (FileSystem :> es, Emit :> es, Error PlanViolation :> es, Reader JobFormat :> es)
@@ -376,9 +378,9 @@ runSealPass patterns source pass = do
   case pass.onFailure of
     CopyAnyway -> pure (Just tally)
     StopBeforeCopy
-      | tally.failures == 0 -> pure (Just tally)
+      | Set.null tally.failedPaths -> pure (Just tally)
       | otherwise -> do
-          emit (JobFailed (display SealStopped {failed = tally.failures, total = V.length pass.steps}))
+          emit (JobFailed (display SealStopped {failed = Set.size tally.failedPaths, total = V.length pass.steps}))
           pure Nothing
 
 runGenerationPlan
@@ -390,7 +392,7 @@ runGenerationPlan plan record = do
   tally <- runSteps record.folder Map.empty plan.steps
   emit ManifestWriting
   writeGeneration record.generation plan.ignorePatterns tally.entries
-  emit (JobFinished (resultOf tally.failures))
+  emit (JobFinished (resultOf tally.failedPaths))
 
 runStep
   :: (Copying es)
@@ -434,20 +436,14 @@ runSteps
   -> Vector PlanStep
   -> Eff es PassTally
 runSteps root recorded steps =
-  traverse (\step -> runStep root recorded step) steps <&> \results -> tallyOf results
+  traverse (\step -> runStep root recorded step) steps <&> \results ->
+    PassTally
+      { entries = V.mapMaybe (\result -> result.manifestEntry) results
+      , failedPaths = Set.fromList [step.path | (step, result) <- zip (V.toList steps) (V.toList results), outcomeFailed result.outcome]
+      }
 
-tallyOf :: Vector FileStepResult -> PassTally
-tallyOf results =
-  PassTally
-    { entries = V.mapMaybe (\result -> result.manifestEntry) results
-    , failures = V.length (V.filter (\result -> outcomeFailed result.outcome) results)
-    }
-
-emptyTally :: PassTally
-emptyTally = PassTally {entries = V.empty, failures = 0}
-
-resultOf :: Int -> JobResult
-resultOf failures = if failures == 0 then AllOk else WithFailures failures
+resultOf :: Set RelPath -> JobResult
+resultOf failed = if Set.null failed then AllOk else WithFailures (Set.size failed)
 
 expectedHash :: Map RelPath Hash -> RelPath -> Expected -> Maybe Hash
 expectedHash recorded path expected = case expected of

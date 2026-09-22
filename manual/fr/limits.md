@@ -32,11 +32,12 @@ La chaîne contient un hachage `c4` pour chaque manifeste, permettant ainsi de d
 après son écriture. MediaCopy 3000 écrit ce hachage et le renseigne pour les entrées plus anciennes. Cependant,
 elle ne compare pas le manifeste à ce hachage lors de la lecture de l'historique.
 
-## Les échecs peuvent être comptabilisés deux fois
+## Un échec du scellement peut se cacher derrière une bonne copie
 
 Une tâche qui effectue une opération de scellement (seal) avant la copie parcourt deux fois les mêmes fichiers.
-Le compteur d'échecs additionne les passages ; ainsi, un fichier échouant lors des deux passages est compté deux fois.
-La liste des fichiers ne mentionne chaque fichier qu'une seule fois, et c'est cette liste qui indique quels fichiers sont défectueux.
+Un fichier qui échoue lors de l'un des deux passages est compté une seule fois dans le compteur d'échecs.
+La liste des fichiers affiche le dernier état de chaque fichier. Si le scellement ne peut pas lire un fichier et que la copie le lit ensuite correctement, la tâche signale un échec que la liste des fichiers ne montre pas.
+Le manifeste du scellement ne contient aucune entrée pour ce fichier.
 
 ## Une action inconnue de ce lecteur est classée comme `original`
 

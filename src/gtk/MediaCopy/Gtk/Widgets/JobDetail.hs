@@ -41,6 +41,7 @@ import MediaCopy.Domain.Job
   , jobKind
   , jobLabel
   , jobRoot
+  , rateOf
   )
 import MediaCopy.Gtk.Actions (actionButton)
 import MediaCopy.Gtk.Widgets.Common (nameAccessible, newLabel, paddedBox, suppressing, toggleClass, unlessSuppressed)
@@ -51,7 +52,7 @@ import MediaCopy.Model (FileFilter (..), JobEntry (..), Model (..), UiMessage (.
 
 data JobDetail = JobDetail
   { root :: Gtk.Box
-  , render :: Model -> Maybe JobEntry -> Double -> IO ()
+  , render :: Model -> Maybe JobEntry -> IO ()
   }
 
 newJobDetail :: (UiMessage -> IO ()) -> IO JobDetail
@@ -76,13 +77,13 @@ newJobDetail dispatch = do
   Gtk.boxAppend root files.header
   Gtk.boxAppend root files.scroll
   Gtk.boxAppend root actions
-  let render model newEntry rate = case newEntry of
+  let render model newEntry = case newEntry of
         Nothing -> renderHistory history Nothing
         Just entry -> do
           let state = entry.state
               loaded = entry.history
           renderHeading heading loaded state
-          renderProgress progress model.now state rate
+          renderProgress progress model.now state (rateOf state)
           renderCounters counters loaded state
           renderHistory history (historyFor loaded state)
           suppressing suppress (selectFilter filterButtons model.fileFilter)

@@ -26,7 +26,6 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust, isNothing)
 import Data.Text (Text)
-import Data.Text qualified as T
 import Data.Time (UTCTime)
 import Data.Vector qualified as V
 import GHC.Generics (Generic)
@@ -36,6 +35,7 @@ import System.OsPath (OsPath)
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan (JobPlan (..), planBlocked, planEquivalent)
 import MediaCopy.Interface.Theme (Appearance (..), Base, PaletteMode, Theme, setPalette, systemAppearance)
+import MediaCopy.Interface.Wording (resultText)
 import MediaCopy.Report (renderPlanText, renderReport)
 
 data FileFilter = AllFiles | FailedOnly
@@ -388,8 +388,7 @@ startNext model = case model.running of
 
 toastMessage :: Job -> JobEvent -> Maybe Text
 toastMessage job = \case
-  JobFinished AllOk -> Just (label <> ": " <> allOkText (jobKind job))
-  JobFinished (WithFailures n) -> Just (label <> ": finished with " <> T.pack (show n) <> " failures")
+  JobFinished result -> Just (label <> ": " <> resultText (jobKind job) result)
   JobFailed msg' -> Just (label <> ": failed – " <> msg')
   _ -> Nothing
   where

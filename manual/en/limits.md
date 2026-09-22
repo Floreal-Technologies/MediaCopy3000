@@ -31,11 +31,12 @@ The chain holds a `c4` hash of every manifest, so a reader can tell whether a ma
 after it was written. MediaCopy 3000 writes that hash and fills it in for older entries. It does not
 compare a manifest against it when it reads a history.
 
-## Failures can be counted twice
+## A seal failure can hide behind a good copy
 
-A job that seals before it copies makes two passes over the same files. The failure count sums the
-passes, so a file that fails in both passes counts twice. The file list names each file once, and it
-is the list that says which files are bad.
+A job that seals before it copies makes two passes over the same files. A file that fails in either
+pass counts once in the failure count. The file list shows the last state of each file. So if the
+seal cannot read a file and the copy then reads it well, the job reports a failure that the file
+list does not show. The seal's manifest has no entry for that file.
 
 ## An action this reader does not know becomes `original`
 

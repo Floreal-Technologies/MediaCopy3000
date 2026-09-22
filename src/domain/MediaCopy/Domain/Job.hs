@@ -26,7 +26,6 @@ module MediaCopy.Domain.Job
   , jobRoot
   , historyFolder
   , jobLabel
-  , allOkText
   , originsDescription
   , newJobState
   , foldEvent
@@ -38,6 +37,9 @@ module MediaCopy.Domain.Job
   , countOutcomes
   , destinationPath
   , fractionOf
+  , Throughput (..)
+  , rateOf
+  , failuresText
   ) where
 
 import Ascmhl.Hash
@@ -50,7 +52,7 @@ import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Display (Display (..))
-import Data.Time (UTCTime)
+import Data.Time (UTCTime, diffUTCTime)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import GHC.Generics (Generic)
@@ -136,11 +138,6 @@ historyFolder = \case
 
 jobLabel :: Job -> Text
 jobLabel job = pathText (takeFileName (jobRoot job))
-
-allOkText :: JobKind -> Text
-allOkText = \case
-  (OffloadKind; VerifyKind) -> "finished, all files verified"
-  SealKind -> "finished, all files sealed"
 
 originsDescription :: Map RelPath Hash -> Text
 originsDescription resolved
@@ -240,7 +237,7 @@ instance Display JobEvent where
     OriginalsResolved origin algo -> "originals " <> displayBuilder origin <> " · " <> displayBuilder algo
     LogOpened p -> "log " <> displayBuilder (pathText p)
     JobFinished AllOk -> "finished, all ok"
-    JobFinished (WithFailures n) -> "finished, " <> displayBuilder (T.pack (show n)) <> " failures"
+    JobFinished (WithFailures n) -> "finished, " <> displayBuilder (failuresText n)
     JobFailed message -> "failed – " <> displayBuilder message
 
 data SealStopped = SealStopped
@@ -279,8 +276,16 @@ data JobState = JobState
   , logPath :: Maybe OsPath
   , lastMovedAt :: UTCTime
   , doing :: Maybe Doing
+  , throughput :: Maybe Throughput
   }
   deriving stock (Eq, Generic, Show)
+
+data Throughput = Throughput
+  { at :: UTCTime
+  , bytes :: Int64
+  , rate :: Double
+  }
+  deriving stock (Eq, Show)
 
 newJobState :: JobSpec -> JobState
 newJobState spec =
@@ -297,7 +302,22 @@ newJobState spec =
     , logPath = Nothing
     , lastMovedAt = spec.createdAt
     , doing = Nothing
+    , throughput = Nothing
     }
+
+rateOf :: JobState -> Double
+rateOf state = case (state.phase, state.throughput) of
+  (Running, Just sample) -> sample.rate
+  _ -> 0
+
+-- |
+-- >>> failuresText 1
+-- "1 failure"
+-- >>> failuresText 3
+-- "3 failures"
+failuresText :: Int -> Text
+failuresText 1 = "1 failure"
+failuresText n = T.pack (show n) <> " failures"
 
 fractionOf :: JobState -> Double
 fractionOf state
@@ -321,7 +341,17 @@ foldEvent at ev st = case ev of
       , lastMovedAt = at
       , doing = Just (OnFile s)
       }
-  Progress d -> st {bytesDone = max st.bytesDone d, lastMovedAt = at}
+  Progress d ->
+    let bytes = max st.bytesDone d
+        fresh = Throughput {at, bytes, rate = 0}
+        sampled = case st.throughput of
+          Nothing -> fresh
+          Just previous
+            | elapsed < 0.5 -> previous
+            | otherwise -> fresh {rate = fromIntegral (bytes - previous.bytes) / elapsed}
+            where
+              elapsed = realToFrac (diffUTCTime at previous.at) :: Double
+    in st {bytesDone = bytes, lastMovedAt = at, throughput = Just sampled}
   ManifestWriting -> st {doing = Just WritingManifest, lastMovedAt = at}
   MhlWritten p -> st {mhlPaths = V.snoc st.mhlPaths p}
   OriginalsResolved origin algo -> st {originsUsed = Just origin, originsAlgo = Just algo}

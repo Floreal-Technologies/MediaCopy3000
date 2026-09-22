@@ -41,7 +41,7 @@ scenes =
   , still "plan-blocked" (offered (offloadJob UseHistory) blockedPlan)
   , (still "plan-findings" (offered (offloadJob UseHistory) blockedPlan)) {scroll = True}
   , still "plan-error" (RequestPlan (offloadJob UseHistory) : [PlanComputed (specFor first (offloadJob UseHistory)) (Left planErrorText)])
-  , running "job-running" runningMessages
+  , still "job-running" (runningMessages <> [EngineEvent first (Progress 6_100_000_000), Tick (addUTCTime 2 at), EngineEvent first (Progress 8_640_000_000)])
   , still "job-finished" finishedMessages
   , still "job-failures" failuresMessages
   , still "job-failed-only" (failuresMessages <> [Ui (SetFileFilter FailedOnly)])
@@ -82,19 +82,6 @@ lookupScene wanted = scenes & filter (\scene -> scene.name == wanted) & headOrNo
 
 still :: Text -> List Message -> Scene
 still name msgs = Scene {name, frames = NE.singleton (play msgs), action = Nothing, expand = False, scroll = False}
-
-running :: Text -> List Message -> Scene
-running name msgs =
-  Scene
-    { name
-    , frames = play (msgs <> earlier) :| [play (msgs <> earlier), play (msgs <> later)]
-    , action = Nothing
-    , expand = False
-    , scroll = False
-    }
-  where
-    earlier = [EngineEvent first (Progress 6_100_000_000)]
-    later = [Tick (addUTCTime 2 at), EngineEvent first (Progress 8_640_000_000)]
 
 play :: List Message -> Model
 play msgs = foldl (\model msg -> fst (update msg model)) (initialModel at LightPalette) msgs

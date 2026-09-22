@@ -35,7 +35,6 @@ Plan
   warning: folder is already sealed – generation 2
 Result: finished, all files verified
 Files: 7 total, 7 verified, 0 hash mismatch/io error, 0 missing, 0 new, 0 replaced
-Bytes: 17260697327
 Manifest: /Volumes/Shuttle-01/2026-09-12/CARD_A001/ascmhl/0003_CARD_A001_2026-09-12_140300.mhl
 Manifest: /Volumes/Archive-A/2026-09-12/CARD_A001/ascmhl/0001_CARD_A001_2026-09-12_140300.mhl
 Originals: the media source's own history, 7 files
@@ -48,7 +47,7 @@ Log: /home/you/.local/state/mediacopy3000/jobs/2026-09-12_140300-1-CARD_A001-off
 | `Created` | Date de création de la tâche |
 | `Plan` | Le plan que vous avez approuvé, avec ses conclusions, mot pour mot. Un transfert vers une destination partielle ajoute la mention `existing copy: resume` (reprise) ou `replace` (remplacement). |
 | `Result` | Issue de la tâche |
-| `Files`, `Bytes` | Compteurs issus du volet de détails |
+| `Files` | Compteurs issus du volet de détails |
 | `Manifest` | Tous les manifestes générés par la tâche |
 | `Originals` | Éléments de référence utilisés pour la vérification |
 | `Log` | Journal des événements de la tâche. La page [Journal des événements](event-log.md) fournit des explications à ce sujet. |
