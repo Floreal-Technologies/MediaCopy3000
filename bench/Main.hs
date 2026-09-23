@@ -3,10 +3,10 @@
 module Main (main) where
 
 import Ascmhl.Path (RelPath)
-import Control.Monad (foldM, unless, when)
+import Control.Monad (foldM, unless, void, when)
 import Data.Function ((&))
 import Data.Functor ((<&>))
-import Data.GI.Base (AttrOp (On, (:=)), new, on)
+import Data.GI.Base (AttrOp ((:=)), new, on)
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.List (List, sort)
 import Data.Maybe (mapMaybe)
@@ -18,6 +18,8 @@ import Data.Time.Format.ISO8601 (iso8601Show)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Word (Word64)
+import Effectful (Eff, IOE, liftIO, (:>))
+import Effectful.Exception (catchSync)
 import GHC.Clock (getMonotonicTimeNSec)
 import GI.Adw qualified as Adw
 import GI.GLib qualified as GLib
@@ -26,12 +28,12 @@ import GI.Gtk qualified as Gtk
 import Numeric (showFFloat)
 import System.Directory (doesFileExist)
 import System.Environment (getArgs)
-import System.Exit (ExitCode (ExitFailure), exitWith)
 import Text.Printf (printf)
 
 import MediaCopy.Demo.Fixtures qualified as Fixtures
 import MediaCopy.Domain.Job
-import MediaCopy.Gtk.Environment (Environment, withEnvironment)
+import MediaCopy.Gtk.Eff (onE)
+import MediaCopy.Gtk.Environment (Ui, abortApp, exitOnFault, logFault, runUi, withEnvironment)
 import MediaCopy.Gtk.Reload (loadCss)
 import MediaCopy.Gtk.Theme (apply, loadPalettes, newThemeAdapter)
 import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
@@ -52,15 +54,19 @@ main = withEnvironment $ \environment -> do
   args <- getArgs
   let fileCount = readFileCount args
       resultsPath = readResultsPath args
-  app <-
-    new
-      Adw.Application
-      [ #applicationId := "eu.choutri.MediaCopy3000.RenderBench"
-      , #flags := [Gio.ApplicationFlagsNonUnique]
-      , On #activate (bench environment fileCount resultsPath ?self)
-      ]
-  status <- Gio.applicationRun app Nothing
-  when (status /= 0) (exitWith (ExitFailure (fromIntegral status)))
+  failed <- newIORef False
+  status <- runUi environment (void . logFault) $ do
+    app <-
+      new
+        Adw.Application
+        [ #applicationId := "eu.choutri.MediaCopy3000.RenderBench"
+        , #flags := [Gio.ApplicationFlagsNonUnique]
+        ]
+    _ <-
+      onE app #activate $
+        bench fileCount resultsPath ?self `catchSync` abortApp failed app
+    Gio.applicationRun app Nothing
+  exitOnFault status failed
 
 readFileCount :: List String -> Int
 readFileCount = \case
@@ -74,24 +80,25 @@ readResultsPath = \case
   _ : raw : _ -> raw
   _ -> defaultResultsPath
 
-bench :: Environment -> Int -> FilePath -> Adw.Application -> IO ()
-bench environment fileCount resultsPath app = do
-  themeAdapter <- newThemeAdapter environment
-  palettes <- loadPalettes environment
+bench :: (Ui es) => Int -> FilePath -> Adw.Application -> Eff es ()
+bench fileCount resultsPath app = do
+  themeAdapter <- newThemeAdapter
+  palettes <- loadPalettes
   let lightSections = themeSections LightPalette palettes
       darkSections = themeSections DarkPalette palettes
   widgets <- buildWidgets app (apply themeAdapter) lightSections darkSections (\_intent -> pure ())
-  loadCss environment
+  loadCss
   Gtk.windowPresent widgets.window
-  settle 500
-  counters <- newCounters widgets.window
+  liftIO (settle 500)
+  counters <- liftIO (newCounters widgets.window)
   let stream = streamOf (benchFiles fileCount)
   samples <- measure widgets stream
-  settle 500
-  result <- resultOf fileCount (length stream) counters samples
-  baseline <- readBaseline resultsPath fileCount
-  report result baseline resultsPath
-  appendResult resultsPath result
+  liftIO $ do
+    settle 500
+    result <- resultOf fileCount (length stream) counters samples
+    baseline <- readBaseline resultsPath fileCount
+    report result baseline resultsPath
+    appendResult resultsPath result
   Gtk.windowDestroy widgets.window
 
 benchFiles :: Int -> Vector (RelPath, FileSize)
@@ -153,19 +160,19 @@ newCounters window =
   where
     bump counter = modifyIORef' counter (\seen -> seen + 1)
 
-measure :: Widgets -> List Message -> IO (List Word64)
+measure :: (IOE :> es) => Widgets es -> List Message -> Eff es (List Word64)
 measure widgets stream = do
-  samples <- newIORef []
+  samples <- liftIO (newIORef [])
   let step model msg = do
         let (next, _cmds) = update msg model
-        before <- getMonotonicTimeNSec
+        before <- liftIO getMonotonicTimeNSec
         widgets.render next
-        drain
-        after <- getMonotonicTimeNSec
-        modifyIORef' samples (\seen -> (after - before) : seen)
+        liftIO drain
+        after <- liftIO getMonotonicTimeNSec
+        liftIO (modifyIORef' samples (\seen -> (after - before) : seen))
         pure next
   _final <- foldM step (initialModel Fixtures.at LightPalette) stream
-  readIORef samples <&> reverse
+  liftIO (readIORef samples) <&> reverse
 
 drain :: IO ()
 drain = do

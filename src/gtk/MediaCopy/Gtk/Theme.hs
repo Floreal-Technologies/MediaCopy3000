@@ -11,7 +11,7 @@ import Control.Monad.Extra
 import Data.Aeson qualified as Aeson
 import Data.Function ((&))
 import Data.Functor ((<&>))
-import Data.GI.Base (AttrOp ((:=)), on, set)
+import Data.GI.Base (AttrOp ((:=)), set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.List (List, find)
 import Data.Maybe (catMaybes)
@@ -19,6 +19,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Vector (Vector)
 import Data.Vector qualified as V
+import Effectful (Eff, IOE, liftIO, (:>))
 import Effectful.Log (logAttention_)
 import GI.Adw qualified as Adw
 import GI.Gdk qualified as Gdk
@@ -27,19 +28,19 @@ import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
 import System.FilePath (takeExtension, (</>))
 
 import MediaCopy.Gtk.Assets (resolveAsset)
-import MediaCopy.Gtk.Environment (Environment, logWith)
+import MediaCopy.Gtk.Eff (onE)
+import MediaCopy.Gtk.Environment (Ui)
 import MediaCopy.Interface.Theme
 
-data ThemeAdapter = ThemeAdapter
-  { environment :: Environment
-  , provider :: Gtk.CssProvider
+data ThemeAdapter es = ThemeAdapter
+  { provider :: Gtk.CssProvider
   , manager :: Adw.StyleManager
   , forced :: IORef (Maybe PaletteMode)
-  , handler :: IORef (Maybe (PaletteMode -> IO ()))
+  , handler :: IORef (Maybe (PaletteMode -> Eff es ()))
   }
 
-newThemeAdapter :: Environment -> IO ThemeAdapter
-newThemeAdapter environment = do
+newThemeAdapter :: (Ui es) => Eff es (ThemeAdapter es)
+newThemeAdapter = do
   provider <- Gtk.cssProviderNew
   whenJustM Gdk.displayGetDefault $ \display ->
     Gtk.styleContextAddProviderForDisplay
@@ -47,27 +48,27 @@ newThemeAdapter environment = do
       provider
       (fromIntegral Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1)
   manager <- Adw.styleManagerGetDefault
-  forced <- newIORef Nothing
-  handler <- newIORef Nothing
-  let adapter = ThemeAdapter {environment, provider, manager, forced, handler}
-  void $ on manager (Adw.PropertyNotify #dark) $ \_ ->
-    readIORef forced >>= \case
+  forced <- liftIO (newIORef Nothing)
+  handler <- liftIO (newIORef Nothing)
+  let adapter = ThemeAdapter {provider, manager, forced, handler}
+  void $ onE manager (Adw.PropertyNotify #dark) $ \_ ->
+    liftIO (readIORef forced) >>= \case
       Just _ -> pure ()
       Nothing ->
         readDesktopBase adapter
           >>= \observed -> report adapter observed
   pure adapter
 
-apply :: ThemeAdapter -> Appearance -> PaletteMode -> IO ()
+apply :: (Ui es) => ThemeAdapter es -> Appearance -> PaletteMode -> Eff es ()
 apply adapter appearance desktop = do
   case themeAsset (resolveTheme appearance desktop) of
     Nothing -> Gtk.cssProviderLoadFromString adapter.provider ""
     Just relative -> do
-      path <- resolveAsset adapter.environment relative
+      path <- resolveAsset relative
       Gtk.cssProviderLoadFromPath adapter.provider path
-  previous <- readIORef adapter.forced
+  previous <- liftIO (readIORef adapter.forced)
   let wanted = forcedBase appearance.base
-  writeIORef adapter.forced wanted
+  liftIO (writeIORef adapter.forced wanted)
   set
     adapter.manager
     [ #colorScheme := case wanted of
@@ -81,42 +82,42 @@ apply adapter appearance desktop = do
       when (observed /= desktop) (report adapter observed)
     _ -> pure ()
 
-readDesktopBase :: ThemeAdapter -> IO PaletteMode
+readDesktopBase :: (IOE :> es) => ThemeAdapter es -> Eff es PaletteMode
 readDesktopBase adapter = Adw.styleManagerGetDark adapter.manager <&> \dark -> if dark then DarkPalette else LightPalette
 
-onDesktopBase :: ThemeAdapter -> (PaletteMode -> IO ()) -> IO ()
+onDesktopBase :: (IOE :> es) => ThemeAdapter es -> (PaletteMode -> Eff es ()) -> Eff es ()
 onDesktopBase adapter notify = do
-  writeIORef adapter.handler (Just notify)
-  readIORef adapter.forced >>= \case
+  liftIO (writeIORef adapter.handler (Just notify))
+  liftIO (readIORef adapter.forced) >>= \case
     Just _ -> pure ()
     Nothing -> readDesktopBase adapter >>= \observed -> notify observed
 
-report :: ThemeAdapter -> PaletteMode -> IO ()
+report :: (IOE :> es) => ThemeAdapter es -> PaletteMode -> Eff es ()
 report adapter observed =
-  readIORef adapter.handler >>= mapM_ (\notify -> notify observed)
+  liftIO (readIORef adapter.handler) >>= mapM_ (\notify -> notify observed)
 
-loadPalettes :: Environment -> IO (Vector Palette)
-loadPalettes environment = readThemeListing environment <&> maybe V.empty (uncurry palettesFrom)
+loadPalettes :: (Ui es) => Eff es (Vector Palette)
+loadPalettes = readThemeListing <&> maybe V.empty (uncurry palettesFrom)
 
-readThemeListing :: Environment -> IO (Maybe (FilePath, ThemeListing))
-readThemeListing environment = do
-  root <- resolveAsset environment themeRoot
-  present <- doesDirectoryExist root
+readThemeListing :: (Ui es) => Eff es (Maybe (FilePath, ThemeListing))
+readThemeListing = do
+  root <- resolveAsset themeRoot
+  present <- liftIO (doesDirectoryExist root)
   if not present
     then pure Nothing
     else do
-      directories <- childDirectories root
-      listed <- mapM (\family -> familyListing environment root family) directories
+      directories <- liftIO (childDirectories root)
+      listed <- mapM (\family -> familyListing root family) directories
       pure (Just (root, ThemeListing {families = V.fromList listed}))
 
 themeRoot :: FilePath
 themeRoot = "assets" </> "themes"
 
-familyListing :: Environment -> FilePath -> FilePath -> IO FamilyListing
-familyListing environment root family = do
-  info <- familyInfo environment (root </> family)
-  directories <- childDirectories (root </> family)
-  listed <- mapM (\directory -> modeListing (root </> family) directory) directories
+familyListing :: (Ui es) => FilePath -> FilePath -> Eff es FamilyListing
+familyListing root family = do
+  info <- familyInfo (root </> family)
+  directories <- liftIO (childDirectories (root </> family))
+  listed <- liftIO (mapM (\directory -> modeListing (root </> family) directory) directories)
   pure FamilyListing {directory = T.pack family, info, modes = V.fromList (catMaybes listed)}
 
 modeListing :: FilePath -> FilePath -> IO (Maybe (PaletteMode, Vector Text))
@@ -131,15 +132,15 @@ paletteMode :: FilePath -> Maybe PaletteMode
 paletteMode directory =
   find (\mode -> modeDirectory mode == T.pack directory) [minBound .. maxBound]
 
-familyInfo :: Environment -> FilePath -> IO FamilyInfo
-familyInfo environment familyDir = do
-  present <- doesFileExist path
+familyInfo :: (Ui es) => FilePath -> Eff es FamilyInfo
+familyInfo familyDir = do
+  present <- liftIO (doesFileExist path)
   if not present
     then pure noFamilyInfo
     else
-      Aeson.eitherDecodeFileStrict' path >>= \case
+      liftIO (Aeson.eitherDecodeFileStrict' path) >>= \case
         Left reason -> do
-          logWith environment (logAttention_ (T.pack (path <> ": " <> reason)))
+          logAttention_ (T.pack (path <> ": " <> reason))
           pure noFamilyInfo
         Right found -> pure found
   where

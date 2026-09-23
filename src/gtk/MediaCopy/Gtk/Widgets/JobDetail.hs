@@ -7,7 +7,7 @@ import Ascmhl.Path (RelPath, pathText)
 import Ascmhl.Types (Generation (..), MhlHistory (..), algosText)
 import Control.Monad (void, when)
 import Data.Function ((&))
-import Data.GI.Base (AttrOp ((:=)), new, on, set)
+import Data.GI.Base (AttrOp ((:=)), new, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Int (Int32)
 import Data.List.NonEmpty qualified as NE
@@ -20,6 +20,7 @@ import Data.Text.Display (display)
 import Data.Time (UTCTime)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
+import Effectful (Eff, IOE, MonadIO, liftIO, (:>))
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
@@ -45,24 +46,26 @@ import MediaCopy.Domain.Job
   , rateOf
   )
 import MediaCopy.Gtk.Actions (actionButton)
+import MediaCopy.Gtk.Eff (onE)
+import MediaCopy.Gtk.Environment (Ui)
 import MediaCopy.Gtk.Widgets.Common (nameAccessible, newLabel, paddedBox, suppressing, toggleClass, unlessSuppressed)
 import MediaCopy.Gtk.Widgets.FileRow (FileRow (..), newFileRow)
 import MediaCopy.Gtk.Widgets.History (HistoryView (..), newHistoryView, renderHistory)
 import MediaCopy.Interface.Wording (KindUi (..), count, humanBytes, humanEta, humanRate, kindUi, quietText)
 import MediaCopy.Model (FileFilter (..), JobEntry (..), Model (..), UiMessage (..))
 
-data JobDetail = JobDetail
+data JobDetail es = JobDetail
   { root :: Gtk.Box
-  , render :: Model -> Maybe JobEntry -> IO ()
+  , render :: Model -> Maybe JobEntry -> Eff es ()
   }
 
-newJobDetail :: (UiMessage -> IO ()) -> IO JobDetail
+newJobDetail :: (Ui es) => (UiMessage -> Eff es ()) -> Eff es (JobDetail es)
 newJobDetail dispatch = do
   heading <- newHeading
   progress <- newProgress
   counters <- newCounters
   history <- newHistoryView
-  suppress <- newIORef False
+  suppress <- liftIO (newIORef False)
   filterButtons <- newFilterButtons suppress dispatch
   files <- newFileListPane
   actions <- newActionBar
@@ -97,14 +100,14 @@ data Heading = Heading
   , originsLine :: Gtk.Label
   }
 
-newHeading :: IO Heading
+newHeading :: (MonadIO m) => m Heading
 newHeading = do
   title <- newLabel "" [#xalign := 0, #ellipsize := Pango.EllipsizeModeEnd] ["title-2"]
   pathLine <- newLabel "" [#xalign := 0, #ellipsize := Pango.EllipsizeModeMiddle] ["dim-label", "monospace"]
   originsLine <- newLabel "" [#xalign := 0, #ellipsize := Pango.EllipsizeModeEnd] ["dim-label", "caption"]
   pure Heading {title, pathLine, originsLine}
 
-renderHeading :: Heading -> Maybe MhlHistory -> JobState -> IO ()
+renderHeading :: (MonadIO m) => Heading -> Maybe MhlHistory -> JobState -> m ()
 renderHeading heading loaded state = do
   set heading.title [#label := jobLabel state.spec.job]
   set heading.pathLine [#label := pathLineText loaded state]
@@ -119,7 +122,7 @@ data Progress = Progress
   , line :: Gtk.Box
   }
 
-newProgress :: IO Progress
+newProgress :: (MonadIO m) => m Progress
 newProgress = do
   bar <- new Gtk.ProgressBar []
   nameAccessible bar "Job progress"
@@ -130,7 +133,7 @@ newProgress = do
   Gtk.boxAppend line right
   pure Progress {bar, left, right, line}
 
-renderProgress :: Progress -> UTCTime -> JobState -> Double -> IO ()
+renderProgress :: (MonadIO m) => Progress -> UTCTime -> JobState -> Double -> m ()
 renderProgress progress now state rate = do
   Gtk.progressBarSetFraction progress.bar (fractionOf state)
   set progress.left [#label := progressLeftText state]
@@ -145,7 +148,7 @@ data Counters = Counters
   , algo :: Gtk.Label
   }
 
-newCounters :: IO Counters
+newCounters :: (MonadIO m) => m Counters
 newCounters = do
   (verifiedBox, verified) <- newCounter "Verified"
   (failedBox, failed) <- newCounter "Failed"
@@ -156,7 +159,7 @@ newCounters = do
   mapM_ (Gtk.boxAppend box) [verifiedBox, failedBox, missingBox, newBox, algoBox]
   pure Counters {box, verified, failed, missing, newFiles, algo}
 
-renderCounters :: Counters -> Maybe MhlHistory -> JobState -> IO ()
+renderCounters :: (MonadIO m) => Counters -> Maybe MhlHistory -> JobState -> m ()
 renderCounters counters loaded state = do
   let counts = countOutcomes state
   set counters.verified [#label := count (counts.verified + counts.replaced)]
@@ -167,11 +170,11 @@ renderCounters counters loaded state = do
   toggleClass counters.verified "success" (counts.verified + counts.replaced > 0)
   toggleClass counters.failed "error" (counts.failed > 0)
 
-data FileListPane = FileListPane
+data FileListPane es = FileListPane
   { list :: Gtk.ListBox
   , header :: Gtk.Box
   , scroll :: Gtk.ScrolledWindow
-  , rows :: IORef (Map RelPath FileRow)
+  , rows :: IORef (Map RelPath (FileRow es))
   , lastRendered :: IORef (Maybe (JobId, Int, FileFilter))
   }
 
@@ -181,7 +184,7 @@ data FilterButtons = FilterButtons
   , failedButton :: Gtk.ToggleButton
   }
 
-newFilterButtons :: IORef Bool -> (UiMessage -> IO ()) -> IO FilterButtons
+newFilterButtons :: (Ui es) => IORef Bool -> (UiMessage -> Eff es ()) -> Eff es FilterButtons
 newFilterButtons suppress dispatch = do
   box <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #halign := Gtk.AlignStart]
   Gtk.widgetAddCssClass box "linked"
@@ -196,20 +199,20 @@ newFilterButtons suppress dispatch = do
   suppressing suppress (selectFilter buttons AllFiles)
   pure buttons
 
-reportFilter :: IORef Bool -> (UiMessage -> IO ()) -> Gtk.ToggleButton -> FileFilter -> IO ()
+reportFilter :: (Ui es) => IORef Bool -> (UiMessage -> Eff es ()) -> Gtk.ToggleButton -> FileFilter -> Eff es ()
 reportFilter suppress dispatch button wanted =
   void $
-    on button #toggled $
+    onE button #toggled $
       unlessSuppressed suppress $ do
         active <- Gtk.toggleButtonGetActive button
         when active (dispatch (SetFileFilter wanted))
 
-selectFilter :: FilterButtons -> FileFilter -> IO ()
+selectFilter :: (MonadIO m) => FilterButtons -> FileFilter -> m ()
 selectFilter buttons = \case
   AllFiles -> Gtk.toggleButtonSetActive buttons.allButton True
   FailedOnly -> Gtk.toggleButtonSetActive buttons.failedButton True
 
-newFileListPane :: IO FileListPane
+newFileListPane :: (IOE :> es) => Eff es (FileListPane es)
 newFileListPane = do
   header <- newFileListHeader
   list <- new Gtk.ListBox [#selectionMode := Gtk.SelectionModeNone]
@@ -221,11 +224,11 @@ newFileListPane = do
       , #hscrollbarPolicy := Gtk.PolicyTypeNever
       , #vexpand := True
       ]
-  rows <- newIORef Map.empty
-  lastRendered <- newIORef Nothing
+  rows <- liftIO (newIORef Map.empty)
+  lastRendered <- liftIO (newIORef Nothing)
   pure FileListPane {list, header, scroll, rows, lastRendered}
 
-newActionBar :: IO Gtk.Box
+newActionBar :: (MonadIO m) => m Gtk.Box
 newActionBar = do
   cancelBtn <- actionButton "win.cancel-job" ["destructive-action"]
   reviewBtn <- actionButton "win.review-job" []
@@ -236,43 +239,43 @@ newActionBar = do
   Gtk.boxAppend actions reportBtn
   pure actions
 
-diffFileList :: FileListPane -> Model -> JobState -> IO ()
+diffFileList :: (IOE :> es) => FileListPane es -> Model -> JobState -> Eff es ()
 diffFileList files model state = do
-  rendered <- readIORef files.lastRendered
+  rendered <- liftIO (readIORef files.lastRendered)
   let wanted = (state.spec.jobId, state.revision, model.fileFilter)
   when (rendered /= Just wanted) $ do
     when (fmap (\(jobId, _, _) -> jobId) rendered /= Just state.spec.jobId) (clearFileList files)
-    writeIORef files.lastRendered (Just wanted)
+    liftIO (writeIORef files.lastRendered (Just wanted))
     renderFileList files model state
 
-renderFileList :: FileListPane -> Model -> JobState -> IO ()
+renderFileList :: (IOE :> es) => FileListPane es -> Model -> JobState -> Eff es ()
 renderFileList files model state = do
   let visible = visibleFiles model.fileFilter state
   let wanted = visible & V.toList & Map.fromList
-  existing <- readIORef files.rows
+  existing <- liftIO (readIORef files.rows)
   let gone = Map.difference existing wanted
   mapM_ (\fileRow -> Gtk.listBoxRemove files.list fileRow.row) gone
-  writeIORef files.rows (Map.difference existing gone)
+  liftIO (writeIORef files.rows (Map.difference existing gone))
   V.imapM_ (syncFileRow files) visible
 
-syncFileRow :: FileListPane -> Int -> (RelPath, FileEntry) -> IO ()
+syncFileRow :: (IOE :> es) => FileListPane es -> Int -> (RelPath, FileEntry) -> Eff es ()
 syncFileRow files index (path, entry) = do
-  rows <- readIORef files.rows
+  rows <- liftIO (readIORef files.rows)
   case Map.lookup path rows of
     Just fileRow -> fileRow.update entry.size entry.status
     Nothing -> do
       fileRow <- newFileRow path
       fileRow.update entry.size entry.status
       Gtk.listBoxInsert files.list fileRow.row (fromIntegral index)
-      writeIORef files.rows (Map.insert path fileRow rows)
+      liftIO (writeIORef files.rows (Map.insert path fileRow rows))
 
-clearFileList :: FileListPane -> IO ()
+clearFileList :: (IOE :> es) => FileListPane es -> Eff es ()
 clearFileList files = do
-  existing <- readIORef files.rows
+  existing <- liftIO (readIORef files.rows)
   mapM_ (\fileRow -> Gtk.listBoxRemove files.list fileRow.row) existing
-  writeIORef files.rows Map.empty
+  liftIO (writeIORef files.rows Map.empty)
 
-newCounter :: Text -> IO (Gtk.Box, Gtk.Label)
+newCounter :: (MonadIO m) => Text -> m (Gtk.Box, Gtk.Label)
 newCounter caption = do
   value <- newLabel "0" [#xalign := 0] ["title-3"]
   captionLabel <- newLabel caption [#xalign := 0] ["caption", "dim-label"]
@@ -281,7 +284,7 @@ newCounter caption = do
   Gtk.boxAppend box captionLabel
   pure (box, value)
 
-newFileListHeader :: IO Gtk.Box
+newFileListHeader :: (MonadIO m) => m Gtk.Box
 newFileListHeader = do
   fileCaption <- newHeaderLabel "File" 0 (-1) True
   sizeCaption <- newHeaderLabel "Size" 1 10 False
@@ -299,7 +302,7 @@ newFileListHeader = do
   Gtk.boxAppend header statusCaption
   pure header
 
-newHeaderLabel :: Text -> Float -> Int32 -> Bool -> IO Gtk.Label
+newHeaderLabel :: (MonadIO m) => Text -> Float -> Int32 -> Bool -> m Gtk.Label
 newHeaderLabel caption alignment chars expands =
   newLabel caption [#xalign := alignment, #widthChars := chars, #hexpand := expands] ["dim-label", "caption"]
 

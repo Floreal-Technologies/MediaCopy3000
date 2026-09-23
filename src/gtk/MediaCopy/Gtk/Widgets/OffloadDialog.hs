@@ -6,24 +6,27 @@ module MediaCopy.Gtk.Widgets.OffloadDialog
 
 import Ascmhl.Path (pathText)
 import Data.Function ((&))
-import Data.GI.Base (AttrOp (On, (:=)), new, set)
+import Data.GI.Base (AttrOp ((:=)), new, set)
 import Data.IORef (IORef, newIORef)
 import Data.Maybe (isJust)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
+import Effectful (Eff, IOE, MonadIO, liftIO, (:>))
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 import System.OsPath (OsPath, takeFileName)
 
+import MediaCopy.Gtk.Eff (onE)
+import MediaCopy.Gtk.Environment (Ui)
 import MediaCopy.Gtk.Widgets.Common
 import MediaCopy.Model (Model (..), OffloadDraft (..), UiMessage (..), draftReady)
 
-data OffloadDialog = OffloadDialog
-  { draftCell :: Cell (Maybe OffloadDraft)
-  , openCell :: Cell Bool
+data OffloadDialog es = OffloadDialog
+  { draftCell :: Cell es (Maybe OffloadDraft)
+  , openCell :: Cell es Bool
   }
 
-newOffloadDialog :: Adw.ApplicationWindow -> (UiMessage -> IO ()) -> IO OffloadDialog
+newOffloadDialog :: (Ui es) => Adw.ApplicationWindow -> (UiMessage -> Eff es ()) -> Eff es (OffloadDialog es)
 newOffloadDialog window dispatch = do
   (sourceGroup, sourceRow) <- newSourceGroup dispatch
   (destGroup, addRow) <- newDestGroup dispatch
@@ -39,7 +42,7 @@ newOffloadDialog window dispatch = do
         }
       []
       body
-  destRows <- newIORef V.empty
+  destRows <- liftIO (newIORef V.empty)
   let form = DraftForm {sourceRow, destGroup, addRow, destRows, reviewButton = shell.primaryButton}
   draftCell <- newCell (renderDraft form dispatch)
   openCell <- newOpenCell shell.dialog window
@@ -54,7 +57,7 @@ data DraftForm = DraftForm
   , reviewButton :: Gtk.Button
   }
 
-newSourceGroup :: (UiMessage -> IO ()) -> IO (Adw.PreferencesGroup, Adw.ActionRow)
+newSourceGroup :: (Ui es) => (UiMessage -> Eff es ()) -> Eff es (Adw.PreferencesGroup, Adw.ActionRow)
 newSourceGroup dispatch = do
   sourceGroup <- new Adw.PreferencesGroup [#title := "Source"]
   sourceRow <- new Adw.ActionRow [#title := "No folder chosen"]
@@ -64,14 +67,14 @@ newSourceGroup dispatch = do
       [ #label := "Ch_oose…"
       , #useUnderline := True
       , #valign := Gtk.AlignCenter
-      , On #clicked (dispatch PickSource)
       ]
+  _ <- onE chooseButton #clicked (dispatch PickSource)
   Gtk.widgetAddCssClass chooseButton "flat"
   Adw.actionRowAddSuffix sourceRow chooseButton
   Adw.preferencesGroupAdd sourceGroup sourceRow
   pure (sourceGroup, sourceRow)
 
-newDestGroup :: (UiMessage -> IO ()) -> IO (Adw.PreferencesGroup, Adw.ActionRow)
+newDestGroup :: (Ui es) => (UiMessage -> Eff es ()) -> Eff es (Adw.PreferencesGroup, Adw.ActionRow)
 newDestGroup dispatch = do
   destGroup <-
     new
@@ -85,14 +88,14 @@ newDestGroup dispatch = do
       [ #title := "_Add Destination…"
       , #useUnderline := True
       , #activatable := True
-      , On #activated (dispatch AddDestination)
       ]
+  _ <- onE addRow #activated (dispatch AddDestination)
   addIcon <- new Gtk.Image [#iconName := "list-add-symbolic"]
   Adw.actionRowAddPrefix addRow addIcon
   Adw.preferencesGroupAdd destGroup addRow
   pure (destGroup, addRow)
 
-renderDraft :: DraftForm -> (UiMessage -> IO ()) -> Maybe OffloadDraft -> IO ()
+renderDraft :: (Ui es) => DraftForm -> (UiMessage -> Eff es ()) -> Maybe OffloadDraft -> Eff es ()
 renderDraft form dispatch = mapM_ $ \draft -> do
   renderSourceRow form.sourceRow draft.mediaSource
   Adw.preferencesGroupRemove form.destGroup form.addRow
@@ -100,16 +103,16 @@ renderDraft form dispatch = mapM_ $ \draft -> do
   Adw.preferencesGroupAdd form.destGroup form.addRow
   set form.reviewButton [#sensitive := draftReady draft]
 
-renderSourceRow :: Adw.ActionRow -> Maybe OsPath -> IO ()
+renderSourceRow :: (MonadIO m) => Adw.ActionRow -> Maybe OsPath -> m ()
 renderSourceRow sourceRow = \case
   Nothing -> set sourceRow [#title := "No folder chosen", #subtitle := ""]
   Just folder -> set sourceRow [#title := pathText (takeFileName folder), #subtitle := pathText folder]
 
-destRow :: (UiMessage -> IO ()) -> Int -> OsPath -> Row
+destRow :: (Ui es) => (UiMessage -> Eff es ()) -> Int -> OsPath -> Row es
 destRow dispatch index folder =
   (plainRow (pathText (takeFileName folder)) (pathText folder)) {suffix = Just (removeButton dispatch index folder)}
 
-removeButton :: (UiMessage -> IO ()) -> Int -> OsPath -> IO Gtk.Widget
+removeButton :: (Ui es) => (UiMessage -> Eff es ()) -> Int -> OsPath -> Eff es Gtk.Widget
 removeButton dispatch index folder = do
   button <-
     new
@@ -117,12 +120,12 @@ removeButton dispatch index folder = do
       [ #iconName := "edit-delete-symbolic"
       , #valign := Gtk.AlignCenter
       , #tooltipText := "Remove Destination"
-      , On #clicked (dispatch (RemoveDestination index))
       ]
+  _ <- onE button #clicked (dispatch (RemoveDestination index))
   flatNamed button ("Remove " <> pathText (takeFileName folder))
   Gtk.toWidget button
 
-renderOffloadDialog :: OffloadDialog -> Model -> IO ()
+renderOffloadDialog :: (IOE :> es) => OffloadDialog es -> Model -> Eff es ()
 renderOffloadDialog widgets current = do
   renderCell widgets.draftCell current.draft
   renderCell widgets.openCell (isJust current.draft)

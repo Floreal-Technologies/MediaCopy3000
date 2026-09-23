@@ -7,9 +7,9 @@ module MediaCopy.Gtk.Runtime
   ) where
 
 import Control.Concurrent.Async
-import Control.Exception
-import Control.Monad (forM_, void, when)
-import Data.GI.Base (AttrOp (On, (:=)), new, on)
+import Control.Exception (SomeException, displayException, fromException, throwIO, try)
+import Control.Monad (forM_, void, when, (>=>))
+import Data.GI.Base (AttrOp ((:=)), new)
 import Data.GI.Base.GError (catchGErrorJustDomain)
 import Data.IORef
 import Data.Maybe (isNothing)
@@ -18,14 +18,13 @@ import Data.Text qualified as T
 import Data.Text.Display (display)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time (getCurrentTime)
-import Effectful (runEff)
+import Effectful (Eff, liftIO, runEff)
+import Effectful.Exception (catchSync, isSyncException)
 import Effectful.Time (runTime)
 import GI.Adw qualified as Adw
-import GI.GLib qualified as GLib
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 import Network.HostName qualified as HostName
-import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.File.OsPath (writeFile')
 import System.OsPath (OsPath, encodeFS)
 
@@ -36,7 +35,8 @@ import MediaCopy.Effects.FileSystem (defaultChunkSize, runFileSystemIO)
 import MediaCopy.Effects.Hasher (runHasher)
 import MediaCopy.Engine
 import MediaCopy.EventLog (withEventLog)
-import MediaCopy.Gtk.Environment (Environment, withEnvironment)
+import MediaCopy.Gtk.Eff (idleE, lowerE, onE, timeoutE, toIO1, withStreak)
+import MediaCopy.Gtk.Environment (Ui, abortApp, exitOnFault, logFault, runUi, withEnvironment)
 import MediaCopy.Gtk.Reload (loadCss)
 import MediaCopy.Gtk.Screenshot (Startup (..), seeded)
 import MediaCopy.Gtk.Theme
@@ -46,165 +46,181 @@ import MediaCopy.Interface.Wording (noHistoryText)
 import MediaCopy.Model
 import MediaCopy.Report (renderPlanText)
 
-data Runtime = Runtime
+data Runtime es = Runtime
   { modelRef :: IORef Model
-  , widgets :: Widgets
+  , widgets :: Widgets es
   , engine :: IORef (Maybe (JobId, Async ()))
   }
 
 start :: Maybe Startup -> IO ()
 start startup = withEnvironment $ \environment -> do
   runtimeRef <- newIORef Nothing
-  app <-
-    new
-      Adw.Application
-      [ #applicationId := "eu.choutri.MediaCopy3000"
-      , On #activate (activate runtimeRef environment startup ?self)
-      ]
-  status <- Gio.applicationRun app Nothing
-  when (status /= 0) (exitWith (ExitFailure (fromIntegral status)))
+  startupFailed <- newIORef False
+  status <- runUi environment (reportFault runtimeRef) $ do
+    app <- new Adw.Application [#applicationId := "eu.choutri.MediaCopy3000"]
+    _ <- onE app #activate (activate runtimeRef startupFailed startup ?self)
+    Gio.applicationRun app Nothing
+  exitOnFault status startupFailed
 
-activate :: IORef (Maybe Runtime) -> Environment -> Maybe Startup -> Adw.Application -> IO ()
-activate runtimeRef environment startup app =
-  readIORef runtimeRef >>= \case
+reportFault :: (Ui es) => IORef (Maybe (Runtime es)) -> SomeException -> Eff es ()
+reportFault runtimeRef err = do
+  message <- logFault err
+  liftIO (readIORef runtimeRef) >>= mapM_ (\runtime -> postFaultToast runtime message)
+
+activate :: (Ui es) => IORef (Maybe (Runtime es)) -> IORef Bool -> Maybe Startup -> Adw.Application -> Eff es ()
+activate runtimeRef startupFailed startup app =
+  liftIO (readIORef runtimeRef) >>= \case
     Just runtime -> Gtk.windowPresent runtime.widgets.window
-    Nothing -> buildAndPresent runtimeRef environment startup app
+    Nothing -> buildAndPresent runtimeRef startup app abort `catchSync` abort
+  where
+    abort = abortApp startupFailed app
 
 buildAndPresent
-  :: IORef (Maybe Runtime)
-  -> Environment
+  :: (Ui es)
+  => IORef (Maybe (Runtime es))
   -> Maybe Startup
   -> Adw.Application
-  -> IO ()
-buildAndPresent runtimeRef environment startup app = do
-  startedAt <- getCurrentTime
-  themeAdapter <- newThemeAdapter environment
+  -> (SomeException -> Eff es ())
+  -> Eff es ()
+buildAndPresent runtimeRef startup app abort = do
+  startedAt <- liftIO getCurrentTime
+  themeAdapter <- newThemeAdapter
   desktop <- readDesktopBase themeAdapter
-  modelRef <- newIORef (initialModel startedAt desktop)
-  engine <- newIORef Nothing
+  modelRef <- liftIO (newIORef (initialModel startedAt desktop))
+  engine <- liftIO (newIORef Nothing)
   let dispatchNow msg =
-        readIORef runtimeRef >>= \case
+        liftIO (readIORef runtimeRef) >>= \case
           Nothing -> pure ()
           Just runtime -> dispatch runtime msg
-  palettes <- loadPalettes environment
+  palettes <- loadPalettes
   widgets <- buildWidgets app (apply themeAdapter) (themeSections LightPalette palettes) (themeSections DarkPalette palettes) (\intent -> dispatchNow (Ui intent))
-  loadCss environment
+  loadCss
   let runtime = Runtime {modelRef, widgets, engine}
-  writeIORef runtimeRef (Just runtime)
+  liftIO (writeIORef runtimeRef (Just runtime))
   onDesktopBase themeAdapter (\observed -> postMessage runtime (DesktopBase observed))
   installCloseRequest widgets.window dispatchNow
-  installTicker startup dispatchNow
-  model <- readIORef modelRef
+  installTicker startup runtime
+  model <- liftIO (readIORef modelRef)
   widgets.render model
   Gtk.windowPresent widgets.window
   let showFrame frame = do
-        writeIORef modelRef frame
+        liftIO (writeIORef modelRef frame)
         widgets.render frame
-  mapM_ (seeded environment widgets.window app showFrame) startup
+  mapM_ (seeded widgets.window app showFrame abort) startup
 
-dispatch :: Runtime -> Message -> IO ()
+dispatch :: (Ui es) => Runtime es -> Message -> Eff es ()
 dispatch runtime msg = do
-  old <- readIORef runtime.modelRef
+  old <- liftIO (readIORef runtime.modelRef)
   let (current, cmds) = update msg old
-  writeIORef runtime.modelRef current
+  liftIO (writeIORef runtime.modelRef current)
   runtime.widgets.render current
   mapM_ (\cmd -> guarded runtime (runCommand runtime cmd)) cmds
 
-postMessage :: Runtime -> Message -> IO ()
-postMessage runtime msg =
-  void (GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE (dispatch runtime msg >> pure False))
+postMessage :: (Ui es) => Runtime es -> Message -> Eff es ()
+postMessage runtime msg = idleE (dispatch runtime msg)
 
-guarded :: Runtime -> IO () -> IO ()
-guarded runtime action =
-  try @SomeException action >>= \case
-    Left err -> case fromException @SomeAsyncException err of
-      Just _ -> throwIO err
-      Nothing -> postMessage runtime (ShowToast (T.pack (displayException err)))
-    Right () -> pure ()
+guarded :: (Ui es) => Runtime es -> Eff es () -> Eff es ()
+guarded runtime action = action `catchSync` (logFault >=> postFaultToast runtime)
 
-runCommand :: Runtime -> Command -> IO ()
+postFaultToast :: (Ui es) => Runtime es -> Text -> Eff es ()
+postFaultToast runtime message =
+  idleE (dispatch runtime (ShowToast message) `catchSync` (void . logFault))
+
+runCommand :: (Ui es) => Runtime es -> Command -> Eff es ()
 runCommand runtime = \case
   OpenFolderDialog toMessage -> openFolderDialog runtime toMessage
   OpenSaveDialog title suggested toMessage -> openSaveDialog runtime title suggested toMessage
   ComputePlan spec -> planWorker runtime spec
   StartJob plan -> startJob runtime plan
   CancelRunning jobId ->
-    readIORef runtime.engine >>= \case
+    liftIO (readIORef runtime.engine) >>= \case
       Just (held, worker)
-        | held == jobId -> void (async (cancel worker))
+        | held == jobId -> liftIO (void (async (cancel worker)))
       _ -> pure ()
   LoadHistory jobId folder -> loadHistory runtime jobId folder
-  WriteFile path text -> writeFile' path (encodeUtf8 text)
+  WriteFile path text -> liftIO (writeFile' path (encodeUtf8 text))
   CloseWindow -> Gtk.windowDestroy runtime.widgets.window
 
-installCloseRequest :: Adw.ApplicationWindow -> (Message -> IO ()) -> IO ()
+installCloseRequest :: (Ui es) => Adw.ApplicationWindow -> (Message -> Eff es ()) -> Eff es ()
 installCloseRequest window dispatchNow =
-  void $ on window #closeRequest $ do
+  void $ onE window #closeRequest $ do
     dispatchNow (Ui RequestClose)
     pure True
 
-installTicker :: Maybe Startup -> (Message -> IO ()) -> IO ()
-installTicker startup dispatchNow =
-  when (isNothing startup) $
+installTicker :: (Ui es) => Maybe Startup -> Runtime es -> Eff es ()
+installTicker startup runtime =
+  when (isNothing startup) $ do
+    failing <- liftIO (newIORef False)
     void
-      ( GLib.timeoutAdd
-          GLib.PRIORITY_DEFAULT
+      ( timeoutE
           1_000
-          ( getCurrentTime >>= \t ->
-              dispatchNow (Tick t) >> pure True
+          ( do
+              withStreak failing (logFault >=> postFaultToast runtime) (void . logFault) $ do
+                t <- liftIO getCurrentTime
+                dispatch runtime (Tick t)
+              pure True
           )
       )
 
-openFolderDialog :: Runtime -> (OsPath -> Message) -> IO ()
+openFolderDialog :: (Ui es) => Runtime es -> (OsPath -> Message) -> Eff es ()
 openFolderDialog runtime toMessage = do
   dialog <- new Gtk.FileDialog [#title := "Choose a Folder"]
-  Gtk.fileDialogSelectFolder dialog (Just runtime.widgets.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
-    guarded runtime (sendPicked runtime toMessage (Gtk.fileDialogSelectFolderFinish dialog result))
+  send <- toIO1 (postMessage runtime)
+  callback <- lowerE @Gio.AsyncReadyCallback $ \_source result ->
+    liftIO (sendPicked send toMessage (Gtk.fileDialogSelectFolderFinish dialog result))
+  Gtk.fileDialogSelectFolder dialog (Just runtime.widgets.window) (Nothing @Gio.Cancellable) (Just callback)
 
-openSaveDialog :: Runtime -> Text -> Text -> (OsPath -> Message) -> IO ()
+openSaveDialog :: (Ui es) => Runtime es -> Text -> Text -> (OsPath -> Message) -> Eff es ()
 openSaveDialog runtime title suggested toMessage = do
   dialog <- new Gtk.FileDialog [#title := title, #initialName := suggested]
-  Gtk.fileDialogSave dialog (Just runtime.widgets.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
-    guarded runtime (sendPicked runtime toMessage (Gtk.fileDialogSaveFinish dialog result))
+  send <- toIO1 (postMessage runtime)
+  callback <- lowerE @Gio.AsyncReadyCallback $ \_source result ->
+    liftIO (sendPicked send toMessage (Gtk.fileDialogSaveFinish dialog result))
+  Gtk.fileDialogSave dialog (Just runtime.widgets.window) (Nothing @Gio.Cancellable) (Just callback)
 
-startJob :: Runtime -> JobPlan -> IO ()
+startJob :: (Ui es) => Runtime es -> JobPlan -> Eff es ()
 startJob runtime plan = do
-  let spec = plan.spec
-  host <- HostName.getHostName
-  let sink event = postMessage runtime (EngineEvent spec.jobId event)
-  previous <- readIORef runtime.engine
-  worker <- async $ do
-    mapM_ (\held -> void (waitCatch (snd held))) previous
-    withEventLog spec (renderPlanText spec plan) $ \logPath logLine -> do
-      forM_ logPath (\p -> sink (LogOpened p))
-      runEff (runFileSystemIO defaultChunkSize (runHasher (runTime (runEmitIO (\ev -> logLine ev >> sink ev) (executePlan (T.pack host) plan)))))
-  writeIORef runtime.engine (Just (spec.jobId, worker))
-  void $ async $ do
-    outcome <- waitCatch worker
-    case outcome of
-      Left err
-        | not (wasCancelled err) ->
-            postMessage runtime (EngineEvent spec.jobId (JobFailed (T.pack (displayException err))))
-      _ -> pure ()
-    atomicModifyIORef' runtime.engine (\held -> (clearWhen spec.jobId held, ()))
+  send <- toIO1 (postMessage runtime)
+  liftIO $ do
+    let spec = plan.spec
+    host <- HostName.getHostName
+    let sink event = send (EngineEvent spec.jobId event)
+    previous <- readIORef runtime.engine
+    worker <- async $ do
+      mapM_ (\held -> void (waitCatch (snd held))) previous
+      withEventLog spec (renderPlanText spec plan) $ \logPath logLine -> do
+        forM_ logPath (\p -> sink (LogOpened p))
+        runEff (runFileSystemIO defaultChunkSize (runHasher (runTime (runEmitIO (\ev -> logLine ev >> sink ev) (executePlan (T.pack host) plan)))))
+    writeIORef runtime.engine (Just (spec.jobId, worker))
+    void $ async $ do
+      outcome <- waitCatch worker
+      case outcome of
+        Left err
+          | not (wasCancelled err) ->
+              send (EngineEvent spec.jobId (JobFailed (T.pack (displayException err))))
+        _ -> pure ()
+      atomicModifyIORef' runtime.engine (\held -> (clearWhen spec.jobId held, ()))
 
-loadHistory :: Runtime -> JobId -> OsPath -> IO ()
-loadHistory runtime jobId folder = void $ async $ do
-  loaded <- runEff (runFileSystemIO defaultChunkSize (readHistory folder))
-  case loaded of
-    Left e -> postMessage runtime (ShowToast (display e))
-    Right Nothing -> postMessage runtime (ShowToast (noHistoryText folder))
-    Right (Just hist) -> postMessage runtime (HistoryLoaded jobId hist)
+loadHistory :: (Ui es) => Runtime es -> JobId -> OsPath -> Eff es ()
+loadHistory runtime jobId folder = do
+  send <- toIO1 (postMessage runtime)
+  liftIO $ void $ async $ do
+    loaded <- runEff (runFileSystemIO defaultChunkSize (readHistory folder))
+    case loaded of
+      Left e -> send (ShowToast (display e))
+      Right Nothing -> send (ShowToast (noHistoryText folder))
+      Right (Just hist) -> send (HistoryLoaded jobId hist)
 
-planWorker :: Runtime -> JobSpec -> IO ()
-planWorker runtime spec =
-  void $ async $ do
+planWorker :: (Ui es) => Runtime es -> JobSpec -> Eff es ()
+planWorker runtime spec = do
+  send <- toIO1 (postMessage runtime)
+  liftIO $ void $ async $ do
     attempt <- try @SomeException (runEff (runFileSystemIO defaultChunkSize (planJob spec)))
     case attempt of
-      Left err -> case fromException @SomeAsyncException err of
-        Just _ -> throwIO err
-        Nothing -> postMessage runtime (PlanComputed spec (Left (T.pack (displayException err))))
-      Right plan -> postMessage runtime (PlanComputed spec (Right plan))
+      Left err
+        | isSyncException err -> send (PlanComputed spec (Left (T.pack (displayException err))))
+        | otherwise -> throwIO err
+      Right plan -> send (PlanComputed spec (Right plan))
 
 clearWhen :: JobId -> Maybe (JobId, Async ()) -> Maybe (JobId, Async ())
 clearWhen finished held = case held of
@@ -225,19 +241,19 @@ instance PickedFile Gio.File where
 instance PickedFile (Maybe Gio.File) where
   pickedFile = id
 
-sendPicked :: (PickedFile file) => Runtime -> (OsPath -> Message) -> IO file -> IO ()
-sendPicked runtime toMessage finish =
+sendPicked :: (PickedFile file) => (Message -> IO ()) -> (OsPath -> Message) -> IO file -> IO ()
+sendPicked send toMessage finish =
   catchGErrorJustDomain
-    (finish >>= \picked -> mapM_ (sendPath runtime toMessage) (pickedFile picked))
-    (\dialogError message -> reportDialogError runtime dialogError message)
+    (finish >>= \picked -> mapM_ (sendPath send toMessage) (pickedFile picked))
+    (\dialogError message -> reportDialogError send dialogError message)
 
-reportDialogError :: Runtime -> Gtk.DialogError -> Text -> IO ()
-reportDialogError runtime dialogError message = case dialogError of
+reportDialogError :: (Message -> IO ()) -> Gtk.DialogError -> Text -> IO ()
+reportDialogError send dialogError message = case dialogError of
   (Gtk.DialogErrorCancelled; Gtk.DialogErrorDismissed) -> pure ()
-  _ -> postMessage runtime (ShowToast message)
+  _ -> send (ShowToast message)
 
-sendPath :: Runtime -> (OsPath -> Message) -> Gio.File -> IO ()
-sendPath runtime toMessage file =
+sendPath :: (Message -> IO ()) -> (OsPath -> Message) -> Gio.File -> IO ()
+sendPath send toMessage file =
   Gio.fileGetPath file >>= \case
-    Nothing -> postMessage runtime (ShowToast "Chosen location has no filesystem path")
-    Just raw -> encodeFS raw >>= \path -> postMessage runtime (toMessage path)
+    Nothing -> send (ShowToast "Chosen location has no filesystem path")
+    Just raw -> encodeFS raw >>= \path -> send (toMessage path)

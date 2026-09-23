@@ -11,6 +11,7 @@ import Data.Text qualified as T
 import Data.Text.Display (display)
 import Data.Text.Read qualified as TR
 import Data.Time (UTCTime)
+import Effectful (Eff, IOE, MonadIO, (:>))
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
@@ -21,7 +22,7 @@ import MediaCopy.Interface.Wording (KindUi (..), count, humanRate, kindUi, quiet
 rowName :: JobId -> Text
 rowName (JobId n) = "job-" <> T.pack (show n)
 
-jobIdOfRow :: Gtk.ListBoxRow -> IO (Maybe JobId)
+jobIdOfRow :: (MonadIO m) => Gtk.ListBoxRow -> m (Maybe JobId)
 jobIdOfRow listRow = do
   name <- Gtk.widgetGetName listRow
   pure (T.stripPrefix "job-" name >>= \digits -> readJobId digits)
@@ -41,12 +42,12 @@ data RowView = RowView
   }
   deriving stock (Eq)
 
-data JobRow = JobRow
+data JobRow es = JobRow
   { row :: Gtk.ListBoxRow
-  , update :: UTCTime -> JobState -> IO ()
+  , update :: UTCTime -> JobState -> Eff es ()
   }
 
-newJobRow :: JobState -> IO JobRow
+newJobRow :: (IOE :> es) => JobState -> Eff es (JobRow es)
 newJobRow state = do
   icon <- new Gtk.Image [#valign := Gtk.AlignStart]
   nameAccessible icon (display (jobKind state.spec.job))

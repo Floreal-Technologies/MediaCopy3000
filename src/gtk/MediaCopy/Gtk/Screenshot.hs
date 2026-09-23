@@ -3,20 +3,23 @@ module MediaCopy.Gtk.Screenshot
   , seeded
   ) where
 
+import Control.Exception (SomeException)
 import Control.Monad.Extra
 import Data.GI.Base (AttrOp ((:=)), castTo, set)
 import Data.List (List)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Effectful (Eff, liftIO)
+import Effectful.Exception (catchSync)
 import Effectful.Log (logAttention_)
 import GI.Adw qualified as Adw
-import GI.GLib qualified as GLib
 import GI.Gdk qualified as Gdk
 import GI.Gio qualified as Gio
 import GI.Gsk qualified as Gsk
 import GI.Gtk qualified as Gtk
 
-import MediaCopy.Gtk.Environment (Environment, logWith)
+import MediaCopy.Gtk.Eff (timeoutE)
+import MediaCopy.Gtk.Environment (Ui)
 import MediaCopy.Model (Model)
 
 data Startup = Startup
@@ -27,33 +30,31 @@ data Startup = Startup
   , scroll :: Bool
   }
 
-seeded :: Environment -> Adw.ApplicationWindow -> Adw.Application -> (Model -> IO ()) -> Startup -> IO ()
-seeded environment window app showFrame startup = do
+seeded :: (Ui es) => Adw.ApplicationWindow -> Adw.Application -> (Model -> Eff es ()) -> (SomeException -> Eff es ()) -> Startup -> Eff es ()
+seeded window app showFrame abort startup = do
   Gtk.widgetSetCanTarget window False
   Gtk.windowSetFocusVisible window False
-  void $ GLib.timeoutAdd GLib.PRIORITY_DEFAULT 250 $ do
+  void $ stage 250 $ do
     showFrame startup.frame
-    mapM_ (activateNamed environment window app) startup.action
-    void (GLib.timeoutAdd GLib.PRIORITY_DEFAULT 600 prepare)
-    pure False
+    mapM_ (activateNamed window app) startup.action
+    void (stage 600 prepare)
   where
+    stage milliseconds body = timeoutE milliseconds ((body `catchSync` abort) >> pure False)
     prepare = do
-      when startup.expand (expandAll window)
-      when startup.scroll (scrollToEnd window)
-      mapM_ (\path -> void (GLib.timeoutAdd GLib.PRIORITY_DEFAULT settleMs (takeShot path))) startup.shot
-      pure False
+      when startup.expand (liftIO (expandAll window))
+      when startup.scroll (liftIO (scrollToEnd window))
+      mapM_ (\path -> void (stage settleMs (takeShot path))) startup.shot
     settleMs = 3_500
     takeShot path = do
-      outcome <- saveWindowPng window path
-      either (\err -> logWith environment (logAttention_ err)) pure outcome
+      outcome <- liftIO (saveWindowPng window path)
+      either (\err -> logAttention_ err) pure outcome
       Gtk.windowDestroy window
-      pure False
 
-activateNamed :: Environment -> Adw.ApplicationWindow -> Adw.Application -> Text -> IO ()
-activateNamed environment window app full = case T.breakOn "." full of
+activateNamed :: (Ui es) => Adw.ApplicationWindow -> Adw.Application -> Text -> Eff es ()
+activateNamed window app full = case T.breakOn "." full of
   ("app", rest) -> Gio.actionGroupActivateAction app (T.drop 1 rest) Nothing
   ("win", rest) -> Gio.actionGroupActivateAction window (T.drop 1 rest) Nothing
-  _ -> logWith environment (logAttention_ ("no such action: " <> full))
+  _ -> logAttention_ ("no such action: " <> full)
 
 saveWindowPng :: Adw.ApplicationWindow -> FilePath -> IO (Either Text ())
 saveWindowPng window path = do
