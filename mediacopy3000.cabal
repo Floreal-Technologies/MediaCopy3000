@@ -172,6 +172,7 @@ library
   exposed-modules:
     MediaCopy.Gtk.Actions
     MediaCopy.Gtk.Assets
+    MediaCopy.Gtk.Eff
     MediaCopy.Gtk.Environment
     MediaCopy.Gtk.Reload
     MediaCopy.Gtk.Runtime
@@ -260,6 +261,7 @@ executable render-bench
     ascmhl,
     base,
     directory,
+    effectful-core,
     extra,
     gi-adwaita ^>=1.0,
     gi-gdk4,
@@ -267,6 +269,7 @@ executable render-bench
     gi-glib ^>=2.0,
     gi-gtk ^>=4.0,
     haskell-gi-base,
+    log-effectful,
     mediacopy3000,
     mediacopy3000:demo,
     mediacopy3000:domain,

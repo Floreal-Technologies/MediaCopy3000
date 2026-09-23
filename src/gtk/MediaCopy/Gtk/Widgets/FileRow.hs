@@ -7,6 +7,7 @@ import Ascmhl.Path (RelPath)
 import Data.GI.Base (AttrOp ((:=)), new, set)
 import Data.Text (Text)
 import Data.Text.Display (display)
+import Effectful (Eff, IOE, (:>))
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
@@ -14,12 +15,12 @@ import MediaCopy.Domain.Job (FileOutcome (..), FileSize, FileStatus (..), isFail
 import MediaCopy.Gtk.Widgets.Common (newCell, newLabel, renderCell, toggleClass)
 import MediaCopy.Interface.Wording (humanBytes)
 
-data FileRow = FileRow
+data FileRow es = FileRow
   { row :: Gtk.ListBoxRow
-  , update :: FileSize -> FileStatus -> IO ()
+  , update :: FileSize -> FileStatus -> Eff es ()
   }
 
-newFileRow :: RelPath -> IO FileRow
+newFileRow :: (IOE :> es) => RelPath -> Eff es (FileRow es)
 newFileRow path = do
   name <- newLabel (display path) [#xalign := 0, #hexpand := True, #ellipsize := Pango.EllipsizeModeEnd] []
   size <- newLabel "" [#xalign := 1, #widthChars := 10] ["dim-label"]

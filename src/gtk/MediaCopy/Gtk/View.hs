@@ -4,20 +4,22 @@ module MediaCopy.Gtk.View
   ) where
 
 import Control.Monad (void)
-import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
+import Data.GI.Base (AttrOp ((:=)), new, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Vector (Vector)
+import Effectful (Eff, IOE, MonadIO, liftIO, (:>))
 import GI.Adw qualified as Adw
-import GI.GLib qualified as GLib
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 
 import MediaCopy.Domain.Job (JobId)
 import MediaCopy.Gtk.Actions (headerAction, installActions)
+import MediaCopy.Gtk.Eff (idleE, onE)
+import MediaCopy.Gtk.Environment (Ui)
 import MediaCopy.Gtk.Widgets.CloseConfirm (newCloseConfirm)
 import MediaCopy.Gtk.Widgets.Common (Cell, flatNamed, newCell, renderCell, suppressing, unlessSuppressed)
 import MediaCopy.Gtk.Widgets.JobDetail (JobDetail (..), newJobDetail)
@@ -28,18 +30,19 @@ import MediaCopy.Gtk.Widgets.Preferences (newPreferences)
 import MediaCopy.Interface.Theme (Appearance, PaletteMode, ThemeSection)
 import MediaCopy.Model (JobEntry (..), Model (..), UiMessage (..), selectedEntry)
 
-data Widgets = Widgets
+data Widgets es = Widgets
   { window :: Adw.ApplicationWindow
-  , render :: Model -> IO ()
+  , render :: Model -> Eff es ()
   }
 
 buildWidgets
-  :: Adw.Application
-  -> (Appearance -> PaletteMode -> IO ())
+  :: (Ui es)
+  => Adw.Application
+  -> (Appearance -> PaletteMode -> Eff es ())
   -> Vector ThemeSection
   -> Vector ThemeSection
-  -> (UiMessage -> IO ())
-  -> IO Widgets
+  -> (UiMessage -> Eff es ())
+  -> Eff es (Widgets es)
 buildWidgets app applyTheme lightSections darkSections dispatch = do
   window <- newAppWindow app
   (menuModel, renderActions) <- installActions app window dispatch
@@ -73,7 +76,7 @@ buildWidgets app applyTheme lightSections darkSections dispatch = do
         renderCell toastCell current.toast
   pure Widgets {window, render}
 
-newAppWindow :: Adw.Application -> IO Adw.ApplicationWindow
+newAppWindow :: (MonadIO m) => Adw.Application -> m Adw.ApplicationWindow
 newAppWindow app =
   new
     Adw.ApplicationWindow
@@ -83,7 +86,7 @@ newAppWindow app =
     , #title := "MediaCopy 3000"
     ]
 
-newHeaderToolbar :: Gio.Menu -> IO Adw.ToolbarView
+newHeaderToolbar :: (MonadIO m) => Gio.Menu -> m Adw.ToolbarView
 newHeaderToolbar menuModel = do
   toolbar <- new Adw.ToolbarView []
   headerBar <- new Adw.HeaderBar []
@@ -103,7 +106,7 @@ newHeaderToolbar menuModel = do
   Adw.toolbarViewAddTopBar toolbar headerBar
   pure toolbar
 
-newContentStack :: JobDetail -> IO (Gtk.Stack, Adw.NavigationPage)
+newContentStack :: (MonadIO m) => JobDetail es -> m (Gtk.Stack, Adw.NavigationPage)
 newContentStack detail = do
   contentStack <- new Gtk.Stack []
   emptyPage <-
@@ -119,63 +122,59 @@ newContentStack detail = do
   set jobPage [#widthRequest := 360]
   pure (contentStack, jobPage)
 
-addNarrowBreakpoint :: Adw.ApplicationWindow -> Adw.NavigationSplitView -> IO ()
+addNarrowBreakpoint :: (Ui es) => Adw.ApplicationWindow -> Adw.NavigationSplitView -> Eff es ()
 addNarrowBreakpoint window splitView = do
   narrow <- Adw.breakpointConditionParse "max-width: 620sp"
   breakpoint <- Adw.breakpointNew narrow
-  void $ on breakpoint #apply $ set splitView [#collapsed := True]
-  void $ on breakpoint #unapply $ set splitView [#collapsed := False]
+  void $ onE breakpoint #apply $ set splitView [#collapsed := True]
+  void $ onE breakpoint #unapply $ set splitView [#collapsed := False]
   Adw.applicationWindowAddBreakpoint window breakpoint
 
-newToastCell :: Adw.ToastOverlay -> (UiMessage -> IO ()) -> IO (Cell (Maybe Text))
+newToastCell :: (Ui es) => Adw.ToastOverlay -> (UiMessage -> Eff es ()) -> Eff es (Cell es (Maybe Text))
 newToastCell toastOverlay dispatch =
   newCell $ \message ->
     mapM_
       ( \text -> do
           toast <- new Adw.Toast [#title := text, #useMarkup := False]
           Adw.toastOverlayAddToast toastOverlay toast
-          void (GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE (dispatch DismissToast >> pure False))
+          idleE (dispatch DismissToast)
       )
       message
 
-data Sidebar = Sidebar
+data Sidebar es = Sidebar
   { list :: Gtk.ListBox
-  , rows :: IORef (Map JobId JobRow)
+  , rows :: IORef (Map JobId (JobRow es))
   , suppress :: IORef Bool
-  , selection :: Cell (Maybe JobId)
+  , selection :: Cell es (Maybe JobId)
   }
 
-newSidebar :: (UiMessage -> IO ()) -> IO (Sidebar, Adw.NavigationPage)
+newSidebar :: (Ui es) => (UiMessage -> Eff es ()) -> Eff es (Sidebar es, Adw.NavigationPage)
 newSidebar dispatch = do
-  suppress <- newIORef False
-  list <-
-    new
-      Gtk.ListBox
-      [ #selectionMode := Gtk.SelectionModeSingle
-      , On #rowSelected $ \picked ->
-          unlessSuppressed suppress $ do
-            chosen <- maybe (pure Nothing) jobIdOfRow picked
-            dispatch (SelectJob chosen)
-      ]
+  suppress <- liftIO (newIORef False)
+  list <- new Gtk.ListBox [#selectionMode := Gtk.SelectionModeSingle]
+  _ <- onE list #rowSelected $ \picked ->
+    unlessSuppressed suppress $ do
+      chosen <- maybe (pure Nothing) jobIdOfRow picked
+      dispatch (SelectJob chosen)
   Gtk.widgetAddCssClass list "navigation-sidebar"
   scroll <- new Gtk.ScrolledWindow [#child := list, #hscrollbarPolicy := Gtk.PolicyTypeNever]
   page <- Adw.navigationPageNew scroll "Jobs"
   set page [#widthRequest := 260]
-  rows <- newIORef Map.empty
+  rows <- liftIO (newIORef Map.empty)
   selection <- newSelectionCell list rows
   pure (Sidebar {list, rows, suppress, selection}, page)
 
-newSelectionCell :: Gtk.ListBox -> IORef (Map JobId JobRow) -> IO (Cell (Maybe JobId))
+newSelectionCell :: (IOE :> es) => Gtk.ListBox -> IORef (Map JobId (JobRow es)) -> Eff es (Cell es (Maybe JobId))
 newSelectionCell list rows =
   newCell $ \case
     Nothing -> Gtk.listBoxUnselectAll list
     Just jobId -> do
-      current <- readIORef rows
+      current <- liftIO (readIORef rows)
       mapM_ (\jobRow -> Gtk.listBoxSelectRow list (Just jobRow.row)) (Map.lookup jobId current)
 
-renderSidebar :: Sidebar -> Model -> IO ()
+renderSidebar :: (IOE :> es) => Sidebar es -> Model -> Eff es ()
 renderSidebar sidebar current = suppressing sidebar.suppress $ do
-  existing <- readIORef sidebar.rows
+  existing <- liftIO (readIORef sidebar.rows)
   let gone = Map.difference existing current.jobs
       kept = Map.intersectionWith (,) existing current.jobs
       missing = Map.difference current.jobs existing
@@ -183,7 +182,7 @@ renderSidebar sidebar current = suppressing sidebar.suppress $ do
   added <- traverse (\entry -> newJobRow entry.state) missing
   mapM_ (\jobRow -> Gtk.listBoxAppend sidebar.list jobRow.row) added
   let rows = Map.union (Map.map fst kept) added
-  writeIORef sidebar.rows rows
+  liftIO (writeIORef sidebar.rows rows)
   mapM_ (\(jobRow, entry) -> jobRow.update current.now entry.state) kept
   let chosen = case current.selected of
         Nothing -> Nothing

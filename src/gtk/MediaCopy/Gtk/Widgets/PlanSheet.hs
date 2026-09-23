@@ -16,6 +16,7 @@ import Data.Text qualified as T
 import Data.Text.Display (display)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
+import Effectful (Eff, IOE, MonadIO, liftIO, (:>))
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 import System.OsPath (takeFileName)
@@ -23,21 +24,24 @@ import System.OsPath (takeFileName)
 import MediaCopy.Domain.Job (ExistingCopy (..), Job (..), JobSpec (..), OffloadJob (..), OnSealFailure (..), SealFirst (..), jobLabel, plural)
 import MediaCopy.Domain.JobFormat (formatAlgo)
 import MediaCopy.Domain.Plan
+import MediaCopy.Gtk.Eff (onE)
+import MediaCopy.Gtk.Environment (Ui)
 import MediaCopy.Gtk.Widgets.Common
 import MediaCopy.Interface.Wording (count, humanBytes)
 import MediaCopy.Model (Model (..), PlanPhase (..), UiMessage (..))
 
-data PlanSheet = PlanSheet
-  { phaseCell :: Cell PlanPhase
-  , openCell :: Cell Bool
+data PlanSheet es = PlanSheet
+  { phaseCell :: Cell es PlanPhase
+  , openCell :: Cell es Bool
   }
 
-newPlanSheet :: Adw.ApplicationWindow -> (UiMessage -> IO ()) -> IO PlanSheet
+newPlanSheet :: (Ui es) => Adw.ApplicationWindow -> (UiMessage -> Eff es ()) -> Eff es (PlanSheet es)
 newPlanSheet window dispatch = do
   seal <- newSealGroup dispatch
   body <- newReadyBody seal
   (stack, errorPage) <- newStackPages body.scroll
-  saveBtn <- new Gtk.Button [#label := "Save _Plan…", #useUnderline := True, #sensitive := False, On #clicked (dispatch SavePlan)]
+  saveBtn <- new Gtk.Button [#label := "Save _Plan…", #useUnderline := True, #sensitive := False]
+  _ <- onE saveBtn #clicked (dispatch SavePlan)
   shell <-
     newDialogShell
       [#title := "Plan", #contentWidth := 560, #contentHeight := 640]
@@ -62,7 +66,7 @@ data Sheet = Sheet
   , body :: ReadyBody
   }
 
-newStackPages :: Gtk.ScrolledWindow -> IO (Gtk.Stack, Adw.StatusPage)
+newStackPages :: (MonadIO m) => Gtk.ScrolledWindow -> m (Gtk.Stack, Adw.StatusPage)
 newStackPages ready = do
   stack <- new Gtk.Stack []
   planningPage <- new Adw.StatusPage [#title := "Reading the Folder…", #description := "No file has been changed"]
@@ -82,7 +86,7 @@ newStackPages ready = do
   void (Gtk.stackAddNamed stack errorPage (Just "error"))
   pure (stack, errorPage)
 
-renderPhase :: Sheet -> PlanPhase -> IO ()
+renderPhase :: (IOE :> es) => Sheet -> PlanPhase -> Eff es ()
 renderPhase sheet phase = case phase of
   Idle -> pure ()
   Planning spec -> do
@@ -115,7 +119,7 @@ data ReadyBody = ReadyBody
   , seal :: SealControls
   }
 
-newReadyBody :: SealControls -> IO ReadyBody
+newReadyBody :: (MonadIO m) => SealControls -> m ReadyBody
 newReadyBody seal = do
   readyBox <- paddedBox Gtk.OrientationVertical 18 18
   summaryGroup <- new Adw.PreferencesGroup [#title := "This Job"]
@@ -130,10 +134,10 @@ newReadyBody seal = do
   Adw.preferencesGroupAdd scriptGroup scriptExpander
   Gtk.boxAppend readyBox scriptGroup
   scroll <- new Gtk.ScrolledWindow [#child := readyBox, #hscrollbarPolicy := Gtk.PolicyTypeNever, #vexpand := True]
-  summaryRows <- newIORef V.empty
-  targetRows <- newIORef V.empty
-  findingRows <- newIORef V.empty
-  scriptRows <- newIORef V.empty
+  summaryRows <- liftIO (newIORef V.empty)
+  targetRows <- liftIO (newIORef V.empty)
+  findingRows <- liftIO (newIORef V.empty)
+  scriptRows <- liftIO (newIORef V.empty)
   pure
     ReadyBody
       { scroll
@@ -148,7 +152,7 @@ newReadyBody seal = do
       , seal
       }
 
-renderReadyBody :: ReadyBody -> JobPlan -> IO ()
+renderReadyBody :: (IOE :> es) => ReadyBody -> JobPlan -> Eff es ()
 renderReadyBody body plan = do
   renderRows body.summaryGroup body.summaryRows (summaryOf plan)
   renderRows body.targetGroup body.targetRows (V.map (\target -> targetRow target) plan.targets)
@@ -166,10 +170,10 @@ data SealControls = SealControls
   , suppress :: IORef Bool
   }
 
-newSealGroup :: (UiMessage -> IO ()) -> IO SealControls
+newSealGroup :: (Ui es) => (UiMessage -> Eff es ()) -> Eff es SealControls
 newSealGroup dispatch = do
   group <- new Adw.PreferencesGroup [#title := "Before Copying"]
-  suppress <- newIORef False
+  suppress <- liftIO (newIORef False)
   sealSwitch <- new Adw.SwitchRow [#title := "Seal the media source first", #active := False]
   policySwitch <- new Adw.SwitchRow [#title := "Copy anyway if the seal finds a problem", #active := False]
   resumeButton <- new Gtk.CheckButton [#label := "Resume", #valign := Gtk.AlignCenter]
@@ -182,25 +186,25 @@ newSealGroup dispatch = do
   Adw.preferencesGroupAdd group sealSwitch
   Adw.preferencesGroupAdd group policySwitch
   let seal = SealControls {group, sealSwitch, policySwitch, resumeButton, replaceButton, existingRow, suppress}
-  void (on sealSwitch (Adw.PropertyNotify #active) (const (reportSealChoice seal dispatch)))
-  void (on policySwitch (Adw.PropertyNotify #active) (const (reportSealChoice seal dispatch)))
-  void (on resumeButton #toggled (reportExistingChoice seal dispatch))
-  void (on replaceButton #toggled (reportExistingChoice seal dispatch))
+  void (onE sealSwitch (Adw.PropertyNotify #active) (const (reportSealChoice seal dispatch)))
+  void (onE policySwitch (Adw.PropertyNotify #active) (const (reportSealChoice seal dispatch)))
+  void (onE resumeButton #toggled (reportExistingChoice seal dispatch))
+  void (onE replaceButton #toggled (reportExistingChoice seal dispatch))
   pure seal
 
-reportSealChoice :: SealControls -> (UiMessage -> IO ()) -> IO ()
+reportSealChoice :: (IOE :> es) => SealControls -> (UiMessage -> Eff es ()) -> Eff es ()
 reportSealChoice seal dispatch = unlessSuppressed seal.suppress $ do
   sealing <- get seal.sealSwitch #active
   anyway <- get seal.policySwitch #active
   dispatch (SetSealFirst (choiceOf sealing anyway))
 
-reportExistingChoice :: SealControls -> (UiMessage -> IO ()) -> IO ()
+reportExistingChoice :: (IOE :> es) => SealControls -> (UiMessage -> Eff es ()) -> Eff es ()
 reportExistingChoice seal dispatch = unlessSuppressed seal.suppress $ do
   resume <- get seal.resumeButton #active
   replace <- get seal.replaceButton #active
   if resume then dispatch (SetExistingCopy Resume) else when replace (dispatch (SetExistingCopy Replace))
 
-renderSealChoice :: SealControls -> JobPlan -> IO ()
+renderSealChoice :: (IOE :> es) => SealControls -> JobPlan -> Eff es ()
 renderSealChoice seal plan = case plan.spec.job of
   Offload oj -> do
     let sealing = case plan.sealPass of
@@ -224,7 +228,7 @@ choiceOf sealing anyway
   | anyway = SealBeforeCopy CopyAnyway
   | otherwise = SealBeforeCopy StopBeforeCopy
 
-renderPlanSheet :: PlanSheet -> Model -> IO ()
+renderPlanSheet :: (IOE :> es) => PlanSheet es -> Model -> Eff es ()
 renderPlanSheet widgets current = do
   renderCell widgets.phaseCell current.planPhase
   renderCell widgets.openCell (isOpen current.planPhase)
@@ -244,7 +248,7 @@ sealSubtitle plan = case plan.sealPass of
 orderedFindings :: JobPlan -> Vector Finding
 orderedFindings plan = blockers plan <> V.filter (\finding -> finding.severity == Warning) plan.findings
 
-summaryOf :: JobPlan -> Vector Row
+summaryOf :: JobPlan -> Vector (Row es)
 summaryOf plan =
   V.fromList
     [ plainRow (plural "file" (V.length plan.steps)) (humanBytes plan.totalBytes)
@@ -278,7 +282,7 @@ stepName step = case step.op of
 scriptSample :: Int
 scriptSample = 20
 
-scriptOf :: JobPlan -> Vector Row
+scriptOf :: JobPlan -> Vector (Row es)
 scriptOf plan =
   V.fromList
     [ plainRow "Execution" (executionText plan)
@@ -309,13 +313,13 @@ carriedText carried
   | carried <= 0 = ""
   | otherwise = " · carries " <> plural "generation" carried
 
-generationRow :: PlannedGeneration -> Row
+generationRow :: PlannedGeneration -> Row es
 generationRow planned =
   plainRow
     (pathText (takeFileName planned.manifest))
     (pathText planned.folder <> " · generation " <> count planned.number <> " · " <> display planned.process)
 
-stepRow :: PlanStep -> Row
+stepRow :: PlanStep -> Row es
 stepRow step =
   plainRow
     (display step.path)
@@ -335,12 +339,12 @@ tempText step = case step.writes V.!? 0 of
   Nothing -> ""
   Just w -> " · " <> pathText (takeFileName w.temp)
 
-overflowRow :: Int -> Vector Row
+overflowRow :: Int -> Vector (Row es)
 overflowRow total
   | total <= scriptSample = V.empty
   | otherwise = V.singleton (plainRow ("and " <> count (total - scriptSample) <> " more") "")
 
-targetRow :: Target -> Row
+targetRow :: Target -> Row es
 targetRow target =
   plainRow
     (pathText (takeFileName target.root))
@@ -349,13 +353,13 @@ targetRow target =
 freeText :: Target -> Text
 freeText target = maybe "free space unknown" (\free -> humanBytes free <> " free") target.freeBytes
 
-findingRow :: Finding -> Row
+findingRow :: Finding -> Row es
 findingRow finding =
   (plainRow (display finding.code) finding.detail)
     { cssClass = Just (case finding.severity of Blocker -> "error"; Warning -> "warning")
     }
 
-renderRows :: Adw.PreferencesGroup -> IORef (Vector Adw.ActionRow) -> Vector Row -> IO ()
+renderRows :: (IOE :> es) => Adw.PreferencesGroup -> IORef (Vector Adw.ActionRow) -> Vector (Row es) -> Eff es ()
 renderRows group rowsRef wanted = do
   renderActionRows rowsRef (InGroup group) wanted
   Gtk.widgetSetVisible group (not (V.null wanted))

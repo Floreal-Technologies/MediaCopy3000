@@ -3,7 +3,7 @@ module MediaCopy.Gtk.Widgets.Preferences
   ) where
 
 import Control.Monad (void)
-import Data.GI.Base (AttrOp (On, (:=)), new, on, set, unsafeCastTo)
+import Data.GI.Base (AttrOp (On, (:=)), new, set, unsafeCastTo)
 import Data.GI.Base.BasicTypes (glibType)
 import Data.IORef (IORef, newIORef)
 import Data.Text (Text)
@@ -11,15 +11,18 @@ import Data.Text.Display (display)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Word (Word32)
+import Effectful (Eff, IOE, MonadIO, liftIO, (:>))
 import GI.Adw qualified as Adw
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 
+import MediaCopy.Gtk.Eff (onE)
+import MediaCopy.Gtk.Environment (Ui)
 import MediaCopy.Gtk.Widgets.Common (flatNamed, newLabel, suppressing, unlessSuppressed)
 import MediaCopy.Interface.Theme (Appearance (..), Base (..), PaletteMode (..), Theme, ThemeSection (..), themeRowLabel, usesBase)
 import MediaCopy.Model (UiMessage (..))
 
-newPreferences :: Adw.Application -> Adw.ApplicationWindow -> Vector ThemeSection -> Vector ThemeSection -> (UiMessage -> IO ()) -> IO (Appearance -> IO ())
+newPreferences :: (Ui es) => Adw.Application -> Adw.ApplicationWindow -> Vector ThemeSection -> Vector ThemeSection -> (UiMessage -> Eff es ()) -> Eff es (Appearance -> Eff es ())
 newPreferences app window lightSections darkSections dispatch = do
   dialog <- new Adw.PreferencesDialog [#title := "Preferences"]
   page <- new Adw.PreferencesPage [#title := "General", #iconName := "preferences-system-symbolic"]
@@ -46,9 +49,9 @@ data AppearanceRows = AppearanceRows
   , suppress :: IORef Bool
   }
 
-newAppearanceRows :: Vector ThemeSection -> Vector ThemeSection -> IO AppearanceRows
+newAppearanceRows :: (MonadIO m) => Vector ThemeSection -> Vector ThemeSection -> m AppearanceRows
 newAppearanceRows lightSections darkSections = do
-  suppress <- newIORef False
+  suppress <- liftIO (newIORef False)
   baseNames <- Gtk.stringListNew (Just (V.toList (V.map (\value -> display value) baseValues)))
   baseRow <- new Adw.ComboRow [#title := "Base", #model := baseNames]
   (lightRow, lightDrop) <- newPaletteRow "Light palette" lightSections
@@ -65,27 +68,27 @@ newAppearanceRows lightSections darkSections = do
       , suppress
       }
 
-newPaletteRow :: Text -> Vector ThemeSection -> IO (Adw.ActionRow, Gtk.DropDown)
+newPaletteRow :: (MonadIO m) => Text -> Vector ThemeSection -> m (Adw.ActionRow, Gtk.DropDown)
 newPaletteRow title sections = do
-  names <- themeModel sections
-  headers <- themeHeaderFactory sections
+  names <- liftIO (themeModel sections)
+  headers <- liftIO (themeHeaderFactory sections)
   dropDown <- new Gtk.DropDown [#model := names, #headerFactory := headers, #valign := Gtk.AlignCenter]
   row <- new Adw.ActionRow [#title := title, #activatableWidget := dropDown]
   Adw.actionRowAddSuffix row dropDown
   pure (row, dropDown)
 
-reportChoices :: AppearanceRows -> (UiMessage -> IO ()) -> IO ()
+reportChoices :: (Ui es) => AppearanceRows -> (UiMessage -> Eff es ()) -> Eff es ()
 reportChoices rows dispatch = do
-  void (on rows.baseRow (Adw.PropertyNotify #selected) (\_ -> chosen rows dispatch (Adw.comboRowGetSelected rows.baseRow) baseValues SetBase))
-  void (on rows.lightDrop (Gtk.PropertyNotify #selected) (\_ -> chosen rows dispatch (Gtk.dropDownGetSelected rows.lightDrop) rows.lightThemes SetPalette))
-  void (on rows.darkDrop (Gtk.PropertyNotify #selected) (\_ -> chosen rows dispatch (Gtk.dropDownGetSelected rows.darkDrop) rows.darkThemes SetPalette))
+  void (onE rows.baseRow (Adw.PropertyNotify #selected) (\_ -> chosen rows dispatch (Adw.comboRowGetSelected rows.baseRow) baseValues SetBase))
+  void (onE rows.lightDrop (Gtk.PropertyNotify #selected) (\_ -> chosen rows dispatch (Gtk.dropDownGetSelected rows.lightDrop) rows.lightThemes SetPalette))
+  void (onE rows.darkDrop (Gtk.PropertyNotify #selected) (\_ -> chosen rows dispatch (Gtk.dropDownGetSelected rows.darkDrop) rows.darkThemes SetPalette))
 
-chosen :: AppearanceRows -> (UiMessage -> IO ()) -> IO Word32 -> Vector a -> (a -> UiMessage) -> IO ()
+chosen :: (IOE :> es) => AppearanceRows -> (UiMessage -> Eff es ()) -> Eff es Word32 -> Vector a -> (a -> UiMessage) -> Eff es ()
 chosen rows dispatch selected values report = unlessSuppressed rows.suppress $ do
   index <- selected
   mapM_ (\value -> dispatch (report value)) (values V.!? fromIntegral index)
 
-paintAppearance :: AppearanceRows -> Appearance -> IO ()
+paintAppearance :: (IOE :> es) => AppearanceRows -> Appearance -> Eff es ()
 paintAppearance rows appearance = do
   select rows.suppress (Adw.comboRowSetSelected rows.baseRow) baseValues appearance.base
   set rows.lightRow [#sensitive := usesBase LightPalette appearance.base]
@@ -93,18 +96,14 @@ paintAppearance rows appearance = do
   select rows.suppress (Gtk.dropDownSetSelected rows.lightDrop) rows.lightThemes appearance.light
   select rows.suppress (Gtk.dropDownSetSelected rows.darkDrop) rows.darkThemes appearance.dark
 
-select :: (Eq a) => IORef Bool -> (Word32 -> IO ()) -> Vector a -> a -> IO ()
+select :: (IOE :> es, Eq a) => IORef Bool -> (Word32 -> Eff es ()) -> Vector a -> a -> Eff es ()
 select suppress choose values wanted =
   mapM_ (\index -> suppressing suppress (choose (fromIntegral index))) (V.elemIndex wanted values)
 
-installPreferencesAction :: Adw.Application -> Adw.ApplicationWindow -> Adw.Dialog -> IO ()
+installPreferencesAction :: (Ui es) => Adw.Application -> Adw.ApplicationWindow -> Adw.Dialog -> Eff es ()
 installPreferencesAction app window dialog = do
-  action <-
-    new
-      Gio.SimpleAction
-      [ #name := "preferences"
-      , On #activate (\_param -> Adw.dialogPresent dialog (Just window))
-      ]
+  action <- new Gio.SimpleAction [#name := "preferences"]
+  _ <- onE action #activate (\_param -> Adw.dialogPresent dialog (Just window))
   Gio.actionMapAddAction app action
 
 baseValues :: Vector Base

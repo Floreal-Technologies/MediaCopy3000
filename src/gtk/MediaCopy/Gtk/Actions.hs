@@ -6,7 +6,7 @@ module MediaCopy.Gtk.Actions
 
 import Control.Monad (unless)
 import Data.Function ((&))
-import Data.GI.Base (AttrOp (On, (:=)), new)
+import Data.GI.Base (AttrOp ((:=)), new)
 import Data.List (List)
 import Data.Maybe (isJust)
 import Data.Text (Text)
@@ -15,10 +15,13 @@ import Data.Text.Display (Display (..), display)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Version (showVersion)
+import Effectful (Eff, MonadIO)
 import GI.Adw qualified as Adw
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 
+import MediaCopy.Gtk.Eff (onE)
+import MediaCopy.Gtk.Environment (Ui)
 import MediaCopy.Model
 import Paths_mediacopy3000 (version)
 
@@ -77,18 +80,18 @@ actionLabel wanted =
     & V.find (\spec -> spec.name == Just wanted)
     & maybe wanted (\spec -> spec.label)
 
-actionButton :: Text -> List Text -> IO Gtk.Button
+actionButton :: (MonadIO m) => Text -> List Text -> m Gtk.Button
 actionButton actionName classes = do
   button <- new Gtk.Button [#label := actionLabel actionName, #actionName := actionName]
   mapM_ (\klass -> Gtk.widgetAddCssClass button klass) classes
   pure button
 
-headerAction :: Adw.HeaderBar -> Text -> List Text -> IO ()
+headerAction :: (MonadIO m) => Adw.HeaderBar -> Text -> List Text -> m ()
 headerAction header actionName classes = do
   button <- actionButton actionName classes
   Adw.headerBarPackStart header button
 
-installActions :: Adw.Application -> Adw.ApplicationWindow -> (UiMessage -> IO ()) -> IO (Gio.Menu, Model -> IO ())
+installActions :: (Ui es) => Adw.Application -> Adw.ApplicationWindow -> (UiMessage -> Eff es ()) -> Eff es (Gio.Menu, Model -> Eff es ())
 installActions app window dispatch = do
   gated <- V.foldM (\acc spec -> installOne app window dispatch acc spec) [] actionTable
   overlay <- buildShortcutsWindow
@@ -98,12 +101,13 @@ installActions app window dispatch = do
   pure (menu, \model -> mapM_ (\g -> Gio.simpleActionSetEnabled g.action (g.rule model)) gated)
 
 installOne
-  :: Adw.Application
+  :: (Ui es)
+  => Adw.Application
   -> Adw.ApplicationWindow
-  -> (UiMessage -> IO ())
+  -> (UiMessage -> Eff es ())
   -> List Gated
   -> ActionSpec
-  -> IO (List Gated)
+  -> Eff es (List Gated)
 installOne app window dispatch gated spec = case spec.name of
   Nothing -> pure gated
   Just full -> do
@@ -112,23 +116,19 @@ installOne app window dispatch gated spec = case spec.name of
       Nothing -> pure gated
       Just wanted -> do
         let (prefix, dotted) = T.breakOn "." full
-        action <-
-          new
-            Gio.SimpleAction
-            [ #name := T.drop 1 dotted
-            , On #activate (\_param -> runEffect window dispatch wanted)
-            ]
+        action <- new Gio.SimpleAction [#name := T.drop 1 dotted]
+        _ <- onE action #activate (\_param -> runEffect window dispatch wanted)
         if prefix == "app"
           then Gio.actionMapAddAction app action
           else Gio.actionMapAddAction window action
         pure (maybe gated (\rule -> Gated {action, rule} : gated) spec.enabled)
 
-runEffect :: Adw.ApplicationWindow -> (UiMessage -> IO ()) -> Effect -> IO ()
+runEffect :: (MonadIO m) => Adw.ApplicationWindow -> (UiMessage -> m ()) -> Effect -> m ()
 runEffect window dispatch = \case
   Send intent -> dispatch intent
   ShowAbout -> presentAbout window
 
-buildMenu :: IO Gio.Menu
+buildMenu :: (MonadIO m) => m Gio.Menu
 buildMenu = do
   menu <- Gio.menuNew
   jobs <- Gio.menuNew
@@ -141,10 +141,10 @@ buildMenu = do
   Gio.menuAppendSection menu Nothing general
   pure menu
 
-menuRow :: Gio.Menu -> Text -> IO ()
+menuRow :: (MonadIO m) => Gio.Menu -> Text -> m ()
 menuRow menu actionName = Gio.menuAppend menu (Just (actionLabel actionName)) (Just actionName)
 
-buildShortcutsWindow :: IO Gtk.ShortcutsWindow
+buildShortcutsWindow :: (MonadIO m) => m Gtk.ShortcutsWindow
 buildShortcutsWindow = do
   shortcuts <- new Gtk.ShortcutsWindow []
   section <- new Gtk.ShortcutsSection [#sectionName := "shortcuts", #maxHeight := 12]
@@ -152,7 +152,7 @@ buildShortcutsWindow = do
   Gtk.shortcutsWindowAddSection shortcuts section
   pure shortcuts
 
-addGroup :: Gtk.ShortcutsSection -> Section -> IO ()
+addGroup :: (MonadIO m) => Gtk.ShortcutsSection -> Section -> m ()
 addGroup section wanted = do
   let rows = V.filter (\spec -> spec.section == Just wanted) actionTable
   unless (V.null rows) $ do
@@ -160,14 +160,14 @@ addGroup section wanted = do
     V.mapM_ (\spec -> addShortcut group spec) rows
     Gtk.shortcutsSectionAddGroup section group
 
-addShortcut :: Gtk.ShortcutsGroup -> ActionSpec -> IO ()
+addShortcut :: (MonadIO m) => Gtk.ShortcutsGroup -> ActionSpec -> m ()
 addShortcut group spec = do
   shortcut <- case spec.name of
     Just full -> new Gtk.ShortcutsShortcut [#title := spec.label, #actionName := full]
     Nothing -> new Gtk.ShortcutsShortcut [#title := spec.label, #accelerator := T.unwords spec.accels]
   Gtk.shortcutsGroupAddShortcut group shortcut
 
-presentAbout :: Adw.ApplicationWindow -> IO ()
+presentAbout :: (MonadIO m) => Adw.ApplicationWindow -> m ()
 presentAbout window = do
   dialog <-
     new
