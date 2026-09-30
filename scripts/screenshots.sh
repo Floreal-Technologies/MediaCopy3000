@@ -10,7 +10,7 @@ binary=$(cabal list-bin mediacopy3000)
 icons=$(mktemp -d)
 trap 'rm -rf "$icons"' EXIT
 mkdir -p "$icons/icons/hicolor/scalable/apps"
-cp assets/eu.choutri.MediaCopy3000.svg "$icons/icons/hicolor/scalable/apps/"
+cp assets/tech.floreal.MediaCopy3000.svg "$icons/icons/hicolor/scalable/apps/"
 export XDG_DATA_DIRS="$icons:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
 
 mapfile -t scenes < <("$binary" --list-scenes)

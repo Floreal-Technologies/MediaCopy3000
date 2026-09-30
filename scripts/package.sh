@@ -162,9 +162,9 @@ macos_bundle() {
   mkdir -p "$iconset"
   for size in 16 32 128 256 512; do
     rsvg-convert -w "$size" -h "$size" \
-      assets/eu.choutri.MediaCopy3000.svg -o "${iconset}/icon_${size}x${size}.png"
+      assets/tech.floreal.MediaCopy3000.svg -o "${iconset}/icon_${size}x${size}.png"
     rsvg-convert -w "$((size * 2))" -h "$((size * 2))" \
-      assets/eu.choutri.MediaCopy3000.svg -o "${iconset}/icon_${size}x${size}@2x.png"
+      assets/tech.floreal.MediaCopy3000.svg -o "${iconset}/icon_${size}x${size}@2x.png"
   done
   iconutil -c icns -o "${contents}/Resources/mediacopy3000.icns" "$iconset"
 }
@@ -176,15 +176,15 @@ else
   strip "${STAGING}${PREFIX}/bin/mediacopy3000"
   install_file 644 assets/styles.css "${STAGING}${PREFIX}/share/mediacopy3000/assets/styles.css"
   install_themes "${STAGING}${PREFIX}/share/mediacopy3000"
-  install_file 644 assets/eu.choutri.MediaCopy3000.desktop \
-    "${STAGING}${PREFIX}/share/applications/eu.choutri.MediaCopy3000.desktop"
-  install_file 644 assets/eu.choutri.MediaCopy3000.svg \
-    "${STAGING}${PREFIX}/share/icons/hicolor/scalable/apps/eu.choutri.MediaCopy3000.svg"
-  install_file 644 assets/eu.choutri.MediaCopy3000.metainfo.xml \
-    "${STAGING}${PREFIX}/share/metainfo/eu.choutri.MediaCopy3000.metainfo.xml"
+  install_file 644 assets/tech.floreal.MediaCopy3000.desktop \
+    "${STAGING}${PREFIX}/share/applications/tech.floreal.MediaCopy3000.desktop"
+  install_file 644 assets/tech.floreal.MediaCopy3000.svg \
+    "${STAGING}${PREFIX}/share/icons/hicolor/scalable/apps/tech.floreal.MediaCopy3000.svg"
+  install_file 644 assets/tech.floreal.MediaCopy3000.metainfo.xml \
+    "${STAGING}${PREFIX}/share/metainfo/tech.floreal.MediaCopy3000.metainfo.xml"
 fi
 
-FLATPAK_MANIFEST=packaging/flatpak/eu.choutri.MediaCopy3000.yml
+FLATPAK_MANIFEST=packaging/flatpak/tech.floreal.MediaCopy3000.yml
 
 FPM_COMMON=(
   -s dir
@@ -207,7 +207,7 @@ build_osxpkg() {
   /usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$components"
   pkgbuild \
     --root "$STAGING" \
-    --identifier eu.choutri.MediaCopy3000 \
+    --identifier tech.floreal.MediaCopy3000 \
     --version "$VERSION" \
     --install-location / \
     --component-plist "$components" \
@@ -236,7 +236,7 @@ build_flatpak() {
     "$FLATPAK_MANIFEST"
   check_flatpak_glibc
   flatpak build-bundle dist-package/flatpak-repo \
-    "dist-package/out/${pkg_name}" eu.choutri.MediaCopy3000
+    "dist-package/out/${pkg_name}" tech.floreal.MediaCopy3000
 }
 
 for fmt in "${FORMATS[@]}"; do

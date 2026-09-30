@@ -1,4 +1,4 @@
-app-id: eu.choutri.MediaCopy3000
+app-id: tech.floreal.MediaCopy3000
 runtime: org.gnome.Platform
 runtime-version: '49'
 sdk: org.gnome.Sdk

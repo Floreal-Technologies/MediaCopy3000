@@ -7,7 +7,7 @@
     <key>CFBundleDisplayName</key>
     <string>MediaCopy 3000</string>
     <key>CFBundleIdentifier</key>
-    <string>eu.choutri.MediaCopy3000</string>
+    <string>tech.floreal.MediaCopy3000</string>
     <key>CFBundleVersion</key>
     <string>@VERSION@</string>
     <key>CFBundleShortVersionString</key>

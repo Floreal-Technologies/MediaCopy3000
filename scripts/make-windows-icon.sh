@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SVG=assets/eu.choutri.MediaCopy3000.svg
+SVG=assets/tech.floreal.MediaCopy3000.svg
 OUT=packaging/windows/mediacopy3000.ico
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

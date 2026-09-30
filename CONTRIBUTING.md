@@ -109,7 +109,7 @@ host operating system. `flatpak` is built only when you name it.
 
 The Flatpak build compiles nothing inside the sandbox. The script builds the application on the
 host, then stages it under `dist-package/root/usr`. The manifest
-`packaging/flatpak/eu.choutri.MediaCopy3000.yml` copies that tree into `/app`. It names the
+`packaging/flatpak/tech.floreal.MediaCopy3000.yml` copies that tree into `/app`. It names the
 `org.gnome.Platform` runtime, version 49. `flatpak-builder` pulls the runtime from Flathub, so
 the first build needs a network.
 
@@ -131,7 +131,7 @@ The installer writes to the local application data of the user. It asks for no a
 person can install the application on a machine they do not own.
 
 The icon comes from `scripts/make-windows-icon.sh`. Run it again only when
-`assets/eu.choutri.MediaCopy3000.svg` changes.
+`assets/tech.floreal.MediaCopy3000.svg` changes.
 
 The installer is not signed. SmartScreen shows a warning the first time a person starts the
 application. To get past the warning, select "More info", then "Run anyway".

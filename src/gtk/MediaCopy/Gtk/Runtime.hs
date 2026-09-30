@@ -58,7 +58,7 @@ start startup = withEnvironment $ \environment -> do
   app <-
     new
       Adw.Application
-      [ #applicationId := "eu.choutri.MediaCopy3000"
+      [ #applicationId := "tech.floreal.MediaCopy3000"
       , On #activate (activate runtimeRef environment startup ?self)
       ]
   status <- Gio.applicationRun app Nothing

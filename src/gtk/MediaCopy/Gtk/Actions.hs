@@ -173,9 +173,9 @@ presentAbout window = do
     new
       Adw.AboutDialog
       [ #applicationName := "MediaCopy 3000"
-      , #applicationIcon := "eu.choutri.MediaCopy3000"
+      , #applicationIcon := "tech.floreal.MediaCopy3000"
       , #version := T.pack (showVersion version)
-      , #developerName := "Feriel Choutri de Tarlé"
+      , #developerName := "Floréal Technologies"
       , #comments := "Verified media offload and ASC MHL verification"
       , #licenseType := Gtk.LicenseGpl30Only
       ]
