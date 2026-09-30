@@ -184,7 +184,7 @@ else
     "${STAGING}${PREFIX}/share/metainfo/tech.floreal.MediaCopy3000.metainfo.xml"
 fi
 
-FLATPAK_MANIFEST=packaging/flatpak/tech.floreal.MediaCopy3000.yml
+FLATPAK_MANIFEST=packaging/flatpak/tech.floreal.MediaCopy3000.yaml
 
 FPM_COMMON=(
   -s dir
