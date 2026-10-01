@@ -42,7 +42,9 @@ conformance:
 
 # Run the doctests in the pure libraries' haddocks
 doctest:
-    ./scripts/doctest.sh
+    @cabal repl --with-repl=doctest ascmhl
+    @cabal repl --with-repl=doctest mediacopy3000:domain
+    @cabal repl --with-repl=doctest mediacopy3000:interface
 
 # Install the cross-reference checker for `just xref`
 deps-xref:
