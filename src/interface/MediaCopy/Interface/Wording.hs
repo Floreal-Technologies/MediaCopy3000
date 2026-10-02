@@ -19,10 +19,14 @@ import Data.Time (NominalDiffTime, UTCTime, diffUTCTime)
 import Numeric (showFFloat)
 import System.OsPath (OsPath)
 
-import MediaCopy.Domain.Job (Doing (..), JobKind (..), JobResult (..), JobState (..), isDone, plural)
+import MediaCopy.Domain.Job
+import MediaCopy.Interface.Translation
+import MediaCopy.Interface.Translation.Messages
 
 -- $setup
 -- >>> import System.OsPath (unsafeEncodeUtf)
+-- >>> import MediaCopy.Interface.Translation (SupportedLanguage (..))
+-- >>> import MediaCopy.Interface.Translation.Embedded (embeddedWording)
 
 -- |
 -- >>> count (3 :: Int)
@@ -113,22 +117,22 @@ pad2 :: Int -> Text
 pad2 n = T.justifyRight 2 '0' (count n)
 
 -- |
--- >>> resultText SealKind AllOk
+-- >>> resultText (embeddedWording English) SealKind AllOk
 -- "finished, all files sealed"
--- >>> resultText OffloadKind (WithFailures 1)
+-- >>> resultText (embeddedWording English) OffloadKind (WithFailures 1)
 -- "finished with 1 failure"
-resultText :: JobKind -> JobResult -> Text
-resultText kind = \case
+resultText :: Wording -> JobKind -> JobResult -> Text
+resultText wording kind = \case
   AllOk -> case kind of
-    (OffloadKind; VerifyKind) -> "finished, all files verified"
-    SealKind -> "finished, all files sealed"
-  WithFailures n -> "finished with " <> plural "failure" n
+    (OffloadKind; VerifyKind) -> getTranslation' wording resultAllVerified []
+    SealKind -> getTranslation' wording resultAllSealed []
+  WithFailures n -> getTranslation' wording resultWithFailures [("count", int n)]
 
 -- |
--- >>> noHistoryText (unsafeEncodeUtf "card")
--- "no ASC MHL history (ascmhl/) in card"
-noHistoryText :: OsPath -> Text
-noHistoryText folder = "no ASC MHL history (ascmhl/) in " <> pathText folder
+-- >>> noHistoryText (embeddedWording English) (unsafeEncodeUtf "card")
+-- "no ASC Media Hash List history (ascmhl/) in card"
+noHistoryText :: Wording -> OsPath -> Text
+noHistoryText wording folder = getTranslation' wording toastNoHistory [("folder", str (pathText folder))]
 
 data KindUi = KindUi
   { icon :: Text

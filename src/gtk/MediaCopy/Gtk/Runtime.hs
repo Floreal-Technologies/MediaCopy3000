@@ -193,7 +193,9 @@ loadHistory runtime jobId folder = void $ async $ do
   loaded <- runEff (runFileSystemIO defaultChunkSize (readHistory folder))
   case loaded of
     Left e -> postMessage runtime (ShowToast (display e))
-    Right Nothing -> postMessage runtime (ShowToast (noHistoryText folder))
+    Right Nothing -> do
+      model <- readIORef runtime.modelRef
+      postMessage runtime (ShowToast (noHistoryText model.wording folder))
     Right (Just hist) -> postMessage runtime (HistoryLoaded jobId hist)
 
 planWorker :: Runtime -> JobSpec -> IO ()

@@ -17,6 +17,7 @@ extra-source-files:
   tests/fixtures/**/*.mhl
   tests/fixtures/**/*.xml
   tests/fixtures/**/*.xsd
+  locales/*.ftl
 
 tested-with: ghc ==9.14.1
 
@@ -134,7 +135,12 @@ library interface
   exposed-modules:
     MediaCopy.Interface.Theme
     MediaCopy.Interface.Translation
+    MediaCopy.Interface.Translation.Coverage
+    MediaCopy.Interface.Translation.Embedded
     MediaCopy.Interface.Translation.English
+    MediaCopy.Interface.Translation.French
+    MediaCopy.Interface.Translation.Messages
+    MediaCopy.Interface.Translation.Splice
     MediaCopy.Interface.Wording
     MediaCopy.Model
     MediaCopy.Report
@@ -150,6 +156,7 @@ library interface
     mediacopy3000:domain,
     optics-core,
     scientific,
+    template-haskell,
     text,
     text-display,
     time,

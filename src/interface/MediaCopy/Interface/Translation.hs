@@ -3,12 +3,16 @@ module MediaCopy.Interface.Translation
   , SupportedLanguage (..)
   , parseFtl
   , Wording (..)
+  , mkWording
   , parseWording
+  , WordingFault (..)
   , getTranslation'
-
-    -- * Translation helpers
+  , localeFile
+  , int
+  , str
   ) where
 
+import Control.Exception (Exception, throw)
 import Data.Bifunctor (first)
 import Data.Function ((&))
 import Data.List (List)
@@ -26,6 +30,7 @@ import Language.Fluent.Bundle qualified as Bundle
 import System.OsPath (OsPath)
 
 import MediaCopy.Interface.Translation.English qualified as English
+import MediaCopy.Interface.Translation.French qualified as French
 
 data SupportedLanguage
   = English
@@ -38,29 +43,35 @@ instance Locale SupportedLanguage where
   displayLanguage namedLanguage _ =
     case namedLanguage of
       English -> Just English.languageName
-      French -> Nothing
+      French -> Just French.languageName
   capitalise = \case
     English -> English.capitalise
-    French -> undefined
+    French -> French.capitalise
   pluralCategory lang n _ = case lang of
     English -> English.pluralCategory n
-    _ -> undefined
+    French -> French.pluralCategory n
   formatNumber ls n _ = case NonEmpty.head ls of
     English -> Right (English.formatNumber n)
-    _ -> undefined
+    French -> Right (French.formatNumber n)
   formatTime ls t _ = case NonEmpty.head ls of
     English -> Right (English.formatTime t)
-    _ -> undefined
+    French -> Right (French.formatTime t)
 
 data Wording = Wording
   { language :: SupportedLanguage
   , bundle :: Bundle SupportedLanguage
   , revision :: Word
+  , strict :: Bool
   }
   deriving stock (Show)
 
 instance Eq Wording where
   left == right = (left.language, left.revision) == (right.language, right.revision)
+
+newtype WordingFault = WordingFault Text
+  deriving stock (Show)
+
+instance Exception WordingFault
 
 parseFtl :: Text -> Either (NonEmpty Text) Resource
 parseFtl source = do
@@ -85,6 +96,7 @@ mkWording language revision resource =
        { language
        , bundle = localeBundle
        , revision
+       , strict = False
        }
 
 parseWording :: SupportedLanguage -> Word -> Text -> Either (NonEmpty Text) Wording
@@ -109,7 +121,9 @@ getTranslation'
 getTranslation' wording reference arguments =
   case getTranslation wording reference arguments of
     Right translation -> translation
-    Left _ -> "{" <> referenceName reference <> "}"
+    Left fault
+      | wording.strict -> throw (WordingFault fault)
+      | otherwise -> "{" <> referenceName reference <> "}"
 
 referenceName :: Reference -> Text
 referenceName reference =
@@ -117,12 +131,18 @@ referenceName reference =
     Left message -> T.pack message
     Right (Identifier name) -> name
 
+str :: Text -> SomeValue
+str = StringValue
+
+int :: Int -> SomeValue
+int = value
+
 -- * Helpers
 
 localeFile :: SupportedLanguage -> OsPath
 localeFile = \case
   English -> English.localeFile
-  French -> undefined
+  French -> French.localeFile
 
 languageCode :: SupportedLanguage -> Text
 languageCode = \case
