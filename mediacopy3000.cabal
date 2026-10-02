@@ -52,6 +52,7 @@ common options
 library domain
   import: options
   hs-source-dirs: src/domain
+  -- cabal-gild: discover src/domain
   exposed-modules:
     MediaCopy.Domain.Destination
     MediaCopy.Domain.DirectoryHash
@@ -78,6 +79,7 @@ library domain
 library application
   import: options
   hs-source-dirs: src/application
+  -- cabal-gild: discover src/application src/application-posix/
   exposed-modules:
     MediaCopy.Effects.Emit
     MediaCopy.Effects.FileSystem
@@ -128,8 +130,11 @@ library application
 library interface
   import: options
   hs-source-dirs: src/interface
+  -- cabal-gild: discover src/interface
   exposed-modules:
     MediaCopy.Interface.Theme
+    MediaCopy.Interface.Translation
+    MediaCopy.Interface.Translation.English
     MediaCopy.Interface.Wording
     MediaCopy.Model
     MediaCopy.Report
@@ -140,8 +145,11 @@ library interface
     base,
     containers,
     filepath,
+    fluent,
+    fluent-syntax,
     mediacopy3000:domain,
     optics-core,
+    scientific,
     text,
     text-display,
     time,
@@ -150,6 +158,7 @@ library interface
 library demo
   import: options
   hs-source-dirs: src/demo
+  -- cabal-gild: discover src/demo
   exposed-modules:
     MediaCopy.Demo
     MediaCopy.Demo.Fixtures
@@ -169,6 +178,7 @@ library demo
 library
   import: options
   hs-source-dirs: src/gtk
+  -- cabal-gild: discover src/gtk
   exposed-modules:
     MediaCopy.Gtk.Actions
     MediaCopy.Gtk.Assets
@@ -280,6 +290,7 @@ test-suite core-test
   type: exitcode-stdio-1.0
   hs-source-dirs: tests
   main-is: Main.hs
+  -- cabal-gild: discover tests/ --exclude tests/Main.hs
   other-modules:
     MediaCopy.Domain.DirectoryHashTest
     MediaCopy.Domain.JobFormatTest
