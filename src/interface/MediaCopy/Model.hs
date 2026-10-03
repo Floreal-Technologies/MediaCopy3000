@@ -141,6 +141,7 @@ data Message
   | Tick UTCTime
   | DesktopBase PaletteMode
   | ShowToast Text
+  | WordingReloaded Wording
   deriving stock (Eq, Show)
 
 data Command
@@ -196,6 +197,7 @@ update msg model = case msg of
     | wanted == model.desktopBase -> (model, [])
     | otherwise -> (model {desktopBase = wanted}, [])
   ShowToast message -> (model {toast = Just message}, [])
+  WordingReloaded wording -> (model {wording}, [])
 
 updateUi :: UiMessage -> Model -> (Model, List Command)
 updateUi msg model = case msg of

@@ -1,9 +1,12 @@
 module MediaCopy.Gtk.Reload
   ( loadCss
+  , reloadWording
+  , loadWording
   ) where
 
-import Control.Exception (catch)
-import Control.Monad (void, when)
+import Control.Exception (IOException, catch, try)
+import Control.Monad (unless, void, when)
+import Data.ByteString qualified as ByteString
 import Data.GI.Base (GError, disownObject, gerrorMessage, on)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.List (List)
@@ -16,9 +19,13 @@ import GI.GLib qualified as GLib
 import GI.Gdk qualified as Gdk
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
+import System.Directory (doesFileExist)
+import System.OsPath qualified as OsPath
 
 import MediaCopy.Gtk.Assets (resolveAsset)
 import MediaCopy.Gtk.Environment (Environment (..), Mode (..), logWith)
+import MediaCopy.Interface.Translation
+import MediaCopy.Interface.Translation.Coverage
 
 loadCss :: Environment -> IO ()
 loadCss environment = do
@@ -32,11 +39,53 @@ loadCss environment = do
   Gdk.displayGetDefault
     >>= mapM_ (\display -> Gtk.styleContextAddProviderForDisplay display provider (fromIntegral Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION))
 
+loadWording :: Environment -> SupportedLanguage -> (Wording -> IO ()) -> (Text -> IO ()) -> IO ()
+loadWording environment language publish warn =
+  when (environment.mode == Development) $ do
+    wordingPath <- OsPath.decodeUtf (localeFile language)
+    doesFileExist wordingPath >>= \case
+      False -> logWith environment (logAttention_ ("wording live-reload disabled: no " <> T.pack wordingPath))
+      True -> do
+        revision <- newIORef 0
+        streak <- newIORef False
+        let reload = reloadWording environment language publish warn revision streak
+        reload
+        watchFile environment "wording" wordingPath reload
+
+reloadWording :: Environment -> SupportedLanguage -> (Wording -> IO ()) -> (Text -> IO ()) -> IORef Word -> IORef Bool -> IO ()
+reloadWording environment language publish warn revision streak = do
+  wordingPath <- OsPath.decodeUtf (localeFile language)
+  next <- (+ 1) <$> readIORef revision
+  try @IOException (ByteString.readFile wordingPath) >>= \case
+    Left err -> fault wordingPath [T.pack (show err)]
+    Right bytes -> case decodeUtf8' bytes of
+      Left err -> fault wordingPath [T.pack (show err)]
+      Right source -> case parseWording language next source of
+        Left junk -> fault wordingPath (map (\entry -> "cannot parse: " <> T.strip entry) (NE.toList junk))
+        Right wording ->
+          wordingFaults wording >>= \case
+            [] -> do
+              writeIORef revision next
+              writeIORef streak False
+              publish wording
+              logWith environment (logInfo_ ("reloaded " <> T.pack wordingPath <> " (revision " <> T.pack (show next) <> ")"))
+            faults -> fault wordingPath faults
+  where
+    fault :: FilePath -> List Text -> IO ()
+    fault wordingPath faults = do
+      mapM_ (\message -> logWith environment (logAttention_ (T.pack wordingPath <> ": " <> message))) faults
+      shown <- readIORef streak
+      unless shown (warn (summary wordingPath faults))
+      writeIORef streak True
+    summary wordingPath faults = case faults of
+      [] -> T.pack wordingPath
+      first' : _ -> T.pack wordingPath <> ": " <> T.pack (show (length faults)) <> " faults; first: " <> first'
+
 watchFile :: Environment -> Text -> FilePath -> IO () -> IO ()
 watchFile environment label path action =
   startWatch `catch` \(err :: GError) -> do
     message <- gerrorMessage err
-    logWith environment (logAttention_ (label <>  " live-reload disabled: " <> message))
+    logWith environment (logAttention_ (label <> " live-reload disabled: " <> message))
   where
     startWatch = do
       file <- Gio.fileNewForPath path

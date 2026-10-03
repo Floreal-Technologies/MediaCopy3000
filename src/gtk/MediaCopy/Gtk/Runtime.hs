@@ -37,7 +37,7 @@ import MediaCopy.Effects.Hasher (runHasher)
 import MediaCopy.Engine
 import MediaCopy.EventLog (withEventLog)
 import MediaCopy.Gtk.Environment (Environment, withEnvironment)
-import MediaCopy.Gtk.Reload (loadCss)
+import MediaCopy.Gtk.Reload (loadCss, loadWording)
 import MediaCopy.Gtk.Screenshot (Startup (..), seeded)
 import MediaCopy.Gtk.Theme
 import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
@@ -101,6 +101,11 @@ buildAndPresent runtimeRef environment startup app = do
   loadCss environment
   let runtime = Runtime {modelRef, widgets, engine}
   writeIORef runtimeRef (Just runtime)
+  loadWording
+    environment
+    wording.language
+    (\reloaded -> postMessage runtime (WordingReloaded reloaded))
+    (\message -> postMessage runtime (ShowToast message))
   onDesktopBase themeAdapter (\observed -> postMessage runtime (DesktopBase observed))
   installCloseRequest widgets.window dispatchNow
   installTicker startup dispatchNow
