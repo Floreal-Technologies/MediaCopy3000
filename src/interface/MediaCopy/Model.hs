@@ -33,8 +33,10 @@ import System.OsPath (OsPath)
 
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan (JobPlan (..), planBlocked, planEquivalent)
-import MediaCopy.Interface.Theme (Appearance (..), Base, PaletteMode, Theme, setPalette, systemAppearance)
-import MediaCopy.Interface.Wording (resultText)
+import MediaCopy.Interface.Theme
+import MediaCopy.Interface.Translation
+import MediaCopy.Interface.Translation.Embedded (embeddedWording)
+import MediaCopy.Interface.Wording
 import MediaCopy.Report (renderPlanText, renderReport)
 
 data FileFilter = AllFiles | FailedOnly
@@ -73,6 +75,7 @@ data Model = Model
   , toast :: Maybe Text
   , now :: UTCTime
   , closeConfirm :: Bool
+  , wording :: Wording
   }
   deriving stock (Eq, Generic, Show)
 
@@ -92,6 +95,7 @@ initialModel t desktop =
     , toast = Nothing
     , now = t
     , closeConfirm = False
+    , wording = embeddedWording English
     }
 
 data UiMessage
@@ -137,6 +141,7 @@ data Message
   | Tick UTCTime
   | DesktopBase PaletteMode
   | ShowToast Text
+  | WordingReloaded Wording
   deriving stock (Eq, Show)
 
 data Command
@@ -159,7 +164,7 @@ update msg model = case msg of
         (model & #draft % _Just % #destinations %~ (\dests -> dests <> [p]), [])
   ReportTargetPicked jid p -> case Map.lookup jid model.jobs of
     Nothing -> (model, [])
-    Just entry -> (model, [WriteFile p (renderReport entry.state entry.plan entry.history)])
+    Just entry -> (model, [WriteFile p (renderReport model.wording entry.state entry.plan entry.history)])
   PlanTargetPicked plan p -> (model, [WriteFile p (renderPlanText plan.spec plan)])
   RequestPlan job ->
     let jid = model.nextId
@@ -175,7 +180,12 @@ update msg model = case msg of
               refresh = historyRefresh jid entry.state.spec.job ev
           in if isTerminalEvent ev
                then
-                 let ended = model1 {running = Nothing, toast = toastMessage entry.state.spec.job ev, closeConfirm = False}
+                 let ended =
+                       model1
+                         { running = Nothing
+                         , toast = toastMessage model.wording entry.state.spec.job ev
+                         , closeConfirm = False
+                         }
                      (model2, cmds) = startNext ended
                  in (model2, refresh <> cmds)
                else (model1, [])
@@ -187,6 +197,7 @@ update msg model = case msg of
     | wanted == model.desktopBase -> (model, [])
     | otherwise -> (model {desktopBase = wanted}, [])
   ShowToast message -> (model {toast = Just message}, [])
+  WordingReloaded wording -> (model {wording}, [])
 
 updateUi :: UiMessage -> Model -> (Model, List Command)
 updateUi msg model = case msg of
@@ -214,7 +225,7 @@ updateUi msg model = case msg of
     Just jid -> cancelJob jid model
   SaveSelectedReport -> saveSelectedReport model
   SavePlan -> case model.planPhase of
-    Ready plan -> (model, [OpenSaveDialog "Save Plan" (jobLabel plan.spec.job <> "-plan.txt") (PlanTargetPicked plan)])
+    Ready plan -> (model, [OpenSaveDialog (savePlanTitle model.wording) (jobLabel plan.spec.job <> "-plan.txt") (PlanTargetPicked plan)])
     _ -> (model, [])
   SelectJob mjid -> (model {selected = mjid}, [])
   SelectNextJob -> (model {selected = neighbour 1 model}, [])
@@ -241,7 +252,14 @@ saveSelectedReport :: Model -> (Model, List Command)
 saveSelectedReport model = case selectedEntry model of
   Nothing -> (model, [])
   Just entry ->
-    (model, [OpenSaveDialog "Save Report" (jobLabel entry.state.spec.job <> "-report.txt") (ReportTargetPicked entry.state.spec.jobId)])
+    ( model
+    ,
+      [ OpenSaveDialog
+          (saveReportTitle model.wording)
+          (jobLabel entry.state.spec.job <> "-report.txt")
+          (ReportTargetPicked entry.state.spec.jobId)
+      ]
+    )
 
 clearFinished :: Model -> (Model, List Command)
 clearFinished model =
@@ -306,7 +324,15 @@ planComputed spec outcome model
       Right plan -> replanReady spec.jobId plan model
       Left message ->
         startNext
-          (setPhase spec.jobId (Failed message) model {running = Nothing, toast = toastMessage spec.job (JobFailed message)})
+          ( setPhase
+              spec.jobId
+              (Failed message)
+              ( model
+                  { running = Nothing
+                  , toast = toastMessage model.wording spec.job (JobFailed message)
+                  }
+              )
+          )
   | otherwise = (model, [])
 
 awaitingPlan :: Model -> JobSpec -> Bool
@@ -377,13 +403,11 @@ startNext model = case model.running of
       Nothing -> startNext model {queue = rest}
       Just entry -> (model {running = Just j, queue = rest}, [ComputePlan entry.state.spec])
 
-toastMessage :: Job -> JobEvent -> Maybe Text
-toastMessage job = \case
-  JobFinished result -> Just (label <> ": " <> resultText (jobKind job) result)
-  JobFailed msg' -> Just (label <> ": failed – " <> msg')
+toastMessage :: Wording -> Job -> JobEvent -> Maybe Text
+toastMessage wording job = \case
+  JobFinished result -> Just (jobFinishedToast wording (jobLabel job) (jobKind job) result)
+  JobFailed msg' -> Just (jobFailedToast wording (jobLabel job) msg')
   _ -> Nothing
-  where
-    label = jobLabel job
 
 deleteAt :: Int -> List a -> List a
 deleteAt i xs

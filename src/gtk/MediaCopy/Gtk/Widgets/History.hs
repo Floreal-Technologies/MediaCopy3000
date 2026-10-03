@@ -10,7 +10,6 @@ import Data.IORef (IORef, newIORef)
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Display (display)
 import Data.Time (defaultTimeLocale, formatTime)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
@@ -18,12 +17,13 @@ import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
 import MediaCopy.Domain.Job (plural)
-import MediaCopy.Gtk.Widgets.Common (Cell, Row (..), RowHost (..), newCell, plainRow, renderActionRows, renderCell)
-import MediaCopy.Interface.Wording (count)
+import MediaCopy.Gtk.Widgets.Common
+import MediaCopy.Interface.Translation
+import MediaCopy.Interface.Wording
 
 data HistoryView = HistoryView
   { root :: Gtk.ListBox
-  , cell :: Cell (Maybe MhlHistory)
+  , cell :: Cell (Wording, Maybe MhlHistory)
   }
 
 newHistoryView :: IO HistoryView
@@ -33,23 +33,23 @@ newHistoryView = do
   Gtk.widgetAddCssClass root "boxed-list"
   Gtk.listBoxAppend root expander
   rows <- newIORef V.empty
-  cell <- newCell (\history -> renderGenerations expander rows history)
+  cell <- newCell (\(wording, history) -> renderGenerations expander rows wording history)
   pure HistoryView {root, cell}
 
-renderHistory :: HistoryView -> Maybe MhlHistory -> IO ()
-renderHistory view history = do
-  renderCell view.cell history
+renderHistory :: HistoryView -> Wording -> Maybe MhlHistory -> IO ()
+renderHistory view wording history = do
+  renderCell view.cell (wording, history)
   Gtk.widgetSetVisible view.root (isJust history)
 
-renderGenerations :: Adw.ExpanderRow -> IORef (Vector Adw.ActionRow) -> Maybe MhlHistory -> IO ()
-renderGenerations expander rows history = do
+renderGenerations :: Adw.ExpanderRow -> IORef (Vector Adw.ActionRow) -> Wording -> Maybe MhlHistory -> IO ()
+renderGenerations expander rows wording history = do
   let generations = maybe V.empty (\loaded -> loaded.generations) history
   set expander [#subtitle := plural "generation" (V.length generations)]
-  renderActionRows rows (InExpander expander) (V.map (\gen -> generationRow gen) generations)
+  renderActionRows rows (InExpander expander) (V.map (\gen -> generationRow wording gen) generations)
 
-generationRow :: Generation -> Row
-generationRow generation =
-  (plainRow (generationTitle generation) (generationSubtitle generation))
+generationRow :: Wording -> Generation -> Row
+generationRow wording generation =
+  (plainRow (generationTitle generation) (generationSubtitle wording generation))
     { cssClass = if generation.failures > 0 then Just "error" else Nothing
     }
 
@@ -59,8 +59,8 @@ generationTitle generation =
     <> " · "
     <> T.pack (formatTime defaultTimeLocale "%Y-%m-%d %H:%M" generation.creator.creationDate)
 
-generationSubtitle :: Generation -> Text
-generationSubtitle generation =
+generationSubtitle :: Wording -> Generation -> Text
+generationSubtitle wording generation =
   generation.creator.hostname
     <> " — "
     <> generation.creator.toolName
@@ -68,7 +68,7 @@ generationSubtitle generation =
     <> " · "
     <> algosText generation.algos
     <> " · "
-    <> display generation.process
+    <> processKindText wording generation.process
     <> failuresSuffix generation.failures
 
 failuresSuffix :: Int -> Text

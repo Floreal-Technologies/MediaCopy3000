@@ -4,6 +4,7 @@ module MediaCopy.Gtk.View
   ) where
 
 import Control.Monad (void)
+import Data.Foldable (traverse_)
 import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Map.Strict (Map)
@@ -26,6 +27,7 @@ import MediaCopy.Gtk.Widgets.OffloadDialog (newOffloadDialog, renderOffloadDialo
 import MediaCopy.Gtk.Widgets.PlanSheet (newPlanSheet, renderPlanSheet)
 import MediaCopy.Gtk.Widgets.Preferences (newPreferences)
 import MediaCopy.Interface.Theme (Appearance, PaletteMode, ThemeSection)
+import MediaCopy.Interface.Translation
 import MediaCopy.Model (JobEntry (..), Model (..), UiMessage (..), selectedEntry)
 
 data Widgets = Widgets
@@ -36,11 +38,12 @@ data Widgets = Widgets
 buildWidgets
   :: Adw.Application
   -> (Appearance -> PaletteMode -> IO ())
+  -> Wording
   -> Vector ThemeSection
   -> Vector ThemeSection
   -> (UiMessage -> IO ())
   -> IO Widgets
-buildWidgets app applyTheme lightSections darkSections dispatch = do
+buildWidgets app applyTheme wording lightSections darkSections dispatch = do
   window <- newAppWindow app
   (menuModel, renderActions) <- installActions app window dispatch
   toolbar <- newHeaderToolbar menuModel
@@ -57,7 +60,7 @@ buildWidgets app applyTheme lightSections darkSections dispatch = do
   themeCell <- newCell (\(appearance, desktop) -> applyTheme appearance desktop)
   offloadDialog <- newOffloadDialog window dispatch
   planSheet <- newPlanSheet window dispatch
-  paintPreferences <- newPreferences app window lightSections darkSections dispatch
+  paintPreferences <- newPreferences app window wording lightSections darkSections dispatch
   closeConfirm <- newCloseConfirm window dispatch
   let render current = do
         renderCell themeCell (current.appearance, current.desktopBase)
@@ -179,12 +182,12 @@ renderSidebar sidebar current = suppressing sidebar.suppress $ do
   let gone = Map.difference existing current.jobs
       kept = Map.intersectionWith (,) existing current.jobs
       missing = Map.difference current.jobs existing
-  mapM_ (\jobRow -> Gtk.listBoxRemove sidebar.list jobRow.row) gone
-  added <- traverse (\entry -> newJobRow entry.state) missing
-  mapM_ (\jobRow -> Gtk.listBoxAppend sidebar.list jobRow.row) added
+  traverse_ (\jobRow -> Gtk.listBoxRemove sidebar.list jobRow.row) gone
+  added <- traverse (\entry -> newJobRow current.wording entry.state) missing
+  traverse_ (\jobRow -> Gtk.listBoxAppend sidebar.list jobRow.row) added
   let rows = Map.union (Map.map fst kept) added
   writeIORef sidebar.rows rows
-  mapM_ (\(jobRow, entry) -> jobRow.update current.now entry.state) kept
+  traverse_ (\(jobRow, entry) -> jobRow.update current.wording current.now entry.state) kept
   let chosen = case current.selected of
         Nothing -> Nothing
         Just jobId -> if Map.member jobId rows then Just jobId else Nothing

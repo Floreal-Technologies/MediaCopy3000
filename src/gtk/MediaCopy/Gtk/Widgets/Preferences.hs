@@ -7,7 +7,6 @@ import Data.GI.Base (AttrOp (On, (:=)), new, on, set, unsafeCastTo)
 import Data.GI.Base.BasicTypes (glibType)
 import Data.IORef (IORef, newIORef)
 import Data.Text (Text)
-import Data.Text.Display (display)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Word (Word32)
@@ -16,15 +15,23 @@ import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 
 import MediaCopy.Gtk.Widgets.Common (flatNamed, newLabel, suppressing, unlessSuppressed)
-import MediaCopy.Interface.Theme (Appearance (..), Base (..), PaletteMode (..), Theme, ThemeSection (..), themeRowLabel, usesBase)
+import MediaCopy.Interface.Theme
+import MediaCopy.Interface.Translation
 import MediaCopy.Model (UiMessage (..))
 
-newPreferences :: Adw.Application -> Adw.ApplicationWindow -> Vector ThemeSection -> Vector ThemeSection -> (UiMessage -> IO ()) -> IO (Appearance -> IO ())
-newPreferences app window lightSections darkSections dispatch = do
+newPreferences
+  :: Adw.Application
+  -> Adw.ApplicationWindow
+  -> Wording
+  -> Vector ThemeSection
+  -> Vector ThemeSection
+  -> (UiMessage -> IO ())
+  -> IO (Appearance -> IO ())
+newPreferences app window wording lightSections darkSections dispatch = do
   dialog <- new Adw.PreferencesDialog [#title := "Preferences"]
   page <- new Adw.PreferencesPage [#title := "General", #iconName := "preferences-system-symbolic"]
   group <- new Adw.PreferencesGroup [#title := "Appearance", #description := "Applies to this run only"]
-  rows <- newAppearanceRows lightSections darkSections
+  rows <- newAppearanceRows wording lightSections darkSections
   Adw.preferencesGroupAdd group rows.baseRow
   Adw.preferencesGroupAdd group rows.lightRow
   Adw.preferencesGroupAdd group rows.darkRow
@@ -46,13 +53,13 @@ data AppearanceRows = AppearanceRows
   , suppress :: IORef Bool
   }
 
-newAppearanceRows :: Vector ThemeSection -> Vector ThemeSection -> IO AppearanceRows
-newAppearanceRows lightSections darkSections = do
+newAppearanceRows :: Wording -> Vector ThemeSection -> Vector ThemeSection -> IO AppearanceRows
+newAppearanceRows wording lightSections darkSections = do
   suppress <- newIORef False
-  baseNames <- Gtk.stringListNew (Just (V.toList (V.map (\value -> display value) baseValues)))
+  baseNames <- Gtk.stringListNew (Just (V.toList (V.map (\value -> displayBase wording value) baseValues)))
   baseRow <- new Adw.ComboRow [#title := "Base", #model := baseNames]
-  (lightRow, lightDrop) <- newPaletteRow "Light palette" lightSections
-  (darkRow, darkDrop) <- newPaletteRow "Dark palette" darkSections
+  (lightRow, lightDrop) <- newPaletteRow wording "Light palette" lightSections
+  (darkRow, darkDrop) <- newPaletteRow wording "Dark palette" darkSections
   pure
     AppearanceRows
       { baseRow
@@ -65,9 +72,9 @@ newAppearanceRows lightSections darkSections = do
       , suppress
       }
 
-newPaletteRow :: Text -> Vector ThemeSection -> IO (Adw.ActionRow, Gtk.DropDown)
-newPaletteRow title sections = do
-  names <- themeModel sections
+newPaletteRow :: Wording -> Text -> Vector ThemeSection -> IO (Adw.ActionRow, Gtk.DropDown)
+newPaletteRow wording title sections = do
+  names <- themeModel wording sections
   headers <- themeHeaderFactory sections
   dropDown <- new Gtk.DropDown [#model := names, #headerFactory := headers, #valign := Gtk.AlignCenter]
   row <- new Adw.ActionRow [#title := title, #activatableWidget := dropDown]
@@ -113,13 +120,13 @@ baseValues = V.fromList [minBound .. maxBound]
 themeRows :: Vector ThemeSection -> Vector Theme
 themeRows sections = V.concatMap (\section -> section.themes) sections
 
-themeModel :: Vector ThemeSection -> IO Gtk.FlattenListModel
-themeModel sections = do
+themeModel :: Wording -> Vector ThemeSection -> IO Gtk.FlattenListModel
+themeModel wording sections = do
   modelType <- glibType @Gio.ListModel
   store <- Gio.listStoreNew modelType
   mapM_
     ( \section -> do
-        labels <- Gtk.stringListNew (Just (V.toList (V.map (\theme -> themeRowLabel theme) section.themes)))
+        labels <- Gtk.stringListNew (Just (V.toList (V.map (\theme -> themeRowLabel wording theme) section.themes)))
         Gio.listStoreAppend store labels
     )
     sections

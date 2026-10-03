@@ -5,7 +5,9 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import MediaCopy.Demo.Fixtures (paletteListing)
-import MediaCopy.Interface.Theme (PaletteMode (..), ThemeSection (..), palettesFrom, themeRowLabel, themeSections)
+import MediaCopy.Interface.Theme
+import MediaCopy.Interface.Translation
+import MediaCopy.Interface.Translation.Embedded
 
 tests :: TestTree
 tests =
@@ -15,7 +17,7 @@ tests =
 
 darkListHoldsTheDocumentedSections :: Assertion
 darkListHoldsTheDocumentedSections =
-  map named (V.toList (themeSections DarkPalette (palettesFrom "assets/themes" paletteListing)))
+  map named (V.toList (themeSections (embeddedWording English) DarkPalette (palettesFrom "assets/themes" paletteListing)))
     @?= [ ("System", ["System dark"])
         , ("Catppuccin", ["Frappé", "Macchiato", "Mocha"])
         , ("Dracula", ["Dracula"])
@@ -23,4 +25,4 @@ darkListHoldsTheDocumentedSections =
         , ("Kanagawa", ["Dragon", "Wave"])
         ]
   where
-    named section = (section.heading, map themeRowLabel (V.toList section.themes))
+    named section = (section.heading, map (themeRowLabel (embeddedWording English)) (V.toList section.themes))

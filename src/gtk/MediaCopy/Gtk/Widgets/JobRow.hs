@@ -8,15 +8,15 @@ import Data.GI.Base (AttrOp ((:=)), new, set)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Display (display)
 import Data.Text.Read qualified as TR
 import Data.Time (UTCTime)
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
-import MediaCopy.Domain.Job (JobId (..), JobPhase (..), JobResult (..), JobSpec (..), JobState (..), fractionOf, jobKind, jobLabel, plural, rateOf)
-import MediaCopy.Gtk.Widgets.Common (nameAccessible, newCell, newLabel, paddedBox, renderCell, toggleClass)
-import MediaCopy.Interface.Wording (KindUi (..), count, humanRate, kindUi, quietText)
+import MediaCopy.Domain.Job
+import MediaCopy.Gtk.Widgets.Common
+import MediaCopy.Interface.Translation
+import MediaCopy.Interface.Wording
 
 rowName :: JobId -> Text
 rowName (JobId n) = "job-" <> T.pack (show n)
@@ -43,13 +43,13 @@ data RowView = RowView
 
 data JobRow = JobRow
   { row :: Gtk.ListBoxRow
-  , update :: UTCTime -> JobState -> IO ()
+  , update :: Wording -> UTCTime -> JobState -> IO ()
   }
 
-newJobRow :: JobState -> IO JobRow
-newJobRow state = do
+newJobRow :: Wording -> JobState -> IO JobRow
+newJobRow wording state = do
   icon <- new Gtk.Image [#valign := Gtk.AlignStart]
-  nameAccessible icon (display (jobKind state.spec.job))
+  nameAccessible icon (jobKindText wording (jobKind state.spec.job))
   name <- newLabel (jobLabel state.spec.job) [#xalign := 0, #ellipsize := Pango.EllipsizeModeEnd] ["heading"]
   sub <- newLabel "" [#xalign := 0, #ellipsize := Pango.EllipsizeModeEnd] ["caption"]
   bar <- new Gtk.ProgressBar []
@@ -71,16 +71,16 @@ newJobRow state = do
     toggleClass bar "success" view.allOk
     toggleClass sub "error" view.bad
     toggleClass bar "error" view.bad
-  let update now current = renderCell cell (rowView now current)
-  update state.lastMovedAt state
+  let update wording' now current = renderCell cell (rowView wording' now current)
+  update wording state.lastMovedAt state
   pure JobRow {row, update}
 
-rowView :: UTCTime -> JobState -> RowView
-rowView now state =
+rowView :: Wording -> UTCTime -> JobState -> RowView
+rowView wording now state =
   RowView
     { icon = (kindUi (jobKind state.spec.job)).icon
     , label = jobLabel state.spec.job
-    , phase = phaseText now state
+    , phase = phaseText wording now state
     , fraction = fractionOf state
     , allOk = state.phase == Finished AllOk
     , bad = case state.phase of
@@ -88,20 +88,26 @@ rowView now state =
         _ -> False
     }
 
-phaseText :: UTCTime -> JobState -> Text
-phaseText now state = case state.phase of
+phaseText :: Wording -> UTCTime -> JobState -> Text
+phaseText wording now state = case state.phase of
   Queued -> "Queued"
   NeedsReview -> "Needs review"
-  Running -> runningText now state
+  Running -> runningText wording now state
   Finished AllOk -> "Finished · " <> plural "file" (Map.size state.files) <> " · all OK"
   Finished (WithFailures failures) -> "Finished · " <> plural "failure" failures
   Failed _ -> "Failed"
   Cancelled -> "Cancelled"
 
-runningText :: UTCTime -> JobState -> Text
-runningText now state
-  | Just quiet <- quietText now state = quiet
-  | ui.showsProgress = ui.runningVerb <> " · " <> count (floor (fractionOf state * 100) :: Int) <> " % · " <> humanRate (rateOf state)
-  | otherwise = ui.runningVerb <> "…"
+runningText :: Wording -> UTCTime -> JobState -> Text
+runningText wording now state
+  | Just quiet <- quietText wording now state = quiet
+  | (kindUi kind).showsProgress =
+      verb
+        <> " • "
+        <> count (floor (fractionOf state * 100) :: Int)
+        <> " % • "
+        <> humanRate wording (rateOf state)
+  | otherwise = verb <> "…"
   where
-    ui = kindUi (jobKind state.spec.job)
+    kind = jobKind state.spec.job
+    verb = runningVerbText wording kind

@@ -21,12 +21,13 @@ import System.OsPath (takeFileName)
 
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan
+import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Wording (count, resultText)
 
-renderReport :: JobState -> Maybe JobPlan -> Maybe MhlHistory -> Text
-renderReport st plan mhlHist =
+renderReport :: Wording -> JobState -> Maybe JobPlan -> Maybe MhlHistory -> Text
+renderReport wording st plan mhlHist =
   ( line "MediaCopy 3000 report"
-      <> renderBody st plan
+      <> renderBody wording st plan
       <> renderFailures st
       <> foldMap (\hist -> renderHistory hist) mhlHist
   )
@@ -49,13 +50,13 @@ line text = TB.fromText (text <> "\n")
 field :: Text -> Text -> Builder
 field label value = line (label <> ": " <> value)
 
-renderBody :: JobState -> Maybe JobPlan -> Builder
-renderBody st plan =
+renderBody :: Wording -> JobState -> Maybe JobPlan -> Builder
+renderBody wording st plan =
   field "Job" (display (jobKind st.spec.job))
     <> renderJobDetails st.spec.job
     <> field "Created" (formatMhlTime st.spec.createdAt)
     <> foldMap (\ready -> renderPlan ready) plan
-    <> renderResult (jobKind st.spec.job) st.phase
+    <> renderResult wording (jobKind st.spec.job) st.phase
     <> renderCounts st
     <> foldMap (\p -> field "Manifest" (pathText p)) st.mhlPaths
     <> foldMap (\origin -> field "Originals" origin) st.originsUsed
@@ -112,12 +113,12 @@ renderJobDetails job = case job of
   where
     folderField = field "Folder" (pathText (jobRoot job))
 
-renderResult :: JobKind -> JobPhase -> Builder
-renderResult kind phase = case phase of
+renderResult :: Wording -> JobKind -> JobPhase -> Builder
+renderResult wording kind phase = case phase of
   Queued -> field "Result" "queued"
   Running -> field "Result" "running"
   NeedsReview -> field "Result" "waiting for review"
-  Finished result -> field "Result" (resultText kind result)
+  Finished result -> field "Result" (resultText wording kind result)
   Failed msg -> field "Result" ("failed – " <> msg)
   Cancelled -> field "Result" "cancelled"
 

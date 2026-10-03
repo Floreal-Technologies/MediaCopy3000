@@ -23,32 +23,13 @@ import Data.Vector qualified as V
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
-import MediaCopy.Domain.Job
-  ( Counts (..)
-  , ExistingCopy (..)
-  , FileEntry (..)
-  , Job (..)
-  , JobId
-  , JobPhase (..)
-  , JobSpec (..)
-  , JobState (..)
-  , OffloadJob (..)
-  , countOutcomes
-  , fractionOf
-  , historyFolder
-  , isDone
-  , isFailure
-  , jobKind
-  , jobLabel
-  , jobRoot
-  , plural
-  , rateOf
-  )
+import MediaCopy.Domain.Job hiding (Progress)
 import MediaCopy.Gtk.Actions (actionButton)
 import MediaCopy.Gtk.Widgets.Common (nameAccessible, newLabel, paddedBox, suppressing, toggleClass, unlessSuppressed)
 import MediaCopy.Gtk.Widgets.FileRow (FileRow (..), newFileRow)
 import MediaCopy.Gtk.Widgets.History (HistoryView (..), newHistoryView, renderHistory)
-import MediaCopy.Interface.Wording (KindUi (..), count, humanBytes, humanEta, humanRate, kindUi, quietText)
+import MediaCopy.Interface.Translation
+import MediaCopy.Interface.Wording
 import MediaCopy.Model (FileFilter (..), JobEntry (..), Model (..), UiMessage (..))
 
 data JobDetail = JobDetail
@@ -79,14 +60,14 @@ newJobDetail dispatch = do
   Gtk.boxAppend root files.scroll
   Gtk.boxAppend root actions
   let render model newEntry = case newEntry of
-        Nothing -> renderHistory history Nothing
+        Nothing -> renderHistory history model.wording Nothing
         Just entry -> do
           let state = entry.state
               loaded = entry.history
           renderHeading heading loaded state
-          renderProgress progress model.now state (rateOf state)
+          renderProgress progress model.now model.wording state (rateOf state)
           renderCounters counters loaded state
-          renderHistory history (historyFor loaded state)
+          renderHistory history model.wording (historyFor loaded state)
           suppressing suppress (selectFilter filterButtons model.fileFilter)
           diffFileList files model state
   pure JobDetail {root, render}
@@ -130,11 +111,11 @@ newProgress = do
   Gtk.boxAppend line right
   pure Progress {bar, left, right, line}
 
-renderProgress :: Progress -> UTCTime -> JobState -> Double -> IO ()
-renderProgress progress now state rate = do
+renderProgress :: Progress -> UTCTime -> Wording -> JobState -> Double -> IO ()
+renderProgress progress now wording state rate = do
   Gtk.progressBarSetFraction progress.bar (fractionOf state)
-  set progress.left [#label := progressLeftText state]
-  set progress.right [#label := progressRightText now state rate]
+  set progress.left [#label := progressLeftText wording state]
+  set progress.right [#label := progressRightText wording now state rate]
 
 data Counters = Counters
   { box :: Gtk.Box
@@ -172,7 +153,7 @@ data FileListPane = FileListPane
   , header :: Gtk.Box
   , scroll :: Gtk.ScrolledWindow
   , rows :: IORef (Map RelPath FileRow)
-  , lastRendered :: IORef (Maybe (JobId, Int, FileFilter))
+  , lastRendered :: IORef (Maybe (JobId, Int, FileFilter, Wording))
   }
 
 data FilterButtons = FilterButtons
@@ -239,9 +220,9 @@ newActionBar = do
 diffFileList :: FileListPane -> Model -> JobState -> IO ()
 diffFileList files model state = do
   rendered <- readIORef files.lastRendered
-  let wanted = (state.spec.jobId, state.revision, model.fileFilter)
+  let wanted = (state.spec.jobId, state.revision, model.fileFilter, model.wording)
   when (rendered /= Just wanted) $ do
-    when (fmap (\(jobId, _, _) -> jobId) rendered /= Just state.spec.jobId) (clearFileList files)
+    when (fmap (\(jobId, _, _, _) -> jobId) rendered /= Just state.spec.jobId) (clearFileList files)
     writeIORef files.lastRendered (Just wanted)
     renderFileList files model state
 
@@ -253,16 +234,16 @@ renderFileList files model state = do
   let gone = Map.difference existing wanted
   mapM_ (\fileRow -> Gtk.listBoxRemove files.list fileRow.row) gone
   writeIORef files.rows (Map.difference existing gone)
-  V.imapM_ (syncFileRow files) visible
+  V.imapM_ (syncFileRow files model.wording) visible
 
-syncFileRow :: FileListPane -> Int -> (RelPath, FileEntry) -> IO ()
-syncFileRow files index (path, entry) = do
+syncFileRow :: FileListPane -> Wording -> Int -> (RelPath, FileEntry) -> IO ()
+syncFileRow files wording index (path, entry) = do
   rows <- readIORef files.rows
   case Map.lookup path rows of
-    Just fileRow -> fileRow.update entry.size entry.status
+    Just fileRow -> fileRow.update wording entry.size entry.status
     Nothing -> do
       fileRow <- newFileRow path
-      fileRow.update entry.size entry.status
+      fileRow.update wording entry.size entry.status
       Gtk.listBoxInsert files.list fileRow.row (fromIntegral index)
       writeIORef files.rows (Map.insert path fileRow rows)
 
@@ -357,38 +338,38 @@ algoOfLatestGeneration = \case
     Nothing -> "—"
     Just (_earlier, latest) -> algosText latest.algos
 
-progressLeftText :: JobState -> Text
-progressLeftText state =
-  verbOf state
+progressLeftText :: Wording -> JobState -> Text
+progressLeftText wording state =
+  verbOf wording state
     <> " "
     <> count (doneCount state)
     <> " / "
     <> plural "file" (Map.size state.files)
     <> " · "
-    <> humanBytes state.bytesDone
+    <> humanBytes wording state.bytesDone
     <> " of "
-    <> humanBytes state.bytesTotal
+    <> humanBytes wording state.bytesTotal
 
-progressRightText :: UTCTime -> JobState -> Double -> Text
-progressRightText now state rate = case state.phase of
+progressRightText :: Wording -> UTCTime -> JobState -> Double -> Text
+progressRightText wording now state rate = case state.phase of
   Running
-    | Just quiet <- quietText now state -> quiet
-    | rate > 0 -> humanRate rate <> " · ETA " <> humanEta (remainingSeconds state rate)
-    | otherwise -> humanRate rate <> " · ETA —"
+    | Just quiet <- quietText wording now state -> quiet
+    | rate > 0 -> humanRate wording rate <> " · ETA " <> humanEta wording (remainingSeconds state rate)
+    | otherwise -> humanRate wording rate <> " · ETA —"
   Finished _ -> "done"
   _ -> ""
 
 remainingSeconds :: JobState -> Double -> Double
 remainingSeconds state rate = fromIntegral (state.bytesTotal - state.bytesDone) / rate
 
-verbOf :: JobState -> Text
-verbOf state = case state.phase of
+verbOf :: Wording -> JobState -> Text
+verbOf wording state = case state.phase of
   Queued -> "Queued"
   NeedsReview -> "Needs review"
   Finished _ -> "Finished"
   Failed _ -> "Failed"
   Cancelled -> "Cancelled"
-  _ -> (kindUi (jobKind state.spec.job)).runningVerb
+  _ -> runningVerbText wording (jobKind state.spec.job)
 
 doneCount :: JobState -> Int
 doneCount state = state.files & Map.elems & filter (\entry -> isDone entry.status) & length
