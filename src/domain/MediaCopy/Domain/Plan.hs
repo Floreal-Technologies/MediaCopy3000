@@ -60,7 +60,7 @@ data WriteMode
   = WriteNew
   | Overwrite
   | Reuse
-  deriving stock (Eq, Show)
+  deriving stock (Bounded, Enum, Eq, Show)
 
 -- |
 -- >>> map display [WriteNew, Overwrite, Reuse]
@@ -124,7 +124,7 @@ stepBytesToRead step =
   in sourceBytes + fromIntegral (V.length step.writes) * step.size
 
 data TargetState = Fresh | NotEmpty | Absent | Partial
-  deriving stock (Eq, Show)
+  deriving stock (Bounded, Enum, Eq, Show)
 
 -- |
 -- >>> map display [Fresh, NotEmpty, Absent, Partial]
@@ -168,7 +168,7 @@ data FindingCode
   | ManifestUnreadable
   | NoSeal
   | AlreadySealed
-  deriving stock (Eq, Ord, Show)
+  deriving stock (Bounded, Enum, Eq, Ord, Show)
 
 -- |
 -- >>> display DestinationForeign

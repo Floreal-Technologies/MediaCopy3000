@@ -23,27 +23,7 @@ import Data.Vector qualified as V
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
-import MediaCopy.Domain.Job
-  ( Counts (..)
-  , ExistingCopy (..)
-  , FileEntry (..)
-  , Job (..)
-  , JobId
-  , JobPhase (..)
-  , JobSpec (..)
-  , JobState (..)
-  , OffloadJob (..)
-  , countOutcomes
-  , fractionOf
-  , historyFolder
-  , isDone
-  , isFailure
-  , jobKind
-  , jobLabel
-  , jobRoot
-  , plural
-  , rateOf
-  )
+import MediaCopy.Domain.Job hiding (Progress)
 import MediaCopy.Gtk.Actions (actionButton)
 import MediaCopy.Gtk.Widgets.Common (nameAccessible, newLabel, paddedBox, suppressing, toggleClass, unlessSuppressed)
 import MediaCopy.Gtk.Widgets.FileRow (FileRow (..), newFileRow)
@@ -80,14 +60,14 @@ newJobDetail dispatch = do
   Gtk.boxAppend root files.scroll
   Gtk.boxAppend root actions
   let render model newEntry = case newEntry of
-        Nothing -> renderHistory history Nothing
+        Nothing -> renderHistory history model.wording Nothing
         Just entry -> do
           let state = entry.state
               loaded = entry.history
           renderHeading heading loaded state
           renderProgress progress model.now model.wording state (rateOf state)
           renderCounters counters loaded state
-          renderHistory history (historyFor loaded state)
+          renderHistory history model.wording (historyFor loaded state)
           suppressing suppress (selectFilter filterButtons model.fileFilter)
           diffFileList files model state
   pure JobDetail {root, render}

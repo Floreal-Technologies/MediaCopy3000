@@ -4,6 +4,7 @@ module MediaCopy.Gtk.View
   ) where
 
 import Control.Monad (void)
+import Data.Foldable (traverse_)
 import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Map.Strict (Map)
@@ -27,7 +28,6 @@ import MediaCopy.Gtk.Widgets.PlanSheet (newPlanSheet, renderPlanSheet)
 import MediaCopy.Gtk.Widgets.Preferences (newPreferences)
 import MediaCopy.Interface.Theme (Appearance, PaletteMode, ThemeSection)
 import MediaCopy.Model (JobEntry (..), Model (..), UiMessage (..), selectedEntry)
-import Data.Foldable (traverse_)
 
 data Widgets = Widgets
   { window :: Adw.ApplicationWindow

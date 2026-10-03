@@ -8,7 +8,6 @@ import Data.GI.Base (AttrOp ((:=)), new, set)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Display (display)
 import Data.Text.Read qualified as TR
 import Data.Time (UTCTime)
 import GI.Gtk qualified as Gtk
@@ -50,7 +49,7 @@ data JobRow = JobRow
 newJobRow :: Wording -> JobState -> IO JobRow
 newJobRow wording state = do
   icon <- new Gtk.Image [#valign := Gtk.AlignStart]
-  nameAccessible icon (display (jobKind state.spec.job))
+  nameAccessible icon (jobKindText wording (jobKind state.spec.job))
   name <- newLabel (jobLabel state.spec.job) [#xalign := 0, #ellipsize := Pango.EllipsizeModeEnd] ["heading"]
   sub <- newLabel "" [#xalign := 0, #ellipsize := Pango.EllipsizeModeEnd] ["caption"]
   bar <- new Gtk.ProgressBar []

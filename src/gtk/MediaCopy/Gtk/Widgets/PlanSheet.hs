@@ -20,13 +20,13 @@ import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 import System.OsPath (takeFileName)
 
-import MediaCopy.Domain.Job (ExistingCopy (..), Job (..), JobSpec (..), OffloadJob (..), OnSealFailure (..), SealFirst (..), jobLabel, plural)
+import MediaCopy.Domain.Job
 import MediaCopy.Domain.JobFormat (formatAlgo)
 import MediaCopy.Domain.Plan
 import MediaCopy.Gtk.Widgets.Common
-import MediaCopy.Interface.Wording (count, humanBytes)
-import MediaCopy.Model (Model (..), PlanPhase (..), UiMessage (..))
 import MediaCopy.Interface.Translation
+import MediaCopy.Interface.Wording
+import MediaCopy.Model
 
 data PlanSheet = PlanSheet
   { phaseCell :: Cell (Wording, PlanPhase)
@@ -153,9 +153,9 @@ renderReadyBody :: (Wording, ReadyBody) -> JobPlan -> IO ()
 renderReadyBody (wording, body) plan = do
   renderRows body.summaryGroup body.summaryRows (summaryOf wording plan)
   renderRows body.targetGroup body.targetRows (V.map (\target -> targetRow wording target) plan.targets)
-  renderRows body.findingGroup body.findingRows (V.map (\finding -> findingRow finding) (orderedFindings plan))
+  renderRows body.findingGroup body.findingRows (V.map (\finding -> findingRow wording finding) (orderedFindings plan))
   renderActionRows body.scriptRows (InExpander body.scriptExpander) (scriptOf wording plan)
-  renderSealChoice  body.seal wording plan
+  renderSealChoice body.seal wording plan
 
 data SealControls = SealControls
   { group :: Adw.PreferencesGroup
@@ -202,7 +202,7 @@ reportExistingChoice seal dispatch = unlessSuppressed seal.suppress $ do
   if resume then dispatch (SetExistingCopy Resume) else when replace (dispatch (SetExistingCopy Replace))
 
 renderSealChoice :: SealControls -> Wording -> JobPlan -> IO ()
-renderSealChoice seal wording  plan = case plan.spec.job of
+renderSealChoice seal wording plan = case plan.spec.job of
   Offload oj -> do
     let sealing = case plan.sealPass of
           Nothing -> False
@@ -250,7 +250,7 @@ summaryOf wording plan =
   V.fromList
     [ plainRow (plural "file" (V.length plan.steps)) (humanBytes wording plan.totalBytes)
     , plainRow "Hash format" (formatText plan)
-    , plainRow "Steps" (stepCounts plan)
+    , plainRow "Steps" (stepCounts wording plan)
     ]
 
 formatText :: JobPlan -> Text
@@ -258,20 +258,20 @@ formatText plan = case plan.format of
   Nothing -> "not settled"
   Just fmt -> display (formatAlgo fmt) <> " · originals: " <> plan.originsUsed
 
-stepCounts :: JobPlan -> Text
-stepCounts plan =
+stepCounts :: Wording -> JobPlan -> Text
+stepCounts wording plan =
   plan.steps
-    & V.foldr (\step tally -> Map.insertWith (\_ n -> n + 1) (stepName step) (1 :: Int) tally) Map.empty
+    & V.foldr (\step tally -> Map.insertWith (\_ n -> n + 1) (stepName wording step) (1 :: Int) tally) Map.empty
     & Map.toList
     & map (\pair -> fst pair <> " " <> count (snd pair))
     & T.intercalate " · "
 
-stepName :: PlanStep -> Text
-stepName step = case step.op of
+stepName :: Wording -> PlanStep -> Text
+stepName wording step = case step.op of
   Copy _
-    | V.any (\w -> w.mode == Overwrite) step.writes -> display Overwrite
-    | not (V.null step.writes) && V.all (\w -> w.mode == Reuse) step.writes -> display Reuse
-    | otherwise -> display WriteNew
+    | V.any (\w -> w.mode == Overwrite) step.writes -> writeModeText wording Overwrite
+    | not (V.null step.writes) && V.all (\w -> w.mode == Reuse) step.writes -> writeModeText wording Reuse
+    | otherwise -> writeModeText wording WriteNew
   VerifyAgainst _ -> "verify"
   ReportNew -> "record"
   ReportMissing -> "missing"
@@ -282,14 +282,14 @@ scriptSample = 20
 scriptOf :: Wording -> JobPlan -> Vector Row
 scriptOf wording plan =
   V.fromList
-    [ plainRow "Execution" (executionText plan)
+    [ plainRow "Execution" (executionText wording plan)
     , plainRow "Instant" (formatMhlTime plan.spec.createdAt)
     , plainRow "Bytes" (count plan.bytesToRead <> " to read, " <> count plan.totalBytes <> " in the main pass")
     , plainRow "Creates" (count (V.length plan.creates) <> " directories")
     , plainRow "Directories" (directoriesText plan)
     , plainRow "Ignores" (T.intercalate " · " (V.toList plan.ignorePatterns))
     ]
-    <> V.map (\planned -> generationRow planned) (plannedGenerations plan)
+    <> V.map (\planned -> generationRow wording planned) (plannedGenerations plan)
     <> V.map (\step -> stepRow wording step) (V.take scriptSample plan.steps)
     <> overflowRow (V.length plan.steps)
 
@@ -300,27 +300,27 @@ directoriesText plan =
     & map (\planned -> count (V.length planned.directories))
     & T.intercalate " · "
 
-executionText :: JobPlan -> Text
-executionText plan = case plan.execution of
-  CopyInto copy -> display copy.process <> " · source: " <> pathText copy.source <> " · originals: " <> plan.originsUsed <> carriedText copy.carried
-  RecordAt record -> display record.process <> " · folder: " <> pathText record.folder
+executionText :: Wording -> JobPlan -> Text
+executionText wording plan = case plan.execution of
+  CopyInto copy -> processKindText wording copy.process <> " · source: " <> pathText copy.source <> " · originals: " <> plan.originsUsed <> carriedText copy.carried
+  RecordAt record -> processKindText wording record.process <> " · folder: " <> pathText record.folder
 
 carriedText :: Int -> Text
 carriedText carried
   | carried <= 0 = ""
   | otherwise = " · carries " <> plural "generation" carried
 
-generationRow :: PlannedGeneration -> Row
-generationRow planned =
+generationRow :: Wording -> PlannedGeneration -> Row
+generationRow wording planned =
   plainRow
     (pathText (takeFileName planned.manifest))
-    (pathText planned.folder <> " · generation " <> count planned.number <> " · " <> display planned.process)
+    (pathText planned.folder <> " · generation " <> count planned.number <> " · " <> processKindText wording planned.process)
 
 stepRow :: Wording -> PlanStep -> Row
 stepRow wording step =
   plainRow
     (display step.path)
-    (humanBytes wording step.size <> " · " <> stepName step <> " · " <> expectationText step.op <> tempText step)
+    (humanBytes wording step.size <> " · " <> stepName wording step <> " · " <> expectationText step.op <> tempText step)
 
 expectationText :: FileOp -> Text
 expectationText op = case op of
@@ -350,9 +350,9 @@ targetRow wording target =
 freeText :: Wording -> Target -> Text
 freeText wording target = maybe "free space unknown" (\free -> humanBytes wording free <> " free") target.freeBytes
 
-findingRow :: Finding -> Row
-findingRow finding =
-  (plainRow (display finding.code) finding.detail)
+findingRow :: Wording -> Finding -> Row
+findingRow wording finding =
+  (plainRow (findingText wording finding.code) finding.detail)
     { cssClass = Just (case finding.severity of Blocker -> "error"; Warning -> "warning")
     }
 

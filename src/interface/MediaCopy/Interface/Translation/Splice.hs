@@ -1,5 +1,4 @@
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskellQuotes #-}
 
 module MediaCopy.Interface.Translation.Splice (readFtl, messageReferences) where
 
@@ -45,7 +44,10 @@ messageReferences relative = do
     declare identifier = do
       let name = mkName (camel identifier)
           literal = T.unpack identifier
-      sequence [sigD name [t|Reference|], valD (varP name) (normalB [|fromString literal|]) []]
+      sequence
+        [ sigD name [t|Reference|]
+        , valD (varP name) (normalB [|fromString literal|]) []
+        ]
     camel identifier = case T.splitOn "-" identifier of
       [] -> ""
       first' : rest -> T.unpack (T.concat (lower first' : map upper rest))

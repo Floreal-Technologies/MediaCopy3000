@@ -19,8 +19,8 @@ import Data.Text qualified as T
 import Data.Time (UTCTime)
 import Data.Time qualified as Time
 import Language.Fluent.Plural
-import System.OsPath
 import Numeric
+import System.OsPath
 
 languageCode :: Text
 languageCode = "fr"

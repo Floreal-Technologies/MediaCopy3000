@@ -77,13 +77,12 @@ parseFtl :: Text -> Either (NonEmpty Text) Resource
 parseFtl source = do
   resource <- first (\message -> pure (T.pack message)) (parseResource source)
   let potentialJunk =
-        resource.entries
-          & List.map
-            ( \case
-                JunkEntry junk -> Just junk
-                _ -> Nothing
-            )
-          & Maybe.catMaybes
+        Maybe.mapMaybe
+          ( \case
+              JunkEntry junk -> Just junk
+              _ -> Nothing
+          )
+          resource.entries
           & NonEmpty.nonEmpty
   case potentialJunk of
     Just junkEntries -> Left junkEntries

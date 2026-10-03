@@ -12,9 +12,15 @@ module MediaCopy.Interface.Wording
   , KindUi (..)
   , kindUi
   , runningVerbText
+  , jobKindText
+  , writeModeText
+  , processKindText
+  , targetStateText
+  , findingText
   ) where
 
 import Ascmhl.Path (pathText)
+import Ascmhl.Types
 import Data.Int (Int64)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -22,10 +28,11 @@ import Data.Time (NominalDiffTime, UTCTime, diffUTCTime)
 import System.OsPath (OsPath)
 
 import MediaCopy.Domain.Job
+import MediaCopy.Domain.Plan
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Translation.English qualified as English
+import MediaCopy.Interface.Translation.French qualified as French
 import MediaCopy.Interface.Translation.Messages
-import qualified MediaCopy.Interface.Translation.French as French
 
 -- $setup
 -- >>> import System.OsPath (unsafeEncodeUtf)
@@ -201,3 +208,50 @@ runningVerbText wording = \case
   OffloadKind -> getTranslation' wording runningCopying []
   VerifyKind -> getTranslation' wording runningVerifying []
   SealKind -> getTranslation' wording runningSealing []
+
+jobKindText :: Wording -> JobKind -> Text
+jobKindText wording = \case
+  OffloadKind -> getTranslation' wording jobKindOffload []
+  VerifyKind -> getTranslation' wording jobKindVerify []
+  SealKind -> getTranslation' wording jobKindSeal []
+
+writeModeText :: Wording -> WriteMode -> Text
+writeModeText wording = \case
+  WriteNew -> getTranslation' wording writeModeCopy []
+  Overwrite -> getTranslation' wording writeModeOverwrite []
+  Reuse -> getTranslation' wording writeModeReuse []
+
+processKindText :: Wording -> ProcessKind -> Text
+processKindText wording = \case
+  ProcessTransfer -> getTranslation' wording processTransfer []
+  ProcessInPlace -> getTranslation' wording processInPlace []
+  ProcessFlatten -> getTranslation' wording processFlatten []
+
+targetStateText :: Wording -> TargetState -> Text
+targetStateText wording = \case
+  Fresh -> getTranslation' wording targetEmpty []
+  NotEmpty -> getTranslation' wording targetNotEmpty []
+  Absent -> getTranslation' wording targetAbsent []
+  Partial -> getTranslation' wording targetPartial []
+
+-- |
+-- >>> findingText (embeddedWording English) DestinationForeign
+-- "destination holds files that are not on the media source"
+findingText :: Wording -> FindingCode -> Text
+findingText wording code = getTranslation' wording reference []
+  where
+    reference = case code of
+      SourceMissing -> findingSourceMissing
+      SourceEmpty -> findingSourceEmpty
+      DestinationPartial -> findingDestinationPartial
+      DestinationForeign -> findingDestinationForeign
+      DestinationOtherSource -> findingDestinationOtherSource
+      DestinationUnavailable -> findingDestinationUnavailable
+      DestinationHistoryUnreadable -> findingDestinationHistoryUnreadable
+      InsufficientSpace -> findingInsufficientSpace
+      FormatUnsettled -> findingFormatUnsettled
+      ChainNamesNoManifest -> findingChainNamesNoManifest
+      ChainUnreadable -> findingChainUnreadable
+      ManifestUnreadable -> findingManifestUnreadable
+      NoSeal -> findingNoSeal
+      AlreadySealed -> findingAlreadySealed

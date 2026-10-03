@@ -114,7 +114,7 @@ data CreatorInfo = CreatorInfo
   deriving stock (Eq, Show)
 
 data ProcessKind = ProcessTransfer | ProcessInPlace | ProcessFlatten
-  deriving stock (Eq, Show)
+  deriving stock (Bounded, Enum, Eq, Show)
 
 -- |
 -- >>> map display [ProcessTransfer, ProcessInPlace, ProcessFlatten]

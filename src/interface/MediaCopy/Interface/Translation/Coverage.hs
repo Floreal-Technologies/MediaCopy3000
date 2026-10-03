@@ -33,6 +33,11 @@ expectedWording wording =
     <> map (humanEta wording) [34, 125, 3_720]
     <> map (runningVerbText wording) [minBound ..]
     <> map (\doing -> quietLine wording doing 25) (WritingManifest : map OnFile fileStatuses)
+    <> map (jobKindText wording) [minBound ..]
+    <> map (writeModeText wording) [minBound ..]
+    <> map (processKindText wording) [minBound ..]
+    <> map (targetStateText wording) [minBound ..]
+    <> map (findingText wording) [minBound ..]
 
 fileStatuses :: List FileStatus
 fileStatuses =
