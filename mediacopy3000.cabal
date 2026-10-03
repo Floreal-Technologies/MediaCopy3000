@@ -14,10 +14,10 @@ data-files:
   assets/themes/**/*.json
 
 extra-source-files:
+  locales/*.ftl
   tests/fixtures/**/*.mhl
   tests/fixtures/**/*.xml
   tests/fixtures/**/*.xsd
-  locales/*.ftl
 
 tested-with: ghc ==9.14.1
 

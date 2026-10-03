@@ -9,6 +9,7 @@ module MediaCopy.Interface.Translation.English
   , pluralCategory
   , formatNumber
   , formatTime
+  , decimal
   ) where
 
 import Data.Char qualified as Char
@@ -18,6 +19,7 @@ import Data.Text qualified as T
 import Data.Time (UTCTime)
 import Data.Time qualified as Time
 import Language.Fluent.Plural
+import Numeric
 import System.OsPath
 
 languageCode :: Text
@@ -49,3 +51,6 @@ formatNumber n = case floatingOrInteger @Double n of
 
 formatTime :: UTCTime -> Text
 formatTime t = T.pack (Time.formatTime Time.defaultTimeLocale "%Y-%m-%d %H:%M" t)
+
+decimal :: Double -> Text
+decimal x = T.pack (showFFloat (Just 1) x "")

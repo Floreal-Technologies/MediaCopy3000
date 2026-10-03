@@ -27,6 +27,7 @@ import MediaCopy.Gtk.Widgets.PlanSheet (newPlanSheet, renderPlanSheet)
 import MediaCopy.Gtk.Widgets.Preferences (newPreferences)
 import MediaCopy.Interface.Theme (Appearance, PaletteMode, ThemeSection)
 import MediaCopy.Model (JobEntry (..), Model (..), UiMessage (..), selectedEntry)
+import Data.Foldable (traverse_)
 
 data Widgets = Widgets
   { window :: Adw.ApplicationWindow
@@ -179,12 +180,12 @@ renderSidebar sidebar current = suppressing sidebar.suppress $ do
   let gone = Map.difference existing current.jobs
       kept = Map.intersectionWith (,) existing current.jobs
       missing = Map.difference current.jobs existing
-  mapM_ (\jobRow -> Gtk.listBoxRemove sidebar.list jobRow.row) gone
-  added <- traverse (\entry -> newJobRow entry.state) missing
-  mapM_ (\jobRow -> Gtk.listBoxAppend sidebar.list jobRow.row) added
+  traverse_ (\jobRow -> Gtk.listBoxRemove sidebar.list jobRow.row) gone
+  added <- traverse (\entry -> newJobRow current.wording entry.state) missing
+  traverse_ (\jobRow -> Gtk.listBoxAppend sidebar.list jobRow.row) added
   let rows = Map.union (Map.map fst kept) added
   writeIORef sidebar.rows rows
-  mapM_ (\(jobRow, entry) -> jobRow.update current.now entry.state) kept
+  traverse_ (\(jobRow, entry) -> jobRow.update current.wording current.now entry.state) kept
   let chosen = case current.selected of
         Nothing -> Nothing
         Just jobId -> if Map.member jobId rows then Just jobId else Nothing

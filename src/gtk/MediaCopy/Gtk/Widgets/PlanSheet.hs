@@ -26,9 +26,10 @@ import MediaCopy.Domain.Plan
 import MediaCopy.Gtk.Widgets.Common
 import MediaCopy.Interface.Wording (count, humanBytes)
 import MediaCopy.Model (Model (..), PlanPhase (..), UiMessage (..))
+import MediaCopy.Interface.Translation
 
 data PlanSheet = PlanSheet
-  { phaseCell :: Cell PlanPhase
+  { phaseCell :: Cell (Wording, PlanPhase)
   , openCell :: Cell Bool
   }
 
@@ -82,8 +83,8 @@ newStackPages ready = do
   void (Gtk.stackAddNamed stack errorPage (Just "error"))
   pure (stack, errorPage)
 
-renderPhase :: Sheet -> PlanPhase -> IO ()
-renderPhase sheet phase = case phase of
+renderPhase :: Sheet -> (Wording, PlanPhase) -> IO ()
+renderPhase sheet (wording, phase) = case phase of
   Idle -> pure ()
   Planning spec -> do
     set sheet.dialog [#title := "Plan · " <> jobLabel spec.job]
@@ -97,7 +98,7 @@ renderPhase sheet phase = case phase of
     Gtk.stackSetVisibleChildName sheet.stack "error"
   Ready plan -> do
     set sheet.dialog [#title := "Plan · " <> jobLabel plan.spec.job]
-    renderReadyBody sheet.body plan
+    renderReadyBody (wording, sheet.body) plan
     set sheet.startBtn [#sensitive := not (planBlocked plan)]
     set sheet.saveBtn [#sensitive := True]
     Gtk.stackSetVisibleChildName sheet.stack "ready"
@@ -148,13 +149,13 @@ newReadyBody seal = do
       , seal
       }
 
-renderReadyBody :: ReadyBody -> JobPlan -> IO ()
-renderReadyBody body plan = do
-  renderRows body.summaryGroup body.summaryRows (summaryOf plan)
-  renderRows body.targetGroup body.targetRows (V.map (\target -> targetRow target) plan.targets)
+renderReadyBody :: (Wording, ReadyBody) -> JobPlan -> IO ()
+renderReadyBody (wording, body) plan = do
+  renderRows body.summaryGroup body.summaryRows (summaryOf wording plan)
+  renderRows body.targetGroup body.targetRows (V.map (\target -> targetRow wording target) plan.targets)
   renderRows body.findingGroup body.findingRows (V.map (\finding -> findingRow finding) (orderedFindings plan))
-  renderActionRows body.scriptRows (InExpander body.scriptExpander) (scriptOf plan)
-  renderSealChoice body.seal plan
+  renderActionRows body.scriptRows (InExpander body.scriptExpander) (scriptOf wording plan)
+  renderSealChoice  body.seal wording plan
 
 data SealControls = SealControls
   { group :: Adw.PreferencesGroup
@@ -200,8 +201,8 @@ reportExistingChoice seal dispatch = unlessSuppressed seal.suppress $ do
   replace <- get seal.replaceButton #active
   if resume then dispatch (SetExistingCopy Resume) else when replace (dispatch (SetExistingCopy Replace))
 
-renderSealChoice :: SealControls -> JobPlan -> IO ()
-renderSealChoice seal plan = case plan.spec.job of
+renderSealChoice :: SealControls -> Wording -> JobPlan -> IO ()
+renderSealChoice seal wording  plan = case plan.spec.job of
   Offload oj -> do
     let sealing = case plan.sealPass of
           Nothing -> False
@@ -210,7 +211,7 @@ renderSealChoice seal plan = case plan.spec.job of
           Just pass | pass.onFailure == CopyAnyway -> True
           _ -> False
     suppressing seal.suppress $ do
-      set seal.sealSwitch [#active := sealing, #subtitle := sealSubtitle plan]
+      set seal.sealSwitch [#active := sealing, #subtitle := sealSubtitle wording plan]
       set seal.policySwitch [#active := anyway, #visible := sealing]
       set seal.resumeButton [#active := oj.existingCopy == Just Resume]
       set seal.replaceButton [#active := oj.existingCopy == Just Replace]
@@ -226,7 +227,7 @@ choiceOf sealing anyway
 
 renderPlanSheet :: PlanSheet -> Model -> IO ()
 renderPlanSheet widgets current = do
-  renderCell widgets.phaseCell current.planPhase
+  renderCell widgets.phaseCell (current.wording, current.planPhase)
   renderCell widgets.openCell (isOpen current.planPhase)
 
 isOpen :: PlanPhase -> Bool
@@ -234,9 +235,9 @@ isOpen phase = case phase of
   Idle -> False
   _ -> True
 
-sealSubtitle :: JobPlan -> Text
-sealSubtitle plan = case plan.sealPass of
-  Just pass -> "reads " <> humanBytes pass.bytes <> " first, then writes generation " <> count (plan.generations + 1)
+sealSubtitle :: Wording -> JobPlan -> Text
+sealSubtitle wording plan = case plan.sealPass of
+  Just pass -> "reads " <> humanBytes wording pass.bytes <> " first, then writes generation " <> count (plan.generations + 1)
   Nothing
     | plan.generations == 0 -> "the media source has no history; sealing records its hashes before a byte is copied"
     | otherwise -> "the media source already holds " <> plural "generation" plan.generations <> ", which the copies are checked against"
@@ -244,10 +245,10 @@ sealSubtitle plan = case plan.sealPass of
 orderedFindings :: JobPlan -> Vector Finding
 orderedFindings plan = blockers plan <> V.filter (\finding -> finding.severity == Warning) plan.findings
 
-summaryOf :: JobPlan -> Vector Row
-summaryOf plan =
+summaryOf :: Wording -> JobPlan -> Vector Row
+summaryOf wording plan =
   V.fromList
-    [ plainRow (plural "file" (V.length plan.steps)) (humanBytes plan.totalBytes)
+    [ plainRow (plural "file" (V.length plan.steps)) (humanBytes wording plan.totalBytes)
     , plainRow "Hash format" (formatText plan)
     , plainRow "Steps" (stepCounts plan)
     ]
@@ -278,8 +279,8 @@ stepName step = case step.op of
 scriptSample :: Int
 scriptSample = 20
 
-scriptOf :: JobPlan -> Vector Row
-scriptOf plan =
+scriptOf :: Wording -> JobPlan -> Vector Row
+scriptOf wording plan =
   V.fromList
     [ plainRow "Execution" (executionText plan)
     , plainRow "Instant" (formatMhlTime plan.spec.createdAt)
@@ -289,7 +290,7 @@ scriptOf plan =
     , plainRow "Ignores" (T.intercalate " · " (V.toList plan.ignorePatterns))
     ]
     <> V.map (\planned -> generationRow planned) (plannedGenerations plan)
-    <> V.map (\step -> stepRow step) (V.take scriptSample plan.steps)
+    <> V.map (\step -> stepRow wording step) (V.take scriptSample plan.steps)
     <> overflowRow (V.length plan.steps)
 
 directoriesText :: JobPlan -> Text
@@ -315,11 +316,11 @@ generationRow planned =
     (pathText (takeFileName planned.manifest))
     (pathText planned.folder <> " · generation " <> count planned.number <> " · " <> display planned.process)
 
-stepRow :: PlanStep -> Row
-stepRow step =
+stepRow :: Wording -> PlanStep -> Row
+stepRow wording step =
   plainRow
     (display step.path)
-    (humanBytes step.size <> " · " <> stepName step <> " · " <> expectationText step.op <> tempText step)
+    (humanBytes wording step.size <> " · " <> stepName step <> " · " <> expectationText step.op <> tempText step)
 
 expectationText :: FileOp -> Text
 expectationText op = case op of
@@ -340,14 +341,14 @@ overflowRow total
   | total <= scriptSample = V.empty
   | otherwise = V.singleton (plainRow ("and " <> count (total - scriptSample) <> " more") "")
 
-targetRow :: Target -> Row
-targetRow target =
+targetRow :: Wording -> Target -> Row
+targetRow wording target =
   plainRow
     (pathText (takeFileName target.root))
-    (pathText target.root <> " · " <> freeText target <> " · " <> display target.state)
+    (pathText target.root <> " · " <> freeText wording target <> " · " <> targetStateText wording target.state)
 
-freeText :: Target -> Text
-freeText target = maybe "free space unknown" (\free -> humanBytes free <> " free") target.freeBytes
+freeText :: Wording -> Target -> Text
+freeText wording target = maybe "free space unknown" (\free -> humanBytes wording free <> " free") target.freeBytes
 
 findingRow :: Finding -> Row
 findingRow finding =

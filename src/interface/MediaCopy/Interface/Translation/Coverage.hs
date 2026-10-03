@@ -2,6 +2,7 @@ module MediaCopy.Interface.Translation.Coverage
   ( wordingFaults
   ) where
 
+import Ascmhl.Hash
 import Control.Exception (evaluate, try)
 import Data.Containers.ListUtils (nubOrd)
 import Data.List (List)
@@ -27,6 +28,19 @@ expectedWording :: Wording -> List Text
 expectedWording wording =
   concatMap (\kind -> List.map (resultText wording kind) (AllOk : map WithFailures counts)) [minBound @JobKind ..]
     <> [noHistoryText wording (unsafeEncodeUtf "card")]
+    <> map (humanBytes wording) [0, 12_288, 999_500, 95_600_000_000, 2_500_000_000_000]
+    <> map (humanRate wording) [0, 1.1e9]
+    <> map (humanEta wording) [34, 125, 3_720]
+    <> map (runningVerbText wording) [minBound ..]
+    <> map (\doing -> quietLine wording doing 25) (WritingManifest : map OnFile fileStatuses)
+
+fileStatuses :: List FileStatus
+fileStatuses =
+  [Pending, Hashing, Copying, Flushing, Publishing, Verifying]
+    <> List.map Done [Ok, HashMismatch mismatch, Missing, New, IoError "disk full", Replaced mismatch]
+  where
+    mismatch = Mismatch {expected = hash, actual = hash}
+    hash = Hash {algo = XXH64, value = "0"}
 
 counts :: List Int
 counts = [0, 1, 3, 1_000_000]
