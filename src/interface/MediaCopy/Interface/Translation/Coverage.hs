@@ -30,6 +30,7 @@ expectedWording :: Wording -> List Text
 expectedWording wording =
   concatMap (\kind -> List.map (resultText wording kind) (AllOk : map WithFailures counts)) [minBound @JobKind ..]
     <> [noHistoryText wording (unsafeEncodeUtf "card")]
+    <> [jobFinishedToast wording "A001" minBound AllOk, jobFailedToast wording "A001" "disk full", savePlanTitle wording, saveReportTitle wording]
     <> map (humanBytes wording) [0, 12_288, 999_500, 95_600_000_000, 2_500_000_000_000]
     <> map (humanRate wording) [0, 1.1e9]
     <> map (humanEta wording) [34, 125, 3_720]

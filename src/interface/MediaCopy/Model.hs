@@ -36,7 +36,7 @@ import MediaCopy.Domain.Plan (JobPlan (..), planBlocked, planEquivalent)
 import MediaCopy.Interface.Theme
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Translation.Embedded (embeddedWording)
-import MediaCopy.Interface.Wording (resultText)
+import MediaCopy.Interface.Wording
 import MediaCopy.Report (renderPlanText, renderReport)
 
 data FileFilter = AllFiles | FailedOnly
@@ -223,7 +223,7 @@ updateUi msg model = case msg of
     Just jid -> cancelJob jid model
   SaveSelectedReport -> saveSelectedReport model
   SavePlan -> case model.planPhase of
-    Ready plan -> (model, [OpenSaveDialog "Save Plan" (jobLabel plan.spec.job <> "-plan.txt") (PlanTargetPicked plan)])
+    Ready plan -> (model, [OpenSaveDialog (savePlanTitle model.wording) (jobLabel plan.spec.job <> "-plan.txt") (PlanTargetPicked plan)])
     _ -> (model, [])
   SelectJob mjid -> (model {selected = mjid}, [])
   SelectNextJob -> (model {selected = neighbour 1 model}, [])
@@ -250,7 +250,14 @@ saveSelectedReport :: Model -> (Model, List Command)
 saveSelectedReport model = case selectedEntry model of
   Nothing -> (model, [])
   Just entry ->
-    (model, [OpenSaveDialog "Save Report" (jobLabel entry.state.spec.job <> "-report.txt") (ReportTargetPicked entry.state.spec.jobId)])
+    ( model
+    ,
+      [ OpenSaveDialog
+          (saveReportTitle model.wording)
+          (jobLabel entry.state.spec.job <> "-report.txt")
+          (ReportTargetPicked entry.state.spec.jobId)
+      ]
+    )
 
 clearFinished :: Model -> (Model, List Command)
 clearFinished model =
@@ -396,11 +403,9 @@ startNext model = case model.running of
 
 toastMessage :: Wording -> Job -> JobEvent -> Maybe Text
 toastMessage wording job = \case
-  JobFinished result -> Just (label <> ": " <> resultText wording (jobKind job) result)
-  JobFailed msg' -> Just (label <> ": failed – " <> msg')
+  JobFinished result -> Just (jobFinishedToast wording (jobLabel job) (jobKind job) result)
+  JobFailed msg' -> Just (jobFailedToast wording (jobLabel job) msg')
   _ -> Nothing
-  where
-    label = jobLabel job
 
 deleteAt :: Int -> List a -> List a
 deleteAt i xs

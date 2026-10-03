@@ -4,6 +4,10 @@ module MediaCopy.Interface.Wording
   , humanRate
   , humanEta
   , resultText
+  , jobFinishedToast
+  , jobFailedToast
+  , savePlanTitle
+  , saveReportTitle
   , noHistoryText
   , quietText
   , quietLine
@@ -177,6 +181,21 @@ resultText wording kind = \case
     (OffloadKind; VerifyKind) -> getTranslation' wording resultAllVerified []
     SealKind -> getTranslation' wording resultAllSealed []
   WithFailures n -> getTranslation' wording resultWithFailures [("count", int n)]
+
+-- >>> jobFinishedToast (embeddedWording English) "A001" OffloadKind AllOk
+-- "A001: finished, all files verified"
+jobFinishedToast :: Wording -> Text -> JobKind -> JobResult -> Text
+jobFinishedToast wording label kind result =
+  getTranslation' wording toastJobFinished [("label", str label), ("result", str (resultText wording kind result))]
+
+jobFailedToast :: Wording -> Text -> Text -> Text
+jobFailedToast wording label message = getTranslation' wording toastJobFailed [("label", str label), ("message", str message)]
+
+savePlanTitle :: Wording -> Text
+savePlanTitle wording = getTranslation' wording dialogSavePlan []
+
+saveReportTitle :: Wording -> Text
+saveReportTitle wording = getTranslation' wording dialogSaveReport []
 
 -- |
 -- >>> noHistoryText (embeddedWording English) (unsafeEncodeUtf "card")

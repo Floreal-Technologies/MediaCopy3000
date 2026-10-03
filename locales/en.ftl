@@ -84,3 +84,10 @@ theme-system-dark = System dark
 theme-base-follow-desktop = Follow desktop
 theme-base-always-light = Always light
 theme-base-always-dark = Always dark
+
+## Job toasts & dialogs
+
+toast-job-finished = { $label }: { $result }
+toast-job-failed = { $label }: failed – { $message }
+dialog-save-plan = Save Plan
+dialog-save-report = Save Report
