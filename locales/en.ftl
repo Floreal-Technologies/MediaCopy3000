@@ -75,3 +75,12 @@ finding-chain-unreadable = chain cannot be read
 finding-manifest-unreadable = a manifest the chain names cannot be read
 finding-no-seal = folder has no history
 finding-already-sealed = folder is already sealed
+
+## Theme
+
+theme-section-system = System
+theme-system-light = System light
+theme-system-dark = System dark
+theme-base-follow-desktop = Follow desktop
+theme-base-always-light = Always light
+theme-base-always-dark = Always dark

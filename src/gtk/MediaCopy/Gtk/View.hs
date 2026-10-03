@@ -27,6 +27,7 @@ import MediaCopy.Gtk.Widgets.OffloadDialog (newOffloadDialog, renderOffloadDialo
 import MediaCopy.Gtk.Widgets.PlanSheet (newPlanSheet, renderPlanSheet)
 import MediaCopy.Gtk.Widgets.Preferences (newPreferences)
 import MediaCopy.Interface.Theme (Appearance, PaletteMode, ThemeSection)
+import MediaCopy.Interface.Translation
 import MediaCopy.Model (JobEntry (..), Model (..), UiMessage (..), selectedEntry)
 
 data Widgets = Widgets
@@ -37,11 +38,12 @@ data Widgets = Widgets
 buildWidgets
   :: Adw.Application
   -> (Appearance -> PaletteMode -> IO ())
+  -> Wording
   -> Vector ThemeSection
   -> Vector ThemeSection
   -> (UiMessage -> IO ())
   -> IO Widgets
-buildWidgets app applyTheme lightSections darkSections dispatch = do
+buildWidgets app applyTheme wording lightSections darkSections dispatch = do
   window <- newAppWindow app
   (menuModel, renderActions) <- installActions app window dispatch
   toolbar <- newHeaderToolbar menuModel
@@ -58,7 +60,7 @@ buildWidgets app applyTheme lightSections darkSections dispatch = do
   themeCell <- newCell (\(appearance, desktop) -> applyTheme appearance desktop)
   offloadDialog <- newOffloadDialog window dispatch
   planSheet <- newPlanSheet window dispatch
-  paintPreferences <- newPreferences app window lightSections darkSections dispatch
+  paintPreferences <- newPreferences app window wording lightSections darkSections dispatch
   closeConfirm <- newCloseConfirm window dispatch
   let render current = do
         renderCell themeCell (current.appearance, current.desktopBase)

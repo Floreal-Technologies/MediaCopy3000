@@ -36,6 +36,8 @@ import MediaCopy.Gtk.Reload (loadCss)
 import MediaCopy.Gtk.Theme (apply, loadPalettes, newThemeAdapter)
 import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
 import MediaCopy.Interface.Theme (PaletteMode (..), themeSections)
+import MediaCopy.Interface.Translation
+import MediaCopy.Interface.Translation.Embedded
 import MediaCopy.Model
 
 benchJob :: JobId
@@ -78,9 +80,9 @@ bench :: Environment -> Int -> FilePath -> Adw.Application -> IO ()
 bench environment fileCount resultsPath app = do
   themeAdapter <- newThemeAdapter environment
   palettes <- loadPalettes environment
-  let lightSections = themeSections LightPalette palettes
-      darkSections = themeSections DarkPalette palettes
-  widgets <- buildWidgets app (apply themeAdapter) lightSections darkSections (\_intent -> pure ())
+  let lightSections = themeSections (embeddedWording English) LightPalette palettes
+      darkSections = themeSections (embeddedWording English) DarkPalette palettes
+  widgets <- buildWidgets app (apply themeAdapter) (embeddedWording English) lightSections darkSections (\_intent -> pure ())
   loadCss environment
   Gtk.windowPresent widgets.window
   settle 500

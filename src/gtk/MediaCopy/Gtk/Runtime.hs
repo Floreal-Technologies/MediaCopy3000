@@ -42,6 +42,8 @@ import MediaCopy.Gtk.Screenshot (Startup (..), seeded)
 import MediaCopy.Gtk.Theme
 import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
 import MediaCopy.Interface.Theme (PaletteMode (..), themeSections)
+import MediaCopy.Interface.Translation
+import MediaCopy.Interface.Translation.Embedded
 import MediaCopy.Interface.Wording (noHistoryText)
 import MediaCopy.Model
 import MediaCopy.Report (renderPlanText)
@@ -87,7 +89,15 @@ buildAndPresent runtimeRef environment startup app = do
           Nothing -> pure ()
           Just runtime -> dispatch runtime msg
   palettes <- loadPalettes environment
-  widgets <- buildWidgets app (apply themeAdapter) (themeSections LightPalette palettes) (themeSections DarkPalette palettes) (\intent -> dispatchNow (Ui intent))
+  wording <- (\model -> model.wording) <$> readIORef modelRef
+  widgets <-
+    buildWidgets
+      app
+      (apply themeAdapter)
+      wording
+      (themeSections (embeddedWording English) LightPalette palettes)
+      (themeSections (embeddedWording English) DarkPalette palettes)
+      (\intent -> dispatchNow (Ui intent))
   loadCss environment
   let runtime = Runtime {modelRef, widgets, engine}
   writeIORef runtimeRef (Just runtime)
