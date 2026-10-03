@@ -7,7 +7,6 @@ import Data.GI.Base (AttrOp (On, (:=)), new, on, set, unsafeCastTo)
 import Data.GI.Base.BasicTypes (glibType)
 import Data.IORef (IORef, newIORef)
 import Data.Text (Text)
-import Data.Text.Display (display)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Word (Word32)

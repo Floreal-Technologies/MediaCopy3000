@@ -13,6 +13,7 @@ import Data.List (List)
 import Data.List.NonEmpty qualified as NE
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Encoding (decodeUtf8')
 import Data.Word (Word32)
 import Effectful.Log (logAttention_, logInfo_)
 import GI.GLib qualified as GLib
