@@ -19,6 +19,7 @@ module MediaCopy.Interface.Theme
   , themeSections
   , themeRowLabel
   , themeAsset
+  , displayBase
   ) where
 
 import Data.Aeson (FromJSON (..), withObject, (.:?))
@@ -28,18 +29,15 @@ import Data.List (sort)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Display (Display (..), display)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import System.FilePath (takeBaseName, (</>))
 
+import MediaCopy.Interface.Translation
+import MediaCopy.Interface.Translation.Messages
+
 data PaletteMode = DarkPalette | LightPalette
   deriving stock (Bounded, Enum, Eq, Ord, Show)
-
-instance Display PaletteMode where
-  displayBuilder = \case
-    DarkPalette -> "Dark"
-    LightPalette -> "Light"
 
 data FamilyInfo = FamilyInfo
   { name :: Maybe Text
@@ -112,11 +110,11 @@ data Base
   | AlwaysDark
   deriving stock (Bounded, Enum, Eq, Ord, Show)
 
-instance Display Base where
-  displayBuilder = \case
-    FollowDesktop -> "Follow desktop"
-    AlwaysLight -> "Always light"
-    AlwaysDark -> "Always dark"
+displayBase :: Wording -> Base -> Text
+displayBase wording = \case
+  FollowDesktop -> getTranslation' wording themeBaseFollowDesktop []
+  AlwaysLight -> getTranslation' wording themeBaseAlwaysLight []
+  AlwaysDark -> getTranslation' wording themeBaseAlwaysDark []
 
 data Appearance = Appearance
   { base :: Base
@@ -163,16 +161,20 @@ data ThemeSection = ThemeSection
   }
   deriving stock (Eq, Show)
 
-themeSections :: PaletteMode -> Vector Palette -> Vector ThemeSection
-themeSections mode palettes =
+themeSections :: Wording -> PaletteMode -> Vector Palette -> Vector ThemeSection
+themeSections wording mode palettes =
   V.toList palettes
     & filter (\palette -> palette.mode == mode)
     & sort
-    & foldl (\sections palette -> addPalette sections palette) (V.singleton (systemSection mode))
+    & foldl (\sections palette -> addPalette sections palette) (V.singleton (systemSection wording mode))
 
-systemSection :: PaletteMode -> ThemeSection
-systemSection mode =
-  ThemeSection {heading = "System", homepage = Nothing, themes = V.singleton (SystemTheme mode)}
+systemSection :: Wording -> PaletteMode -> ThemeSection
+systemSection wording mode =
+  ThemeSection
+    { heading = getTranslation' wording themeSectionSystem []
+    , homepage = Nothing
+    , themes = V.singleton (SystemTheme mode)
+    }
 
 addPalette :: Vector ThemeSection -> Palette -> Vector ThemeSection
 addPalette sections palette =
@@ -187,9 +189,10 @@ addPalette sections palette =
     heading = sectionHeading palette
     row = PaletteTheme palette
 
-themeRowLabel :: Theme -> Text
-themeRowLabel = \case
-  SystemTheme mode -> "System " <> T.toLower (display mode)
+themeRowLabel :: Wording -> Theme -> Text
+themeRowLabel wording = \case
+  SystemTheme LightPalette -> getTranslation' wording themeSystemLight []
+  SystemTheme DarkPalette -> getTranslation' wording themeSystemDark []
   PaletteTheme palette -> titleCase palette.variant
 
 themeAsset :: Theme -> Maybe FilePath

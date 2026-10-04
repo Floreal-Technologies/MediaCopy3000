@@ -107,7 +107,7 @@ jobs:
 
     - name: Install doctest
       run: |
-        cabal install doctest-0.25.0 \
+        cabal install doctest-0.25.0.2 \
           --ignore-project \
           --with-compiler=ghc-9.14.1 \
           --overwrite-policy=always

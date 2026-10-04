@@ -12,11 +12,12 @@ import GI.Pango qualified as Pango
 
 import MediaCopy.Domain.Job (FileOutcome (..), FileSize, FileStatus (..), isFailure)
 import MediaCopy.Gtk.Widgets.Common (newCell, newLabel, renderCell, toggleClass)
-import MediaCopy.Interface.Wording (humanBytes)
+import MediaCopy.Interface.Translation
+import MediaCopy.Interface.Wording (fileStatusText, humanBytes)
 
 data FileRow = FileRow
   { row :: Gtk.ListBoxRow
-  , update :: FileSize -> FileStatus -> IO ()
+  , update :: Wording -> FileSize -> FileStatus -> IO ()
   }
 
 newFileRow :: RelPath -> IO FileRow
@@ -41,13 +42,13 @@ newFileRow path = do
   Gtk.boxAppend body dot
   Gtk.boxAppend body status
   row <- new Gtk.ListBoxRow [#child := body, #activatable := False]
-  cell <- newCell $ \(fileSize, fileStatus) -> do
-    set size [#label := humanBytes fileSize]
-    set status [#label := display fileStatus]
+  cell <- newCell $ \(wording, fileSize, fileStatus) -> do
+    set size [#label := humanBytes wording fileSize]
+    set status [#label := fileStatusText wording fileStatus]
     set dot [#iconName := statusIcon fileStatus]
     toggleClass row "error" (isFailure fileStatus)
     toggleClass status "success" (isVerified fileStatus)
-  let update fileSize fileStatus = renderCell cell (fileSize, fileStatus)
+  let update wording fileSize fileStatus = renderCell cell (wording, fileSize, fileStatus)
   pure FileRow {row, update}
 
 statusIcon :: FileStatus -> Text

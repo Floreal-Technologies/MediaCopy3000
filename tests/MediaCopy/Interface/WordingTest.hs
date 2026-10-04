@@ -12,7 +12,9 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import MediaCopy.Domain.Job
-import MediaCopy.Interface.Wording (quietText)
+import MediaCopy.Interface.Translation
+import MediaCopy.Interface.Translation.Embedded
+import MediaCopy.Interface.Wording
 
 tests :: TestTree
 tests =
@@ -30,28 +32,28 @@ tests =
 
 saysNothingWhileTheJobMoves :: Assertion
 saysNothingWhileTheJobMoves =
-  quietText (addUTCTime 0.4 at) (inState Flushing) @?= Nothing
+  quietText (embeddedWording English) (addUTCTime 0.4 at) (inState Flushing) @?= Nothing
 
 speaksAtTheThreshold :: Assertion
 speaksAtTheThreshold = do
-  quietText (addUTCTime 1.9 at) (inState Flushing) @?= Nothing
-  quietText (addUTCTime 2 at) (inState Flushing) @?= Just "Saving to disk · 2 s"
+  quietText (embeddedWording English) (addUTCTime 1.9 at) (inState Flushing) @?= Nothing
+  quietText (embeddedWording English) (addUTCTime 2 at) (inState Flushing) @?= Just "Saving to disk · 2 s"
 
 namesTheStateOfTheFileInHand :: Assertion
 namesTheStateOfTheFileInHand = do
-  quietText (addUTCTime 14 at) (inState Publishing) @?= Just "Naming the copy · 14 s"
-  quietText (addUTCTime 245 at) (inState Copying) @?= Just "Copying · 4 min 05 s"
+  quietText (embeddedWording English) (addUTCTime 14 at) (inState Publishing) @?= Just "Naming the copy · 14 s"
+  quietText (embeddedWording English) (addUTCTime 245 at) (inState Copying) @?= Just "Copying · 4 min 05 s"
 
 saysNothingWithNoFileInHand :: Assertion
 saysNothingWithNoFileInHand = do
-  quietText (addUTCTime 25 at) planned @?= Nothing
-  quietText (addUTCTime 25 at) (inState (Done Ok)) @?= Nothing
+  quietText (embeddedWording English) (addUTCTime 25 at) planned @?= Nothing
+  quietText (embeddedWording English) (addUTCTime 25 at) (inState (Done Ok)) @?= Nothing
 
 namesTheManifestPhase :: Assertion
 namesTheManifestPhase = do
   let writing = foldEvent at ManifestWriting (inState (Done Ok))
-  quietText (addUTCTime 1.9 at) writing @?= Nothing
-  quietText (addUTCTime 25 at) writing @?= Just "Writing the manifest · 25 s"
+  quietText (embeddedWording English) (addUTCTime 1.9 at) writing @?= Nothing
+  quietText (embeddedWording English) (addUTCTime 25 at) writing @?= Just "Writing the manifest · 25 s"
 
 at :: UTCTime
 at = UTCTime (fromGregorian 2026 9 15) 0
