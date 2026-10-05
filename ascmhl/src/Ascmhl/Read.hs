@@ -2,11 +2,13 @@ module Ascmhl.Read
   ( parseManifest
   , parseChain
   , parseMhlTime
+  , parseFragment
+  , isXmlChar
   ) where
 
 import Control.Exception (SomeException, displayException)
 import Data.Bifunctor (first)
-import Data.Foldable (traverse_)
+import Data.Foldable (for_, traverse_)
 import Data.Function ((&))
 import Data.List (List, find)
 import Data.Map.Strict (Map)
@@ -18,6 +20,7 @@ import Data.Text.Display (display)
 import Data.Text.Lazy qualified as TL
 import Data.Text.Read qualified as TR
 import Data.Time (UTCTime, defaultTimeLocale, parseTimeM, zonedTimeToUTC)
+import Data.Traversable (for)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Text.XML
@@ -95,6 +98,10 @@ childrenExcept known c =
   where
     kids = c $/ anyElement
 
+-- |
+-- >>> let creator = "<creatorinfo><creationdate>2026-01-01T00:00:00Z</creationdate><hostname>h</hostname><tool>t</tool><author email=\"jane@example.com\" role=\"DIT\">Jane Doe</author><author>Sam Roe</author><comment>c</comment></creatorinfo>"
+-- >>> fmap (\m -> (m.creator.authors, length m.creator.unknown)) (parseManifest ("<hashlist xmlns=\"urn:ASC:MHL:v2.0\" version=\"2.0\">" <> creator <> "</hashlist>"))
+-- Right ([Author {name = "Jane Doe", email = Just "jane@example.com", phone = Nothing, role = Just "DIT"},Author {name = "Sam Roe", email = Nothing, phone = Nothing, role = Nothing}],1)
 parseManifest :: Text -> Either Text Manifest
 parseManifest txt = do
   root <- parseDoc txt
@@ -114,8 +121,9 @@ parseManifest txt = do
           (listToMaybe (root $/ laxElement Schema.processinfo) >>= childText Schema.process >>= processFromName)
       patternList = root $/ laxElement Schema.processinfo &/ laxElement Schema.ignore &/ laxElement Schema.ignorePattern &/ content
       ignorePatterns = V.fromList patternList
+      authors = V.fromList (map authorOf (ci $/ laxElement Schema.author))
       creatorUnknown =
-        childrenExcept (\local -> local `elem` [Schema.creationdate, Schema.hostname, Schema.tool]) ci
+        childrenExcept (\local -> local `elem` [Schema.creationdate, Schema.hostname, Schema.tool, Schema.author]) ci
   rootHash <- case listToMaybe (root $/ laxElement Schema.processinfo &/ laxElement Schema.roothash) of
     Nothing -> Right V.empty
     Just pc -> dirHashesOf (angled Schema.roothash) pc
@@ -123,7 +131,7 @@ parseManifest txt = do
   let entries = V.fromList (catMaybes entriesList)
   pure
     Manifest
-      { creator = CreatorInfo {creationDate, hostname, toolName, toolVersion, unknown = creatorUnknown}
+      { creator = CreatorInfo {creationDate, hostname, toolName, toolVersion, authors, unknown = creatorUnknown}
       , process
       , rootHash
       , ignorePatterns
@@ -137,6 +145,15 @@ pathElement what c = do
   let pathValue = T.concat (pathC $/ content)
   path <- maybe (Left ("ASC MHL: " <> what <> " is not relative: " <> pathValue)) Right (mkRelPath pathValue)
   Right (pathC, path)
+
+authorOf :: Cursor -> Author
+authorOf c =
+  Author
+    { name = T.concat (c $/ content)
+    , email = attr Schema.email c
+    , phone = attr Schema.phone c
+    , role = attr Schema.role c
+    }
 
 parseEntry :: Cursor -> Either Text (Maybe ManifestEntry)
 parseEntry c = case localName c of
@@ -226,3 +243,66 @@ parseChain txt = do
           c4 = kids & mapMaybe hashElement & find (\h -> h.algo == C4)
           isC4 local = algoFromMhlElement local == Just C4
       pure ChainEntry {sequenceNr, path, c4, unknown = childrenExcept (\local -> local == Schema.path || isC4 local) c}
+
+-- |
+-- >>> fmap (\(Fragment nodes) -> length nodes) (parseFragment "urn:x" "<a xmlns=\"urn:x\">1</a> <b xmlns=\"urn:x\"/>")
+-- Right 2
+-- >>> parseFragment "urn:x" "<a xmlns=\"urn:y\"/>"
+-- Left "metadata: <a> is in namespace urn:y, not urn:x"
+-- >>> parseFragment "urn:x" "<a xmlns=\"urn:x\"><b xmlns=\"\"/></a>"
+-- Left "metadata: <b> is in no namespace, not urn:x"
+-- >>> parseFragment "urn:x" "loose text"
+-- Left "metadata: text outside an element"
+-- >>> parseFragment "urn:x" "<a xmlns=\"urn:x\"><!-- v2 -- beta --><?pi x?>1</a>" == parseFragment "urn:x" "<a xmlns=\"urn:x\">1</a>"
+-- True
+-- >>> parseFragment "urn:x" "<a xmlns=\"urn:x\" xmlns:m=\"urn:ASC:MHL:v2.0\" m:size=\"1\"/>"
+-- Left "metadata: <a> has the attribute size in namespace urn:ASC:MHL:v2.0, not urn:x"
+-- >>> parseFragment "urn:x" "<a xmlns=\"urn:x\">a\SOHb</a>"
+-- Left "metadata: <a> holds a character that XML does not allow"
+-- >>> parseFragment "urn:x" "<a xmlns=\"urn:x\" b=\"\SOH\"/>"
+-- Left "metadata: <a> holds a character that XML does not allow"
+-- >>> either id (const "accepted") (parseFragment "urn:x" (T.replicate 33 "<a xmlns=\"urn:x\">" <> T.replicate 33 "</a>"))
+-- "metadata: more than 32 levels of elements"
+parseFragment :: Text -> Text -> Either Text Fragment
+parseFragment ns txt = do
+  doc <-
+    first
+      (\e -> "metadata: " <> T.pack (displayException @SomeException e))
+      (parseText def (TL.fromStrict ("<fragment>" <> txt <> "</fragment>")))
+  kids <- fmap catMaybes . for (elementNodes (documentRoot doc)) $ \case
+    NodeContent loose
+      | T.null (T.strip loose) -> Right Nothing
+      | otherwise -> Left "metadata: text outside an element"
+    NodeElement e -> Just . NodeElement <$> inNamespace ns 1 e
+    _ -> Right Nothing
+  Right (Fragment (V.fromList kids))
+
+maxDepth :: Int
+maxDepth = 32
+
+inNamespace :: Text -> Int -> Element -> Either Text Element
+inNamespace ns depth e = case nameNamespace e.elementName of
+  _ | depth > maxDepth -> Left ("metadata: more than " <> T.show maxDepth <> " levels of elements")
+  Just found | found == ns -> do
+    for_ (Map.toList e.elementAttributes) $ \(name, value) -> case nameNamespace name of
+      Just other | other /= ns -> Left ("metadata: <" <> nameLocalName e.elementName <> "> has the attribute " <> nameLocalName name <> " in namespace " <> other <> ", not " <> ns)
+      _ -> xmlText value
+    kids <- fmap catMaybes . for e.elementNodes $ \case
+      NodeElement child -> Just . NodeElement <$> inNamespace ns (depth + 1) child
+      NodeContent text -> xmlText text >> Right (Just (NodeContent text))
+      _ -> Right Nothing
+    Right e {elementNodes = kids}
+  Just found -> Left (outside ("namespace " <> found))
+  Nothing -> Left (outside "no namespace")
+  where
+    outside found = "metadata: <" <> nameLocalName e.elementName <> "> is in " <> found <> ", not " <> ns
+    xmlText text
+      | T.all isXmlChar text = Right ()
+      | otherwise = Left ("metadata: <" <> nameLocalName e.elementName <> "> holds a character that XML does not allow")
+
+-- |
+-- >>> map isXmlChar ['a', '\t', '\SOH', '\xFFFE', '\x1F600']
+-- [True,True,False,False,True]
+isXmlChar :: Char -> Bool
+isXmlChar c =
+  c == '\t' || c == '\n' || c == '\r' || (c >= ' ' && c <= '\xD7FF') || (c >= '\xE000' && c <= '\xFFFD') || c >= '\x10000'

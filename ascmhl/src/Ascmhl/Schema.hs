@@ -27,6 +27,11 @@ module Ascmhl.Schema
   , hashdate
   , action
   , sequencenr
+  , author
+  , metadata
+  , email
+  , phone
+  , role
   ) where
 
 import Data.Text (Text)
@@ -120,3 +125,18 @@ action = "action"
 
 sequencenr :: Text
 sequencenr = "sequencenr"
+
+author :: Text
+author = "author"
+
+metadata :: Text
+metadata = "metadata"
+
+email :: Text
+email = "email"
+
+phone :: Text
+phone = "phone"
+
+role :: Text
+role = "role"

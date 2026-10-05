@@ -13,6 +13,8 @@ import Data.GI.Base (AttrOp (On, (:=)), new, on)
 import Data.GI.Base.GError (catchGErrorJustDomain)
 import Data.IORef
 import Data.Maybe (isNothing)
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Display (display)
@@ -48,11 +50,13 @@ import MediaCopy.Interface.Translation.Embedded
 import MediaCopy.Interface.Wording (noHistoryText)
 import MediaCopy.Model
 import MediaCopy.Report (renderPlanText)
+import MediaCopy.Signals (onStopSignal)
 
 data Runtime = Runtime
   { modelRef :: IORef Model
   , widgets :: Widgets
   , engine :: IORef (Maybe (JobId, Async ()))
+  , workers :: IORef (Set (Async ()))
   }
 
 start :: Maybe Startup -> IO ()
@@ -64,7 +68,8 @@ start startup = withEnvironment $ \environment -> do
       [ #applicationId := "tech.floreal.MediaCopy3000"
       , On #activate (activate runtimeRef environment startup ?self)
       ]
-  status <- Gio.applicationRun app Nothing
+  onStopSignal (void (GLib.idleAdd GLib.PRIORITY_DEFAULT (Gio.applicationQuit app >> pure False)))
+  status <- Gio.applicationRun app Nothing `finally` (readIORef runtimeRef >>= mapM_ stopBackground)
   when (status /= 0) (exitWith (ExitFailure (fromIntegral status)))
 
 activate :: IORef (Maybe Runtime) -> Environment -> Maybe Startup -> Adw.Application -> IO ()
@@ -100,7 +105,8 @@ buildAndPresent runtimeRef environment startup app = do
       (themeSections (embeddedWording English) DarkPalette palettes)
       (dispatchNow . Ui)
   loadCss environment
-  let runtime = Runtime {modelRef, widgets, engine}
+  workers <- newIORef Set.empty
+  let runtime = Runtime {modelRef, widgets, engine, workers}
   writeIORef runtimeRef (Just runtime)
   loadWording
     environment
@@ -129,6 +135,18 @@ dispatch runtime msg = do
 postMessage :: Runtime -> Message -> IO ()
 postMessage runtime msg =
   void (GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE (dispatch runtime msg >> pure False))
+
+tracked :: Runtime -> IO () -> IO (Async ())
+tracked runtime action = mask_ $ do
+  worker <- asyncWithUnmask (\unmask -> unmask action)
+  atomicModifyIORef' runtime.workers (\held -> (Set.insert worker held, ()))
+  void $ async $ do
+    void (waitCatch worker)
+    atomicModifyIORef' runtime.workers (\held -> (Set.delete worker held, ()))
+  pure worker
+
+stopBackground :: Runtime -> IO ()
+stopBackground runtime = readIORef runtime.workers >>= mapConcurrently_ cancel
 
 toasting :: Runtime -> IO () -> IO ()
 toasting runtime action = guarded action >>= either (toastFailure runtime) pure
@@ -187,7 +205,7 @@ startJob runtime plan = do
   host <- HostName.getHostName
   let sink event = postMessage runtime (EngineEvent spec.jobId event)
   previous <- readIORef runtime.engine
-  worker <- async $ do
+  worker <- tracked runtime $ do
     mapM_ (waitCatch . snd) previous
     withEventLog spec (renderPlanText spec plan) $ \logPath logLine -> do
       forM_ logPath (sink . LogOpened)
@@ -214,7 +232,7 @@ loadHistory runtime jobId folder = void $ async $ do
 
 planWorker :: Runtime -> JobSpec -> IO ()
 planWorker runtime spec =
-  void $ async $ do
+  void $ tracked runtime $ do
     attempt <- guarded (runEff (runFileSystemIO defaultChunkSize (planJob spec)))
     case attempt of
       Left err -> postMessage runtime (PlanComputed spec (Left (T.pack (displayException err))))
