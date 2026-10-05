@@ -6,6 +6,8 @@ module Ascmhl.Types
   , DirectoryEntry (..)
   , ManifestEntry (..)
   , CreatorInfo (..)
+  , Author (..)
+  , Fragment (..)
   , ProcessKind (..)
   , Manifest (..)
   , ChainEntry (..)
@@ -109,8 +111,20 @@ data CreatorInfo = CreatorInfo
   , hostname :: Text
   , toolName :: Text
   , toolVersion :: Maybe Text
+  , authors :: Vector Author
   , unknown :: Vector Node
   }
+  deriving stock (Eq, Show)
+
+data Author = Author
+  { name :: Text
+  , email :: Maybe Text
+  , phone :: Maybe Text
+  , role :: Maybe Text
+  }
+  deriving stock (Eq, Ord, Show)
+
+newtype Fragment = Fragment (Vector Node)
   deriving stock (Eq, Show)
 
 data ProcessKind = ProcessTransfer | ProcessInPlace | ProcessFlatten

@@ -98,13 +98,21 @@ creatorInfoEl creator =
     []
     ( [ manifestEl Schema.creationdate [] [txt (formatMhlTime creator.creationDate)]
       , manifestEl Schema.hostname [] [txt creator.hostname]
-      , manifestEl Schema.tool (toolVersionAttr creator.toolVersion) [txt creator.toolName]
+      , manifestEl Schema.tool (optAttr Schema.version creator.toolVersion) [txt creator.toolName]
       ]
+        <> map authorEl (V.toList creator.authors)
         <> kept creator.unknown
     )
 
-toolVersionAttr :: Maybe Text -> List (Text, Text)
-toolVersionAttr = maybe [] (\v -> [(Schema.version, v)])
+authorEl :: Author -> Node
+authorEl author =
+  manifestEl
+    Schema.author
+    (optAttr Schema.email author.email <> optAttr Schema.phone author.phone <> optAttr Schema.role author.role)
+    [txt author.name]
+
+optAttr :: Text -> Maybe Text -> List (Text, Text)
+optAttr key = maybe [] (\v -> [(key, v)])
 
 processInfoChildren :: Manifest -> List Node
 processInfoChildren m =

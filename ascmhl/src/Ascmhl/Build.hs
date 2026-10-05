@@ -8,6 +8,9 @@ module Ascmhl.Build
   , chainEntry
   , chainFromListing
   , orderedEntries
+  , withAuthors
+  , withFileMetadata
+  , withManifestMetadata
   ) where
 
 import Data.Function ((&))
@@ -24,10 +27,12 @@ import Data.Time (UTCTime)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import System.OsPath (OsPath)
+import Text.XML (Element (..), Name (..), Node (..))
 
 import Ascmhl.Hash (Hash)
 import Ascmhl.Layout (sequenceOf)
 import Ascmhl.Path (RelPath (..), mkRelPath, pathText)
+import Ascmhl.Schema qualified as Schema
 import Ascmhl.Types
 
 creatorInfo :: UTCTime -> Text -> Text -> Text -> CreatorInfo
@@ -37,6 +42,7 @@ creatorInfo creationDate hostname toolName toolVersion =
     , hostname
     , toolName
     , toolVersion = Just toolVersion
+    , authors = V.empty
     , unknown = V.empty
     }
 
@@ -119,3 +125,34 @@ groupOn key xs = foldr (\x acc -> Map.insertWith (<>) (key x) [x] acc) Map.empty
 parentOf :: RelPath -> RelPath
 parentOf (RelPath t) = case T.breakOnEnd "/" t of
   (before, _) -> RelPath (T.dropEnd 1 before)
+
+withAuthors :: Vector Author -> CreatorInfo -> CreatorInfo
+withAuthors authors creator = creator {authors = creator.authors <> authors}
+
+withFileMetadata :: Fragment -> HashEntry -> HashEntry
+withFileMetadata fragment entry =
+  HashEntry
+    { path = entry.path
+    , size = entry.size
+    , lastModified = entry.lastModified
+    , hashes = entry.hashes
+    , pathAttrs = entry.pathAttrs
+    , unknown = V.snoc entry.unknown (metadataNode fragment)
+    }
+
+withManifestMetadata :: Fragment -> Manifest -> Manifest
+withManifestMetadata fragment manifest =
+  Manifest
+    { creator = manifest.creator
+    , process = manifest.process
+    , rootHash = manifest.rootHash
+    , ignorePatterns = manifest.ignorePatterns
+    , entries = manifest.entries
+    , unknown = V.snoc manifest.unknown (metadataNode fragment)
+    }
+
+metadataNode :: Fragment -> Node
+metadataNode (Fragment nodes) = NodeElement (Element (manifestName Schema.metadata) Map.empty (V.toList nodes))
+
+manifestName :: Text -> Name
+manifestName local = Name local (Just Schema.manifestNs) Nothing
