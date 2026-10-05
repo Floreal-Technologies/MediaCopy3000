@@ -57,7 +57,8 @@ data DraftForm = DraftForm
 newSourceGroup :: (UiMessage -> IO ()) -> IO (Adw.PreferencesGroup, Adw.ActionRow)
 newSourceGroup dispatch = do
   sourceGroup <- new Adw.PreferencesGroup [#title := "Source"]
-  sourceRow <- new Adw.ActionRow [#title := "No folder chosen"]
+  sourceRow <- new Adw.ActionRow [#useMarkup := False]
+  set sourceRow [#title := "No folder chosen"]
   chooseButton <-
     new
       Gtk.Button

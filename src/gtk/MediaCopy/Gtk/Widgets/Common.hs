@@ -23,7 +23,7 @@ module MediaCopy.Gtk.Widgets.Common
 
 import Control.Exception (bracket_)
 import Control.Monad (forM_, unless, void, when)
-import Data.GI.Base (AttrOp (On, (:=)), new, on)
+import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
 import Data.GI.Base.Attributes (AttrOpTag (AttrConstruct))
 import Data.GI.Base.GValue (toGValue)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
@@ -191,7 +191,8 @@ addTo host row = case host of
 
 newRow :: Row -> IO Adw.ActionRow
 newRow row = do
-  built <- new Adw.ActionRow [#title := row.title, #subtitle := row.subtitle]
+  built <- new Adw.ActionRow [#useMarkup := False]
+  set built [#title := row.title, #subtitle := row.subtitle]
   mapM_ (Gtk.widgetAddCssClass built) row.cssClass
   mapM_ (\build -> build >>= \widget -> Adw.actionRowAddSuffix built widget) row.suffix
   pure built
