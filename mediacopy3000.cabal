@@ -94,6 +94,7 @@ library application
     MediaCopy.EventLog
     MediaCopy.Guard
     MediaCopy.Mhl.Store
+    MediaCopy.Signals
 
   other-modules: Paths_mediacopy3000
   autogen-modules: Paths_mediacopy3000
