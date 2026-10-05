@@ -77,12 +77,12 @@ data FamilyListing = FamilyListing
   deriving stock (Eq, Ord, Show)
 
 palettesFrom :: FilePath -> ThemeListing -> Vector Palette
-palettesFrom root listing = V.concatMap (\family -> familyPalettes root family) listing.families
+palettesFrom root listing = V.concatMap (familyPalettes root) listing.families
 
 familyPalettes :: FilePath -> FamilyListing -> Vector Palette
 familyPalettes root family =
   V.concatMap
-    (\(mode, files) -> V.map (\file -> paletteAt mode file) files)
+    (\(mode, files) -> V.map (paletteAt mode) files)
     family.modes
   where
     paletteAt mode file =
@@ -166,7 +166,7 @@ themeSections wording mode palettes =
   V.toList palettes
     & filter (\palette -> palette.mode == mode)
     & sort
-    & foldl (\sections palette -> addPalette sections palette) (V.singleton (systemSection wording mode))
+    & foldl addPalette (V.singleton (systemSection wording mode))
 
 systemSection :: Wording -> PaletteMode -> ThemeSection
 systemSection wording mode =
@@ -206,7 +206,7 @@ sectionHeading palette = fromMaybe (titleCase palette.family) palette.info.name
 titleCase :: Text -> Text
 titleCase name =
   T.split (\letter -> letter == '-' || letter == '_') name
-    & map (\word -> capitalise word)
+    & map capitalise
     & T.unwords
 
 capitalise :: Text -> Text

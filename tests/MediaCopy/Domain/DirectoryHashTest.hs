@@ -43,7 +43,7 @@ runHashes fmt node =
 matchesTheReferenceOnANestedTree :: Assertion
 matchesTheReferenceOnANestedTree = do
   (rootPair, rows) <- runHashes (JobFormat XXH64) sampleTree
-  V.map (\row -> fst row) rows @?= V.fromList [RelPath "A/B", RelPath "A", RelPath "Empty"]
+  V.map fst rows @?= V.fromList [RelPath "A/B", RelPath "A", RelPath "Empty"]
   V.map (\row -> (snd row).content) rows
     @?= V.fromList [Hash XXH64 "d6ea6f397b524900", Hash XXH64 "e1d1abb1814a3c33", Hash XXH64 "ef46db3751d8e999"]
   V.map (\row -> (snd row).structure) rows

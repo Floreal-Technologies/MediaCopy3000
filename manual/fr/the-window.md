@@ -2,7 +2,7 @@
 
 ![La fenêtre avant la première tâche](../en/images/empty.png)
 
-La fenêtre princpale a trois parties: la barre d'en-tête, la liste des tâches et le paneau.
+La fenêtre principale a trois parties: la barre d'en-tête, la liste des tâches et le panneau.
 
 ## La barre d'en-tête
 
@@ -20,14 +20,14 @@ Le bouton de menu est à droite, qui s'ouvre avec la touche <kbd>F10</kbd>.
 
 ![La liste avec plusieurs tâches](../en/images/queue.png)
 
-La liste sur la gauche contiens les tâches, une par rangée, leur phase et la barre de progression.
+La liste sur la gauche contient les tâches, une par rangée, leur phase et la barre de progression.
 
 | The row says | What it means |
 |---|---|
 | `Queued` | La tâche est en attente de traitement. Une tâche est executée à la fois. |
-| `Needs review` | La tâche a été reprogrammée et le plan a changé. Il attent patiemment une nouvelle approbation. |
-| `Copying · 42 % · 310 MB/s` | Un déchargement est en cours, avec sa progression et son taux de transfer  |
-| `Writing the manifest · 25 s` | La tâche a a lu ou écrit tous les fichiers, et est en train d'écrire le manifeste. Le temps écoulé est celui passé à attendre le disque. |
+| `Needs review` | La tâche a été reprogrammée et le plan a changé. Il attend patiemment une nouvelle approbation. |
+| `Copying · 42 % · 310 MB/s` | Un déchargement est en cours, avec sa progression et son taux de transfert |
+| `Writing the manifest · 25 s` | La tâche a lu ou écrit tous les fichiers, et est en train d'écrire le manifeste. Le temps écoulé est celui passé à attendre le disque. |
 | `Saving to disk · 14 s` | La tâche n'a transféré aucune donnée depuis quelques secondes. Les termes indiquent l'état du fichier en cours de traitement, et le nombre correspond à la durée écoulée. La page [Exécution d'une tâche](running-a-job.md) fournit des explications à ce sujet. |
 | `Verifying…` | Une tâche de vérification. |
 | `Sealing…` | Une tâche de scellement. |

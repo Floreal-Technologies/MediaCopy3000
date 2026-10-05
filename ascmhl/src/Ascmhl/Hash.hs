@@ -55,7 +55,7 @@ algoSpec = \case
   C4 -> AlgoSpec {mhlElement = "c4", readValue = id, toDigest = c4ToBytes}
   where
     hexSpec element =
-      AlgoSpec {mhlElement = element, readValue = \raw -> T.toLower raw, toDigest = hexToBytes}
+      AlgoSpec {mhlElement = element, readValue = T.toLower, toDigest = hexToBytes}
 
 -- |
 -- >>> preferredAlgo
@@ -108,8 +108,8 @@ c4FromSha512 digest =
   digest
     & BS.foldl' (\acc byte -> acc * 256 + fromIntegral byte) (0 :: Integer)
     & base58
-    & (\body -> T.justifyRight 88 '1' body)
-    & (\body -> c4Prefix <> body)
+    & T.justifyRight 88 '1'
+    & (c4Prefix <>)
   where
     base58 n =
       if n == 0
@@ -130,7 +130,7 @@ c4ToBytes :: Text -> Maybe ByteString
 c4ToBytes t = do
   body <- T.stripPrefix c4Prefix t
   if T.length body == 88 then Just () else Nothing
-  n <- T.foldl' (\acc ch -> addDigit acc ch) (Just 0) body
+  n <- T.foldl' addDigit (Just 0) body
   if n < c4Modulus then Just (integerToBytes 64 n) else Nothing
   where
     addDigit acc ch = do
@@ -150,7 +150,7 @@ hexToBytes :: Text -> Maybe ByteString
 hexToBytes t =
   if odd (T.length t)
     then Nothing
-    else t & T.chunksOf 2 & traverse (\pair -> byteOf pair) & fmap BS.pack
+    else t & T.chunksOf 2 & traverse byteOf & fmap BS.pack
   where
     byteOf pair = case T.unpack pair of
       [hi, lo] -> do

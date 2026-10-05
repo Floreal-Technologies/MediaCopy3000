@@ -41,6 +41,7 @@ import MediaCopy.Gtk.Reload (loadCss, loadWording)
 import MediaCopy.Gtk.Screenshot (Startup (..), seeded)
 import MediaCopy.Gtk.Theme
 import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
+import MediaCopy.Guard (guarded)
 import MediaCopy.Interface.Theme (PaletteMode (..), themeSections)
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Translation.Embedded
@@ -89,7 +90,7 @@ buildAndPresent runtimeRef environment startup app = do
           Nothing -> pure ()
           Just runtime -> dispatch runtime msg
   palettes <- loadPalettes environment
-  wording <- (\model -> model.wording) <$> readIORef modelRef
+  wording <- (.wording) <$> readIORef modelRef
   widgets <-
     buildWidgets
       app
@@ -97,16 +98,16 @@ buildAndPresent runtimeRef environment startup app = do
       wording
       (themeSections (embeddedWording English) LightPalette palettes)
       (themeSections (embeddedWording English) DarkPalette palettes)
-      (\intent -> dispatchNow (Ui intent))
+      (dispatchNow . Ui)
   loadCss environment
   let runtime = Runtime {modelRef, widgets, engine}
   writeIORef runtimeRef (Just runtime)
   loadWording
     environment
     wording.language
-    (\reloaded -> postMessage runtime (WordingReloaded reloaded))
-    (\message -> postMessage runtime (ShowToast message))
-  onDesktopBase themeAdapter (\observed -> postMessage runtime (DesktopBase observed))
+    (postMessage runtime . WordingReloaded)
+    (postMessage runtime . ShowToast)
+  onDesktopBase themeAdapter (postMessage runtime . DesktopBase)
   installCloseRequest widgets.window dispatchNow
   installTicker startup dispatchNow
   model <- readIORef modelRef
@@ -123,19 +124,17 @@ dispatch runtime msg = do
   let (current, cmds) = update msg old
   writeIORef runtime.modelRef current
   runtime.widgets.render current
-  mapM_ (\cmd -> guarded runtime (runCommand runtime cmd)) cmds
+  mapM_ (toasting runtime . runCommand runtime) cmds
 
 postMessage :: Runtime -> Message -> IO ()
 postMessage runtime msg =
   void (GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE (dispatch runtime msg >> pure False))
 
-guarded :: Runtime -> IO () -> IO ()
-guarded runtime action =
-  try @SomeException action >>= \case
-    Left err -> case fromException @SomeAsyncException err of
-      Just _ -> throwIO err
-      Nothing -> postMessage runtime (ShowToast (T.pack (displayException err)))
-    Right () -> pure ()
+toasting :: Runtime -> IO () -> IO ()
+toasting runtime action = guarded action >>= either (toastFailure runtime) pure
+
+toastFailure :: Runtime -> SomeException -> IO ()
+toastFailure runtime err = postMessage runtime (ShowToast (T.pack (displayException err)))
 
 runCommand :: Runtime -> Command -> IO ()
 runCommand runtime = \case
@@ -174,13 +173,13 @@ openFolderDialog :: Runtime -> (OsPath -> Message) -> IO ()
 openFolderDialog runtime toMessage = do
   dialog <- new Gtk.FileDialog [#title := "Choose a Folder"]
   Gtk.fileDialogSelectFolder dialog (Just runtime.widgets.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
-    guarded runtime (sendPicked runtime toMessage (Gtk.fileDialogSelectFolderFinish dialog result))
+    toasting runtime (sendPicked runtime toMessage (Gtk.fileDialogSelectFolderFinish dialog result))
 
 openSaveDialog :: Runtime -> Text -> Text -> (OsPath -> Message) -> IO ()
 openSaveDialog runtime title suggested toMessage = do
   dialog <- new Gtk.FileDialog [#title := title, #initialName := suggested]
   Gtk.fileDialogSave dialog (Just runtime.widgets.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
-    guarded runtime (sendPicked runtime toMessage (Gtk.fileDialogSaveFinish dialog result))
+    toasting runtime (sendPicked runtime toMessage (Gtk.fileDialogSaveFinish dialog result))
 
 startJob :: Runtime -> JobPlan -> IO ()
 startJob runtime plan = do
@@ -189,9 +188,9 @@ startJob runtime plan = do
   let sink event = postMessage runtime (EngineEvent spec.jobId event)
   previous <- readIORef runtime.engine
   worker <- async $ do
-    mapM_ (\held -> void (waitCatch (snd held))) previous
+    mapM_ (waitCatch . snd) previous
     withEventLog spec (renderPlanText spec plan) $ \logPath logLine -> do
-      forM_ logPath (\p -> sink (LogOpened p))
+      forM_ logPath (sink . LogOpened)
       runEff (runFileSystemIO defaultChunkSize (runHasher (runTime (runEmitIO (\ev -> logLine ev >> sink ev) (executePlan (T.pack host) plan)))))
   writeIORef runtime.engine (Just (spec.jobId, worker))
   void $ async $ do
@@ -216,11 +215,9 @@ loadHistory runtime jobId folder = void $ async $ do
 planWorker :: Runtime -> JobSpec -> IO ()
 planWorker runtime spec =
   void $ async $ do
-    attempt <- try @SomeException (runEff (runFileSystemIO defaultChunkSize (planJob spec)))
+    attempt <- guarded (runEff (runFileSystemIO defaultChunkSize (planJob spec)))
     case attempt of
-      Left err -> case fromException @SomeAsyncException err of
-        Just _ -> throwIO err
-        Nothing -> postMessage runtime (PlanComputed spec (Left (T.pack (displayException err))))
+      Left err -> postMessage runtime (PlanComputed spec (Left (T.pack (displayException err))))
       Right plan -> postMessage runtime (PlanComputed spec (Right plan))
 
 clearWhen :: JobId -> Maybe (JobId, Async ()) -> Maybe (JobId, Async ())
@@ -246,7 +243,7 @@ sendPicked :: (PickedFile file) => Runtime -> (OsPath -> Message) -> IO file -> 
 sendPicked runtime toMessage finish =
   catchGErrorJustDomain
     (finish >>= \picked -> mapM_ (sendPath runtime toMessage) (pickedFile picked))
-    (\dialogError message -> reportDialogError runtime dialogError message)
+    (reportDialogError runtime)
 
 reportDialogError :: Runtime -> Gtk.DialogError -> Text -> IO ()
 reportDialogError runtime dialogError message = case dialogError of

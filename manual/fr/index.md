@@ -1,7 +1,7 @@
 # Manuel
 
-MediaCopy 3000 (MC3K) est une application de transfers de medias, concentrée sur
-**l'intégrité** et la **complétion** des transfers des volumes de stockage.
+MediaCopy 3000 (MC3K) est une application de transferts de médias, concentrée sur
+**l'intégrité** et la **complétude** des transferts des volumes de stockage.
 
 ![L'application avec un plan prêt](../en/images/plan-ready.png)
 
@@ -23,8 +23,8 @@ Voici les termes techniques utilisés dans le manuel :
   <dd>Un fichier <code>.mhl</code> qui possède une somme de contrôle pour chaque fichier dans son arborescence.</dd>
   <dt>Génération</dt>
   <dd>Un manifeste dans l'historique d'un dossier, numéroté à partir de 1.</dd>
-  <dt>Chaine</dt>
-  <dd>Le fichier qui contiens toutes les générations et leur somme de contrôle.</dd>
+  <dt>Chaîne</dt>
+  <dd>Le fichier qui contient toutes les générations et leur somme de contrôle.</dd>
   <dt>Sceau</dt>
   <dd>L'enregistrement des sommes de contrôle d'une source de médias.</dd>
   <dt>Déchargement</dt>
@@ -37,5 +37,5 @@ Voici les termes techniques utilisés dans le manuel :
   <dt>Le plan</dt>
   <dd>Ce qu'une tâche a prévu de faire.</dd>
   <dt>Constats</dt>
-  <dd>Les bloqueurs ou avertissements que le plan aura trouvé avant l'exécution.</dd>
+  <dd>Les bloqueurs ou avertissements que le plan aura trouvés avant l'exécution.</dd>
 </dl>

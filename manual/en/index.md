@@ -1,7 +1,7 @@
 # Manual
 
 MediaCopy 3000 (or MC3K) is a media transfer application that focuses on the
-**integrity** and **completenes** of your data, while offloading between storage
+**integrity** and **completeness** of your data, while offloading between storage
 volumes.
 
 ![The application with a plan ready](images/plan-ready.png)
@@ -33,7 +33,7 @@ These are the terms used throughout the manual and the codebase:
     Each destination carries the media source's history.
   </dd>
   <dt>Verify</dt>
-  <dd>The reading of a folder again and check it against its own history.</dd>
+  <dd>Reading a folder again and checking it against its own history.</dd>
   <dt>Plan</dt>
   <dd>What a job will do, computed before the job runs.</dd>
   <dt>Finding</dt>

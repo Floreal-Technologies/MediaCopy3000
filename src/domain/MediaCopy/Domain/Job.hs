@@ -228,10 +228,10 @@ instance Display JobEvent where
       "planned "
         <> displayBuilder (plural "file" (V.length fs))
         <> ", "
-        <> displayBuilder (T.pack (show toRead))
+        <> displayBuilder (T.show toRead)
         <> " bytes to read"
     FileStatusChanged p s -> displayBuilder p <> " " <> displayBuilder s
-    Progress n -> "progress " <> displayBuilder (T.pack (show n))
+    Progress n -> "progress " <> displayBuilder (T.show n)
     ManifestWriting -> "writing the manifest"
     MhlWritten p -> "manifest " <> displayBuilder (pathText p)
     OriginalsResolved origin algo -> "originals " <> displayBuilder origin <> " · " <> displayBuilder algo
@@ -249,9 +249,9 @@ data SealStopped = SealStopped
 instance Display SealStopped where
   displayBuilder stopped =
     "the seal failed for "
-      <> displayBuilder (T.pack (show stopped.failed))
+      <> displayBuilder (T.show stopped.failed)
       <> " of "
-      <> displayBuilder (T.pack (show stopped.total))
+      <> displayBuilder (T.show stopped.total)
       <> " files; nothing was copied"
 
 data JobPhase = Queued | Running | NeedsReview | Finished JobResult | Failed Text | Cancelled
@@ -310,14 +310,9 @@ rateOf state = case (state.phase, state.throughput) of
   (Running, Just sample) -> sample.rate
   _ -> 0
 
--- |
--- >>> plural "failure" 1
--- "1 failure"
--- >>> plural "file" 3
--- "3 files"
 plural :: Text -> Int -> Text
 plural noun 1 = "1 " <> noun
-plural noun n = T.pack (show n) <> " " <> noun <> "s"
+plural noun n = T.show n <> " " <> noun <> "s"
 
 fractionOf :: JobState -> Double
 fractionOf state

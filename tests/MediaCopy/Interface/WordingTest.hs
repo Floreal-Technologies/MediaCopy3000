@@ -1,13 +1,8 @@
-{-# LANGUAGE ExplicitLevelImports #-}
-{-# LANGUAGE QuasiQuotes #-}
-
 module MediaCopy.Interface.WordingTest (tests) where
 
 import Ascmhl.Path (RelPath (..))
-import Data.List.NonEmpty (NonEmpty (..))
 import Data.Time (UTCTime (..), addUTCTime, fromGregorian)
 import Data.Vector qualified as V
-import splice System.OsPath (osp)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -15,6 +10,7 @@ import MediaCopy.Domain.Job
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Translation.Embedded
 import MediaCopy.Interface.Wording
+import MediaCopy.Test.InMemoryFS (sampleSpec)
 
 tests :: TestTree
 tests =
@@ -65,9 +61,4 @@ inState :: FileStatus -> JobState
 inState status = foldEvent at (FileStatusChanged (RelPath "A/1.mxf") status) planned
 
 spec :: JobSpec
-spec =
-  JobSpec
-    { jobId = JobId 1
-    , job = Offload OffloadJob {source = [osp|/src|], destinations = [osp|/dst|] :| [], sealFirst = UseHistory, existingCopy = Nothing}
-    , createdAt = at
-    }
+spec = sampleSpec {createdAt = at}

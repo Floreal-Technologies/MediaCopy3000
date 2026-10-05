@@ -6,7 +6,7 @@ module MediaCopy.EngineTest (tests) where
 
 import Ascmhl.Hash (Hash (..), HashAlgo (..))
 import Ascmhl.Path (RelPath (..), pathText)
-import Ascmhl.Read (parseChain, parseManifest)
+import Ascmhl.Read (parseChain)
 import Ascmhl.Types
 import Control.Exception (Exception (..), asyncExceptionFromException, asyncExceptionToException, throwIO, try)
 import Data.ByteString qualified as BS
@@ -15,7 +15,6 @@ import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.IORef
 import Data.List (List, sort, sortOn)
-import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
@@ -116,18 +115,6 @@ reportsIoErrorPerFileAndKeepsGoing = do
   statusesOf (RelPath "b") evs @?= [Copying, Flushing, Publishing, Verifying, Done Ok]
   V.last evs @?= JobFinished (WithFailures 1)
 
-runOffloadWith :: IORef MemFS -> List OsPath -> Maybe ExistingCopy -> IO (Vector JobEvent)
-runOffloadWith ref dests existingCopy =
-  runJobEvents ref $
-    JobSpec
-      { jobId = JobId 1
-      , job = Offload OffloadJob {source = [osp|/media-source|], destinations = NE.fromList dests, sealFirst = UseHistory, existingCopy}
-      , createdAt = epoch
-      }
-
-runOffload :: IORef MemFS -> List OsPath -> IO (Vector JobEvent)
-runOffload ref dests = runOffloadWith ref dests Nothing
-
 reusesAMatchingDestinationFile :: Assertion
 reusesAMatchingDestinationFile = do
   ref <-
@@ -179,9 +166,6 @@ keepsTheOldFinalWhenAnOverwriteFails = do
   fs <- readIORef ref
   fmap fst (Map.lookup [osp|/ssd1/media-source/b.txt|] fs.files) @?= Just "old"
 
-runResume :: IORef MemFS -> ExistingCopy -> IO (Vector JobEvent)
-runResume ref choice = runOffloadWith ref [[osp|/ssd1|]] (Just choice)
-
 renameFailureKeepsTheOldFinalOnOverwrite :: Assertion
 renameFailureKeepsTheOldFinalOnOverwrite = do
   ref <-
@@ -197,7 +181,7 @@ renameFailureKeepsTheOldFinalOnOverwrite = do
   fmap fst (Map.lookup [osp|/ssd1/media-source/b.txt|] fs.files) @?= Just "old"
   Map.member [osp|/ssd1/media-source/b.txt.mc3k-part|] fs.files @?= False
   assertBool "expected one IoError for b.txt" (length (filter isIoError (statusesOf (RelPath "b.txt") evs)) == 1)
-  actions <- actionsOfLatestManifestIn [osp|/ssd1/media-source/ascmhl/|] ref
+  actions <- actionsOfLatestManifestIn [osp|/ssd1/media-source|] ref
   actions @?= Just [FailedAction]
 
 readBackFailureAfterPublishKeepsTheNewCopyFlagged :: Assertion
@@ -214,7 +198,7 @@ readBackFailureAfterPublishKeepsTheNewCopyFlagged = do
   fs <- readIORef ref
   fmap fst (Map.lookup [osp|/ssd1/media-source/b.txt|] fs.files) @?= Just "hi"
   Map.member [osp|/ssd1/media-source/b.txt.mc3k-part|] fs.files @?= False
-  actions <- actionsOfLatestManifestIn [osp|/ssd1/media-source/ascmhl/|] ref
+  actions <- actionsOfLatestManifestIn [osp|/ssd1/media-source|] ref
   actions @?= Just [FailedAction]
 
 readBackFailureAfterPublishKeepsANewFileFlagged :: Assertion
@@ -230,7 +214,7 @@ readBackFailureAfterPublishKeepsANewFileFlagged = do
   fs <- readIORef ref
   fmap fst (Map.lookup [osp|/ssd1/media-source/a.mxf|] fs.files) @?= Just "data"
   Map.member [osp|/ssd1/media-source/a.mxf.mc3k-part|] fs.files @?= False
-  actions <- actionsOfLatestManifestIn [osp|/ssd1/media-source/ascmhl/|] ref
+  actions <- actionsOfLatestManifestIn [osp|/ssd1/media-source|] ref
   actions @?= Just [FailedAction]
 
 renameFailureOnTheSecondDestinationKeepsTheFirstCopy :: Assertion
@@ -248,33 +232,10 @@ renameFailureOnTheSecondDestinationKeepsTheFirstCopy = do
   Map.member [osp|/ssd2/media-source/a.mxf|] fs.files @?= False
   Map.member [osp|/ssd1/media-source/a.mxf.mc3k-part|] fs.files @?= False
   Map.member [osp|/ssd2/media-source/a.mxf.mc3k-part|] fs.files @?= False
-  first <- actionsOfLatestManifestIn [osp|/ssd1/media-source/ascmhl/|] ref
+  first <- actionsOfLatestManifestIn [osp|/ssd1/media-source|] ref
   first @?= Just [FailedAction]
-  second <- actionsOfLatestManifestIn [osp|/ssd2/media-source/ascmhl/|] ref
+  second <- actionsOfLatestManifestIn [osp|/ssd2/media-source|] ref
   second @?= Just [FailedAction]
-
-data CancelJob = CancelJob
-  deriving stock (Show)
-
-instance Exception CancelJob where
-  toException = asyncExceptionToException
-  fromException = asyncExceptionFromException
-
-runCancelledAt :: FileStatus -> IO MemFS
-runCancelledAt status = do
-  ref <- newIORef (emptyMemFS & withFile [osp|/media-source/a.mxf|] "data")
-  let sink = \case
-        FileStatusChanged _ s | s == status -> throwIO CancelJob
-        _ -> pure ()
-      spec =
-        JobSpec
-          { jobId = JobId 1
-          , job = Offload OffloadJob {source = [osp|/media-source|], destinations = NE.fromList [[osp|/ssd1|]], sealFirst = UseHistory, existingCopy = Nothing}
-          , createdAt = epoch
-          }
-  result <- try @CancelJob (runEff (runFileSystemMem ref (runHasher (runTime (runEmitIO sink (runJob "localhost" spec))))))
-  assertBool "expected the cancel to reach the caller" (either (const True) (const False) result)
-  readIORef ref
 
 cancelBeforeTheRenameLeavesNoName :: Assertion
 cancelBeforeTheRenameLeavesNoName = do
@@ -317,16 +278,12 @@ manifestWriteFailureFailsTheJobAfterTheCopies = do
   fmap fst (Map.lookup [osp|/ssd1/media-source/a.mxf|] fs.files) @?= Just "data"
   assertBool "no ascmhl under the destination" (not (any (\k -> [osp|/ssd1/media-source/ascmhl/|] `isPrefixOf` k) (Map.keys fs.files)))
 
-isReplaced :: FileStatus -> Bool
-isReplaced (Done (Replaced _)) = True
-isReplaced _ = False
-
 recordsVerifiedWhenTheSourceWasSealed :: Assertion
 recordsVerifiedWhenTheSourceWasSealed = do
   ref <- newIORef (emptyMemFS & withFile [osp|/vol/A002C001.MXF|] (BC.pack "hello"))
   _ <- runSeal' ref
   _ <- runOffload' ref
-  actions <- actionsOfLatestManifestIn [osp|/dest/vol/ascmhl/|] ref
+  actions <- actionsOfLatestManifestIn [osp|/dest/vol|] ref
   actions @?= Just [Verified]
 
 recordsFailedWhenTheSourceChangedAfterSealing :: Assertion
@@ -336,9 +293,9 @@ recordsFailedWhenTheSourceChangedAfterSealing = do
   modifyIORef' ref (withFile [osp|/vol/A002C001.MXF|] (BC.pack "HELLO"))
   evs <- runOffload' ref
   V.last evs @?= JobFinished (WithFailures 1)
-  actions <- actionsOfLatestManifestIn [osp|/dest/vol/ascmhl/|] ref
+  actions <- actionsOfLatestManifestIn [osp|/dest/vol|] ref
   actions @?= Just [FailedAction]
-  values <- latestManifestHashesIn [osp|/dest/vol/ascmhl/|] ref <&> fmap (\hs -> map (\mh -> mh.hash.value) hs)
+  values <- latestManifestHashesIn [osp|/dest/vol|] ref <&> fmap (\hs -> map (.hash.value) hs)
   values @?= Just ["26c7827d889f6da3"]
 
 hashesInTheAlgorithmOfTheOriginals :: Assertion
@@ -346,9 +303,9 @@ hashesInTheAlgorithmOfTheOriginals = do
   ref <- newIORef (emptyMemFS & withTextFile [osp|/vol/ascmhl/0001_vol_2026-05-09_170200.mhl|] md5SealFixture)
   modifyIORef' ref (withFile [osp|/vol/A002C001.MXF|] (BC.pack "hello"))
   _ <- runOffload' ref
-  algos <- latestManifestHashesIn [osp|/dest/vol/ascmhl/|] ref <&> fmap (\hs -> map (\mh -> mh.hash.algo) hs)
+  algos <- latestManifestHashesIn [osp|/dest/vol|] ref <&> fmap (\hs -> map (.hash.algo) hs)
   algos @?= Just [MD5]
-  actions <- actionsOfLatestManifestIn [osp|/dest/vol/ascmhl/|] ref
+  actions <- actionsOfLatestManifestIn [osp|/dest/vol|] ref
   actions @?= Just [Verified]
 
 sealsTheMediaSourceFirstAndRecordsVerified :: Assertion
@@ -359,7 +316,7 @@ sealsTheMediaSourceFirstAndRecordsVerified = do
   fs <- readIORef ref
   let mediaSourceHistory = Map.keys (Map.filterWithKey (\k _ -> [osp|/vol/ascmhl/|] `isPrefixOf` k) fs.files)
   assertBool "the media source holds one generation and its chain" (length mediaSourceHistory == 2)
-  actions <- actionsOfLatestManifestIn [osp|/dest/vol/ascmhl/|] ref
+  actions <- actionsOfLatestManifestIn [osp|/dest/vol|] ref
   actions @?= Just [Verified]
 
 stopsBeforeCopyingWhenTheSealFails :: Assertion
@@ -373,85 +330,6 @@ stopsBeforeCopyingWhenTheSealFails = do
       mediaSourceHistory = Map.keys (Map.filterWithKey (\k _ -> [osp|/vol/ascmhl/|] `isPrefixOf` k) fs.files)
   copied @?= []
   assertBool "the media source holds both generations and its chain" (length mediaSourceHistory == 3)
-
-runSealFirstOffload :: IORef MemFS -> OnSealFailure -> IO (Vector JobEvent)
-runSealFirstOffload ref policy =
-  runJobEvents ref $
-    JobSpec
-      { jobId = JobId 1
-      , job =
-          Offload
-            OffloadJob
-              { source = [osp|/vol|]
-              , destinations = NE.fromList [[osp|/dest|]]
-              , sealFirst = SealBeforeCopy policy
-              , existingCopy = Nothing
-              }
-      , createdAt = epoch
-      }
-
-wrongSealFixture :: Text
-wrongSealFixture =
-  """
-  <?xml version="1.0" encoding="UTF-8"?>
-  <hashlist version="2.0" xmlns="urn:ASC:MHL:v2.0">
-    <creatorinfo>
-      <creationdate>2026-05-09T17:02:00+00:00</creationdate>
-      <hostname>dit-laptop</hostname>
-      <tool version="0.4.0">ascmhl</tool>
-    </creatorinfo>
-    <processinfo>
-      <process>in-place</process>
-      <ignore>
-        <pattern>.DS_Store</pattern>
-        <pattern>ascmhl</pattern>
-      </ignore>
-    </processinfo>
-    <hashes>
-      <hash>
-        <path size="5" lastmodificationdate="1970-01-01T00:00:00+00:00">A002C001.MXF</path>
-        <md5 action="original" hashdate="2026-05-09T17:02:00+00:00">00000000000000000000000000000000</md5>
-      </hash>
-    </hashes>
-  </hashlist>
-  """
-    <> "\n"
-
-runOffload' :: IORef MemFS -> IO (Vector JobEvent)
-runOffload' ref =
-  runJobEvents ref $
-    JobSpec
-      { jobId = JobId 1
-      , job = Offload OffloadJob {source = [osp|/vol|], destinations = NE.fromList [[osp|/dest|]], sealFirst = UseHistory, existingCopy = Nothing}
-      , createdAt = epoch
-      }
-
-md5SealFixture :: Text
-md5SealFixture =
-  """
-  <?xml version="1.0" encoding="UTF-8"?>
-  <hashlist version="2.0" xmlns="urn:ASC:MHL:v2.0">
-    <creatorinfo>
-      <creationdate>2026-05-09T17:02:00+00:00</creationdate>
-      <hostname>dit-laptop</hostname>
-      <tool version="0.4.0">ascmhl</tool>
-    </creatorinfo>
-    <processinfo>
-      <process>in-place</process>
-      <ignore>
-        <pattern>.DS_Store</pattern>
-        <pattern>ascmhl</pattern>
-      </ignore>
-    </processinfo>
-    <hashes>
-      <hash>
-        <path size="5" lastmodificationdate="1970-01-01T00:00:00+00:00">A002C001.MXF</path>
-        <md5 action="original" hashdate="2026-05-09T17:02:00+00:00">5d41402abc4b2a76b9719d911017c592</md5>
-      </hash>
-    </hashes>
-  </hashlist>
-  """
-    <> "\n"
 
 verifiesReportsMissingAndNewWritesAVerifyGeneration :: Assertion
 verifiesReportsMissingAndNewWritesAVerifyGeneration = do
@@ -487,15 +365,6 @@ reportsAMismatch = do
     (length (filter isHashMismatch (statusesOf (RelPath "A002C001.MXF") evs)) == 1)
   statusesOf (RelPath "Sidecar/notes.txt") evs @?= [Verifying, Done Ok]
 
-runVerify' :: IORef MemFS -> IO (Vector JobEvent)
-runVerify' ref =
-  runJobEvents ref $
-    JobSpec
-      { jobId = JobId 1
-      , job = VerifyFolder VerifyJob {folder = [osp|/vol|]}
-      , createdAt = epoch
-      }
-
 sealsAFreshFolderWithOriginalActions :: Assertion
 sealsAFreshFolderWithOriginalActions = do
   ref <-
@@ -505,7 +374,7 @@ sealsAFreshFolderWithOriginalActions = do
           & withFile [osp|/vol/Sidecar/notes.txt|] (BC.pack "")
       )
   evs <- runSeal' ref
-  actions <- actionsOfLatestManifestIn [osp|/vol/ascmhl/|] ref
+  actions <- actionsOfLatestManifestIn [osp|/vol|] ref
   actions @?= Just [Original, Original]
   assertBool "no manifest was written" (any isMhlWritten (V.toList evs))
 
@@ -520,7 +389,7 @@ sealsAgainRecordingVerifiedAndFailed = do
   _ <- runSeal' ref
   modifyIORef' ref (withFile [osp|/vol/A002C001.MXF|] (BC.pack "HELLO"))
   _ <- runSeal' ref
-  actions <- actionsOfLatestManifestIn [osp|/vol/ascmhl/|] ref
+  actions <- actionsOfLatestManifestIn [osp|/vol|] ref
   actions @?= Just [FailedAction, Verified]
 
 carriesTheMediaSourceHistoryIntoTheDestination :: Assertion
@@ -542,46 +411,7 @@ carriesTheMediaSourceHistoryIntoTheDestination = do
     Nothing -> assertFailure "the destination has no chain"
     Just (bytes, _) -> case parseChain (TE.decodeUtf8 bytes) of
       Left err -> assertFailure (show err)
-      Right chain -> V.toList (V.map (\entry -> entry.sequenceNr) chain.entries) @?= [1, 2]
-
-runSeal' :: IORef MemFS -> IO (Vector JobEvent)
-runSeal' ref =
-  runJobEvents ref $
-    JobSpec
-      { jobId = JobId 1
-      , job = SealMediaSource SealJob {folder = [osp|/vol|]}
-      , createdAt = epoch
-      }
-
-isMhlWritten :: JobEvent -> Bool
-isMhlWritten (MhlWritten _) = True
-isMhlWritten _ = False
-
-latestManifestHashesIn :: OsPath -> IORef MemFS -> IO (Maybe (List ManifestHash))
-latestManifestHashesIn prefix ref = do
-  fs <- readIORef ref
-  let manifests = fs.files & Map.keys & filter (\p -> isManifestPath prefix p) & sort
-  case reverse manifests of
-    [] -> pure Nothing
-    newest : _ -> case Map.lookup newest fs.files of
-      Nothing -> pure Nothing
-      Just (bytes, _mtime) -> case parseManifest (TE.decodeUtf8 bytes) of
-        Left _ -> pure Nothing
-        Right m ->
-          m.entries
-            & fileEntries
-            & V.toList
-            & sortOn (\e -> e.path)
-            & mapMaybe (\e -> e.hashes V.!? 0)
-            & Just
-            & pure
-
-actionsOfLatestManifestIn :: OsPath -> IORef MemFS -> IO (Maybe (List HashAction))
-actionsOfLatestManifestIn prefix ref =
-  latestManifestHashesIn prefix ref <&> \hashes -> fmap (\hs -> map (\mh -> mh.action) hs) hashes
-
-isManifestPath :: OsPath -> OsPath -> Bool
-isManifestPath prefix p = prefix `isPrefixOf` p && [osp|.mhl|] `isSuffixOf` p
+      Right chain -> V.toList (V.map (.sequenceNr) chain.entries) @?= [1, 2]
 
 blockedPlanWritesNothing :: Assertion
 blockedPlanWritesNothing = do
@@ -621,22 +451,64 @@ offloadStepsMatchWhatItCopies = do
           & sort
   planned @?= copied
 
-offloadOneDest :: OsPath -> OsPath -> JobSpec
-offloadOneDest source dest =
-  JobSpec
-    { jobId = JobId 1
-    , job = Offload OffloadJob {source, destinations = NE.fromList [dest], sealFirst = UseHistory, existingCopy = Nothing}
-    , createdAt = epoch
-    }
-
-isJobFailed :: JobEvent -> Bool
-isJobFailed (JobFailed _) = True
-isJobFailed _ = False
-
 runJobEvents :: IORef MemFS -> JobSpec -> IO (Vector JobEvent)
 runJobEvents ref spec = do
   (_, evs) <- runEff (runFileSystemMem ref (runHasher (runTime (runEmitCollect (runJob "localhost" spec)))))
   pure evs
+
+runOffloadWith :: IORef MemFS -> List OsPath -> Maybe ExistingCopy -> IO (Vector JobEvent)
+runOffloadWith ref dests existingCopy =
+  runJobEvents ref (specOf (Offload (offloadJob [osp|/media-source|] dests UseHistory) {existingCopy}))
+
+runOffload :: IORef MemFS -> List OsPath -> IO (Vector JobEvent)
+runOffload ref dests = runOffloadWith ref dests Nothing
+
+runResume :: IORef MemFS -> ExistingCopy -> IO (Vector JobEvent)
+runResume ref choice = runOffloadWith ref [[osp|/ssd1|]] (Just choice)
+
+runOffload' :: IORef MemFS -> IO (Vector JobEvent)
+runOffload' ref = runJobEvents ref (offloadOneDest [osp|/vol|] [osp|/dest|])
+
+runSealFirstOffload :: IORef MemFS -> OnSealFailure -> IO (Vector JobEvent)
+runSealFirstOffload ref policy =
+  runJobEvents ref (specOf (Offload (offloadJob [osp|/vol|] [[osp|/dest|]] (SealBeforeCopy policy))))
+
+runVerify' :: IORef MemFS -> IO (Vector JobEvent)
+runVerify' ref = runJobEvents ref (specOf (VerifyFolder VerifyJob {folder = [osp|/vol|]}))
+
+runSeal' :: IORef MemFS -> IO (Vector JobEvent)
+runSeal' ref = runJobEvents ref (specOf (SealMediaSource SealJob {folder = [osp|/vol|]}))
+
+offloadOneDest :: OsPath -> OsPath -> JobSpec
+offloadOneDest source dest = specOf (Offload (offloadJob source [dest] UseHistory))
+
+data CancelJob = CancelJob
+  deriving stock (Show)
+
+instance Exception CancelJob where
+  toException = asyncExceptionToException
+  fromException = asyncExceptionFromException
+
+runCancelledAt :: FileStatus -> IO MemFS
+runCancelledAt status = do
+  ref <- newIORef (emptyMemFS & withFile [osp|/media-source/a.mxf|] "data")
+  let sink = \case
+        FileStatusChanged _ s | s == status -> throwIO CancelJob
+        _ -> pure ()
+      spec = offloadOneDest [osp|/media-source|] [osp|/ssd1|]
+  result <- try @CancelJob (runEff (runFileSystemMem ref (runHasher (runTime (runEmitIO sink (runJob "localhost" spec))))))
+  assertBool "expected the cancel to reach the caller" (either (const True) (const False) result)
+  readIORef ref
+
+latestManifestHashesIn :: OsPath -> IORef MemFS -> IO (Maybe (List ManifestHash))
+latestManifestHashesIn root ref =
+  readIORef ref <&> \fs ->
+    newestManifestIn root fs <&> \m ->
+      m.entries & fileEntries & V.toList & sortOn (.path) & mapMaybe (\e -> e.hashes V.!? 0)
+
+actionsOfLatestManifestIn :: OsPath -> IORef MemFS -> IO (Maybe (List HashAction))
+actionsOfLatestManifestIn root ref =
+  latestManifestHashesIn root ref <&> \hashes -> fmap (\hs -> map (.action) hs) hashes
 
 manifestPhases :: Vector JobEvent -> List String
 manifestPhases events = mapMaybe phaseOf (V.toList events)
@@ -646,11 +518,13 @@ manifestPhases events = mapMaybe phaseOf (V.toList events)
       MhlWritten _ -> Just "written"
       _ -> Nothing
 
-statusesOf :: RelPath -> Vector JobEvent -> List FileStatus
-statusesOf target events = mapMaybe matchStatus (V.toList events)
-  where
-    matchStatus (FileStatusChanged rel status) | rel == target = Just status
-    matchStatus _ = Nothing
+isMhlWritten :: JobEvent -> Bool
+isMhlWritten (MhlWritten _) = True
+isMhlWritten _ = False
+
+isJobFailed :: JobEvent -> Bool
+isJobFailed (JobFailed _) = True
+isJobFailed _ = False
 
 isHashMismatch :: FileStatus -> Bool
 isHashMismatch (Done (HashMismatch _)) = True
@@ -659,3 +533,57 @@ isHashMismatch _ = False
 isIoError :: FileStatus -> Bool
 isIoError (Done (IoError _)) = True
 isIoError _ = False
+
+wrongSealFixture :: Text
+wrongSealFixture =
+  """
+  <?xml version="1.0" encoding="UTF-8"?>
+  <hashlist version="2.0" xmlns="urn:ASC:MHL:v2.0">
+    <creatorinfo>
+      <creationdate>2026-05-09T17:02:00+00:00</creationdate>
+      <hostname>dit-laptop</hostname>
+      <tool version="0.4.0">ascmhl</tool>
+    </creatorinfo>
+    <processinfo>
+      <process>in-place</process>
+      <ignore>
+        <pattern>.DS_Store</pattern>
+        <pattern>ascmhl</pattern>
+      </ignore>
+    </processinfo>
+    <hashes>
+      <hash>
+        <path size="5" lastmodificationdate="1970-01-01T00:00:00+00:00">A002C001.MXF</path>
+        <md5 action="original" hashdate="2026-05-09T17:02:00+00:00">00000000000000000000000000000000</md5>
+      </hash>
+    </hashes>
+  </hashlist>
+  """
+    <> "\n"
+
+md5SealFixture :: Text
+md5SealFixture =
+  """
+  <?xml version="1.0" encoding="UTF-8"?>
+  <hashlist version="2.0" xmlns="urn:ASC:MHL:v2.0">
+    <creatorinfo>
+      <creationdate>2026-05-09T17:02:00+00:00</creationdate>
+      <hostname>dit-laptop</hostname>
+      <tool version="0.4.0">ascmhl</tool>
+    </creatorinfo>
+    <processinfo>
+      <process>in-place</process>
+      <ignore>
+        <pattern>.DS_Store</pattern>
+        <pattern>ascmhl</pattern>
+      </ignore>
+    </processinfo>
+    <hashes>
+      <hash>
+        <path size="5" lastmodificationdate="1970-01-01T00:00:00+00:00">A002C001.MXF</path>
+        <md5 action="original" hashdate="2026-05-09T17:02:00+00:00">5d41402abc4b2a76b9719d911017c592</md5>
+      </hash>
+    </hashes>
+  </hashlist>
+  """
+    <> "\n"

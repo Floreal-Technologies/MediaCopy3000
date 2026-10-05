@@ -26,7 +26,7 @@ withEnvironment use = do
     lookupEnv "MC3K_ENV" >>= \case
       Just "dev" -> pure Development
       _ -> pure Production
-  logger <- mkLogger "stderr" (\message -> T.hPutStrLn stderr (showLogMessage Nothing message))
+  logger <- mkLogger "stderr" (T.hPutStrLn stderr . showLogMessage Nothing)
   use Environment {mode, logger} `finally` (waitForLogger logger >> shutdownLogger logger)
 
 logWith :: Environment -> Eff '[Log, IOE] a -> IO a

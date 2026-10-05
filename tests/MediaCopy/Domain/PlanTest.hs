@@ -6,25 +6,20 @@ module MediaCopy.Domain.PlanTest (tests) where
 import Ascmhl.Hash (Hash (..), HashAlgo (..))
 import Ascmhl.Layout (chainPath)
 import Ascmhl.Path (RelPath (..))
-import Ascmhl.Read (parseManifest)
 import Ascmhl.Types (Chain (..), ChainEntry (..), HashEntry (..), Manifest (..), ProcessKind (..), fileEntries)
 import Ascmhl.Write (renderChain)
 import Control.Monad (forM_, when)
-import Data.Bits (xor)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.IORef (IORef, newIORef, readIORef)
 import Data.Int (Int64)
-import Data.List (List, sort, sortOn)
-import Data.List.NonEmpty qualified as NE
+import Data.List (List, sort)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (listToMaybe, mapMaybe)
-import Data.Ord (Down (..))
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Encoding qualified as TE
 import Data.Text.IO qualified as TIO
 import Data.Vector (Vector)
 import Data.Vector qualified as V
@@ -35,7 +30,6 @@ import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
 import System.OsPath (OsPath, unsafeEncodeUtf)
 import splice System.OsPath (osp)
-import System.OsString (isPrefixOf, isSuffixOf)
 import Test.Tasty
 import Test.Tasty.HUnit hiding (assert)
 import Test.Tasty.Hedgehog (testProperty)
@@ -94,9 +88,6 @@ classifiesManifestOnlyDiskOnlyAndSharedPaths = do
   planVerify manifest disk
     @?= V.fromList
       [(RelPath "a", VerifyAgainst sampleHash), (RelPath "extra", ReportNew), (RelPath "gone", ReportMissing)]
-
-sampleHash :: Hash
-sampleHash = Hash XXH64 "ef46db3751d8e999"
 
 samplePlan :: Vector Finding -> JobPlan
 samplePlan = samplePlanWithFree 1_000_000
@@ -228,9 +219,9 @@ sealFirstPlansASealPass = do
       plain = decideOffload (specOf (Offload plainJob)) plainJob facts
       sealing = decideOffload (specOf (Offload sealingJob)) sealingJob facts
   plain.sealPass @?= Nothing
-  fmap (\pass -> pass.bytes) sealing.sealPass @?= Just 900
+  fmap (.bytes) sealing.sealPass @?= Just 900
   fmap (\pass -> V.length pass.steps) sealing.sealPass @?= Just 1
-  fmap (\pass -> pass.onFailure) sealing.sealPass @?= Just StopBeforeCopy
+  fmap (.onFailure) sealing.sealPass @?= Just StopBeforeCopy
   sealing.totalBytes @?= plain.totalBytes
 
 twoWalksOverOneFileSystemAgree :: Assertion
@@ -266,13 +257,13 @@ destinationGenerationFollowsTheSourceHistory = do
       sealing = decideOffload (specOf (Offload sealingJob)) sealingJob facts
   destinationNumbers plain @?= [2]
   destinationNumbers sealing @?= [3]
-  fmap (\pass -> pass.generation.number) sealing.sealPass @?= Just 2
+  fmap (.generation.number) sealing.sealPass @?= Just 2
   planRaceChecks plain @?= V.singleton (source, 2)
   planRaceChecks sealing @?= V.singleton (source, 2)
 
 destinationNumbers :: JobPlan -> List Int
 destinationNumbers plan = case plan.execution of
-  CopyInto copy -> copy.generations & V.toList & map (\planned -> planned.number)
+  CopyInto copy -> copy.generations & V.toList & map (.number)
   RecordAt _ -> []
 
 partialSource :: Tree
@@ -322,7 +313,7 @@ partialDestinationAwaitsAChoice :: Assertion
 partialDestinationAwaitsAChoice = do
   let undecided = partialPlan Nothing (treeOf [(RelPath "b.txt", 2), (RelPath "A/1.mxf.mc3k-part", 400)] []) emptyChain emptyChain
       decided = partialPlan (Just Resume) (treeOf [(RelPath "b.txt", 2), (RelPath "A/1.mxf.mc3k-part", 400)] []) emptyChain emptyChain
-  map (\target -> target.state) (V.toList undecided.targets) @?= [Partial]
+  map (.state) (V.toList undecided.targets) @?= [Partial]
   assertBool "expected DestinationPartial" (DestinationPartial `elem` codesOf undecided)
   planBlocked undecided @?= True
   assertBool "no DestinationPartial once chosen" (DestinationPartial `notElem` codesOf decided)
@@ -378,14 +369,14 @@ detailsOf wanted plan =
   plan.findings
     & V.toList
     & filter (\finding -> finding.code == wanted)
-    & map (\finding -> finding.detail)
+    & map (.detail)
 
 chainWithC4 :: Text -> Chain
 chainWithC4 value =
   Chain {entries = V.singleton ChainEntry {sequenceNr = 1, path = RelPath "0001_media-source_2020-01-01_000000.mhl", c4 = Just (Hash C4 value), unknown = V.empty}}
 
 codesOf :: JobPlan -> List FindingCode
-codesOf plan = plan.findings & V.toList & map (\finding -> finding.code)
+codesOf plan = plan.findings & V.toList & map (.code)
 
 treeOf :: List (RelPath, FileSize) -> List RelPath -> Tree
 treeOf files dirs = Tree {files = V.fromList files, dirs = V.fromList dirs}
@@ -413,13 +404,6 @@ offloadFacts sourceTree targets =
 generationFacts :: Maybe Tree -> Chain -> Map.Map RelPath Hash -> GenerationFacts
 generationFacts tree chain hashes =
   GenerationFacts {tree, freeBytes = Just 1_000_000, history = Right (Just (chain, hashes))}
-
-offloadJob :: OsPath -> List OsPath -> SealFirst -> OffloadJob
-offloadJob source dests sealFirst =
-  OffloadJob {source, destinations = NE.fromList dests, sealFirst, existingCopy = Nothing}
-
-specOf :: Job -> JobSpec
-specOf job = JobSpec {jobId = JobId 1, job, createdAt = epoch}
 
 verifySpec :: OsPath -> JobSpec
 verifySpec folder = specOf (VerifyFolder VerifyJob {folder})
@@ -484,13 +468,8 @@ seedScenario scenario = foldr seedDestination (foldr seedSource emptyMemFS scena
            NotHeld -> fs
            PartOf percent -> withFile (partPath target) (BS.take (BS.length bs * percent `div` 100) bs) fs
            Same -> withFile target bs fs
-           Flipped -> withFile target (flipFirst bs) fs
+           Flipped -> withFile target (corruptFirstByte bs) fs
            OtherSize -> withFile target (bs <> "x") fs
-
-flipFirst :: ByteString -> ByteString
-flipFirst bs = case BS.uncons bs of
-  Nothing -> "y"
-  Just (b, rest) -> BS.cons (b `xor` 0xFF) rest
 
 mediaSource :: OsPath
 mediaSource = [osp|/media-source|]
@@ -510,7 +489,7 @@ planAndEngineAgree = withTests 400 $ property $ do
     (_, sealEvents) <- evalIO (runEngine ref (runJob "localhost" (sealSpec mediaSource)))
     annotateShow sealEvents
     lastEvent sealEvents === Just (JobFinished AllOk)
-  let parents = map (\d -> d.parent) scenario.destinations
+  let parents = map (.parent) scenario.destinations
       job = (offloadJob mediaSource parents UseHistory) {existingCopy = scenario.choice}
   plan <- evalIO (runEff (runFileSystemMem ref (planJob (specOf (Offload job)))))
   annotateShow plan.findings
@@ -529,7 +508,7 @@ planAndEngineAgree = withTests 400 $ property $ do
       Map.member (partPath (memPath root (fst file))) fs.files === False
     manifestPaths root fs === Just (sort (map fst scenario.files))
   forM_ scenario.files $ \file -> do
-    let replaced = statusesOf (fst file) evs & filter isReplacedStatus & length
+    let replaced = statusesOf (fst file) evs & filter isReplaced & length
     replaced === (if fst file `elem` reusedMismatches scenario then 1 else 0)
 
 flippedReuses :: Scenario -> List (RelPath, ByteString)
@@ -579,33 +558,6 @@ lastProgress evs =
     progressOf (Progress n) = Just n
     progressOf _ = Nothing
 
-statusesOf :: RelPath -> Vector JobEvent -> List FileStatus
-statusesOf target evs = evs & V.toList & mapMaybe matchStatus
-  where
-    matchStatus (FileStatusChanged rel status) | rel == target = Just status
-    matchStatus _ = Nothing
-
-isReplacedStatus :: FileStatus -> Bool
-isReplacedStatus = \case
-  Done (Replaced _) -> True
-  _ -> False
-
 manifestPaths :: OsPath -> MemFS -> Maybe (List RelPath)
-manifestPaths root fs = do
-  newest <- newestManifestIn root fs
-  manifest <- either (const Nothing) Just (parseManifest (TE.decodeUtf8 newest))
-  pure (manifest.entries & fileEntries & V.toList & map (\entry -> entry.path) & sort)
-
-newestManifestIn :: OsPath -> MemFS -> Maybe ByteString
-newestManifestIn root fs =
-  sortOn
-    (Down . fst)
-    ( fs.files
-        & Map.toList
-        & filter (\entry -> isManifestIn root (fst entry))
-    )
-    & listToMaybe
-    & fmap (\entry -> fst (snd entry))
-
-isManifestIn :: OsPath -> OsPath -> Bool
-isManifestIn root p = (root <> [osp|/ascmhl/|]) `isPrefixOf` p && [osp|.mhl|] `isSuffixOf` p
+manifestPaths root fs =
+  newestManifestIn root fs <&> \manifest -> manifest.entries & fileEntries & V.toList & map (.path) & sort

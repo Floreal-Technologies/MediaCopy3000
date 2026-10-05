@@ -43,9 +43,9 @@ The `ascmhl` folder is the media source's own history, copied file for file, plu
 generation for this offload. In the example, `0001` is the seal the card already held and `0002`
 is the offload. A media source with no history gives a destination whose first generation is the
 offload. Every destination gets its own copy, because every destination is its own tree.
-The [The ASC MHL format](mhl-format.md) pages covers this in more details.
+The page [The ASC MHL format](mhl-format.md) covers this in more detail.
 
-An offload does not writes to the media source, except for when **Seal the media source
+An offload does not write to the media source, except for when **Seal the media source
 first** is on. The seal pass will write one generation into the `ascmhl` folder of this media source.
 
 ## What the copy is checked against
@@ -56,7 +56,7 @@ come from one of three places:
 
 - The media source's own history, when it holds one.
 - The seal this job takes first, when you turn on **Seal the media source first**.
-- Nothing, when the media source holds no history. Then, every file is then recorded as `original`.
+- Nothing, when the media source holds no history. Every file is then recorded as `original`.
 
 The plan names which of the three it used, and the detail pane repeats it on the `Originals:` line.
 The page [Seal the media source first](seal-first.md) explains the choice.

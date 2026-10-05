@@ -36,8 +36,9 @@ Le fichier débute par une ligne de titre, suivie du plan que vous avez approuv�
 
 Les états des fichiers correspondent aux états de la liste des fichiers. La page
 [Pendant l'exécution d'une tâche](running-a-job.md) les répertorie. Une ligne
-`progress` apparaît environ dix fois par seconde pendant la copie. ## Quand
-l'envoyer
+`progress` apparaît environ dix fois par seconde pendant la copie.
+
+## Quand l'envoyer
 
 Un rapport d'incident est plus utile lorsqu'il est accompagné du rapport
 enregistré et de ce journal. Ensemble, ils contiennent le plan, le résultat et

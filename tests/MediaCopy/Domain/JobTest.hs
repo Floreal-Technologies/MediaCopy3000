@@ -8,7 +8,7 @@ import Ascmhl.Path (RelPath (..))
 import Data.Function ((&))
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict qualified as Map
-import Data.Time (UTCTime (..), addUTCTime, fromGregorian)
+import Data.Time (addUTCTime)
 import Data.Vector qualified as V
 import Hedgehog
 import Hedgehog.Gen qualified as Gen
@@ -20,6 +20,7 @@ import Test.Tasty.HUnit hiding (assert)
 import Test.Tasty.Hedgehog (testProperty)
 
 import MediaCopy.Domain.Job
+import MediaCopy.Test.InMemoryFS (sampleHash, sampleSpec)
 
 tests :: TestTree
 tests =
@@ -93,7 +94,7 @@ bytesDoneNeverDecreases = property $ do
   steps <- forAll $ Gen.list (Range.linear 0 50) (Gen.int64 (Range.linear 0 1000))
   let evs = map Progress steps
       states = scanl (flip fold) (newJobState sampleSpec) evs
-      dones = map (\s -> s.bytesDone) states
+      dones = map (.bytesDone) states
   zipWith (<=) dones (drop 1 dones) & and & assert
 
 countsEachCategory :: Assertion
@@ -148,19 +149,8 @@ anEndClearsWhatTheJobHadInHand = do
 fold :: JobEvent -> JobState -> JobState
 fold = foldEvent sampleSpec.createdAt
 
-sampleSpec :: JobSpec
-sampleSpec =
-  JobSpec
-    { jobId = JobId 1
-    , job = Offload OffloadJob {source = [osp|/src|], destinations = [osp|/dst|] :| [], sealFirst = UseHistory, existingCopy = Nothing}
-    , createdAt = UTCTime (fromGregorian 2026 9 9) 0
-    }
-
 sampleOffload :: OffloadJob
 sampleOffload = OffloadJob {source = [osp|/media/CARD_B/B003_C011|], destinations = [osp|/d|] :| [], sealFirst = UseHistory, existingCopy = Nothing}
 
 sampleVerify :: VerifyJob
 sampleVerify = VerifyJob {folder = [osp|/vol/Day03|]}
-
-sampleHash :: Hash
-sampleHash = Hash XXH64 "ef46db3751d8e999"

@@ -57,7 +57,7 @@ scenes =
        ]
 
 sceneNames :: List Text
-sceneNames = map (\scene -> scene.name) scenes
+sceneNames = map (.name) scenes
 
 lookupScene :: Text -> Maybe Scene
 lookupScene wanted = find (\scene -> scene.name == wanted) scenes

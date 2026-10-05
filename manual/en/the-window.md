@@ -14,7 +14,7 @@ Three buttons sit at the left and start one kind of job:
 | **Verify Folder…** | A verify. The page [Verify a folder](verify.md) explains it. |
 | **Seal Media…** | A seal. The page [Seal a media source](seal.md) explains it. |
 
-The menu button sits at the right, which you can open with the <kbd>F10</kbd> key.
+The menu button sits at the right. The <kbd>F10</kbd> key opens it.
 
 ## The job list
 

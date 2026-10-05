@@ -87,7 +87,7 @@ chainFromListing :: Vector OsPath -> Chain
 chainFromListing names =
   names
     & V.toList
-    & mapMaybe (\name -> mkRelPath (pathText name))
+    & mapMaybe (mkRelPath . pathText)
     & zipWith entryFor [1 ..]
     & V.fromList
     & Chain
@@ -99,17 +99,17 @@ orderedEntries files dirs = V.fromList (below root)
   where
     root = RelPath ""
     dirPaths :: Set RelPath
-    dirPaths = dirs & V.toList & map (\d -> d.path) & Set.fromList
+    dirPaths = dirs & V.toList & map (.path) & Set.fromList
     homeOf :: RelPath -> RelPath
     homeOf path = let p = parentOf path in if p == root || Set.member p dirPaths then p else root
     dirsByParent :: Map RelPath (List DirectoryEntry)
-    dirsByParent = dirs & V.toList & filter (\d -> d.path /= root) & sortOn (\d -> d.path) & groupOn (\d -> homeOf d.path)
+    dirsByParent = dirs & V.toList & filter (\d -> d.path /= root) & sortOn (.path) & groupOn (\d -> homeOf d.path)
     filesByParent :: Map RelPath (List HashEntry)
-    filesByParent = files & V.toList & sortOn (\e -> e.path) & groupOn (\e -> homeOf e.path)
+    filesByParent = files & V.toList & sortOn (.path) & groupOn (\e -> homeOf e.path)
     below :: RelPath -> List ManifestEntry
     below here =
       concatMap subtree (Map.findWithDefault [] here dirsByParent)
-        <> map (\e -> ManifestFile e) (Map.findWithDefault [] here filesByParent)
+        <> map ManifestFile (Map.findWithDefault [] here filesByParent)
     subtree :: DirectoryEntry -> List ManifestEntry
     subtree d = below d.path <> [ManifestDir d]
 

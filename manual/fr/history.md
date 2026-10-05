@@ -29,8 +29,8 @@ Une génération comportant des échecs voit sa seconde ligne se terminer par ` 
 | ` · 2 failures` | Nombre de fichiers non conformes. La ligne s'affiche en rouge. |
 
 Une opération de transfert (*offload*) ne comporte pas une telle ligne. Sa
-destination conserve l'historique de la source ainsi qu'une nouvelle génération
-; une vérification de la destination permet de les visualiser. Un transfert
+destination conserve l'historique de la source ainsi qu'une nouvelle génération ;
+une vérification de la destination permet de les visualiser. Un transfert
 repris après interruption (*resumed offload*) conserve le même historique qu'un
 transfert initial.
 
@@ -40,7 +40,7 @@ La spécification en autorise trois, et aucun autre :
 
 | Terme | Signification |
 |---|---|
-| `in-place` | Les fichiers ont été hachés à leur emplacement d'origine. | Une opération de scellement (*seal*) et une vérification (*verify*) inscrivent toutes deux cette information. |
+| `in-place` | Les fichiers ont été hachés à leur emplacement d'origine. Une opération de scellement (*seal*) et une vérification (*verify*) inscrivent toutes deux cette information. |
 | `transfer` | Les fichiers ont été copiés dans ce dossier et leurs copies ont été hachées à cet emplacement. |
 | `flatten` | Les fichiers ont été copiés dans un dossier unique, sans conserver leur structure de répertoires. |
 

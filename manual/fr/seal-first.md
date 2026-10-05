@@ -1,8 +1,8 @@
 # Sceller d'abord la source multimédia
 
-Le groupe **Avant la copie** de la fiche de plan contient deux options : Sceller
-**d'abord la source multimédia** et **Copier malgré tout si le scellement
-**détecte un problème**.
+Le groupe **Avant la copie** de la fiche de plan contient deux options : **Sceller
+d'abord la source multimédia** et **Copier malgré tout si le scellement
+détecte un problème**.
 
 Une opération de scellement calcule les empreintes numériques (hash) de la
 source multimédia telle qu'elle se trouve et enregistre chaque fichier comme

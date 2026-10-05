@@ -111,7 +111,7 @@ paddedBox orientation spacing margin =
 newLabel :: Text -> List (AttrOp Gtk.Label 'AttrConstruct) -> List Text -> IO Gtk.Label
 newLabel text attrs classes = do
   label <- new Gtk.Label ((#label := text) : attrs)
-  mapM_ (\klass -> Gtk.widgetAddCssClass label klass) classes
+  mapM_ (Gtk.widgetAddCssClass label) classes
   pure label
 
 data DialogShell = DialogShell
@@ -152,7 +152,7 @@ newDialogShell attrs buttons endButtons body = do
   Gtk.widgetAddCssClass primaryButton "suggested-action"
   Adw.headerBarPackStart header leadingButton
   Adw.headerBarPackEnd header primaryButton
-  forM_ endButtons (\b -> Adw.headerBarPackEnd header b)
+  forM_ endButtons (Adw.headerBarPackEnd header)
   Adw.toolbarViewAddTopBar toolbar header
   Adw.toolbarViewSetContent toolbar (Just body)
   Adw.dialogSetChild dialog (Just toolbar)
@@ -174,9 +174,9 @@ data RowHost = InGroup Adw.PreferencesGroup | InExpander Adw.ExpanderRow
 renderActionRows :: IORef (Vector Adw.ActionRow) -> RowHost -> Vector Row -> IO ()
 renderActionRows rowsRef host wanted = do
   existing <- readIORef rowsRef
-  V.mapM_ (\row -> removeFrom host row) existing
-  fresh <- V.mapM (\row -> newRow row) wanted
-  V.mapM_ (\row -> addTo host row) fresh
+  V.mapM_ (removeFrom host) existing
+  fresh <- V.mapM newRow wanted
+  V.mapM_ (addTo host) fresh
   writeIORef rowsRef fresh
 
 removeFrom :: RowHost -> Adw.ActionRow -> IO ()
@@ -192,7 +192,7 @@ addTo host row = case host of
 newRow :: Row -> IO Adw.ActionRow
 newRow row = do
   built <- new Adw.ActionRow [#title := row.title, #subtitle := row.subtitle]
-  mapM_ (\name -> Gtk.widgetAddCssClass built name) row.cssClass
+  mapM_ (Gtk.widgetAddCssClass built) row.cssClass
   mapM_ (\build -> build >>= \widget -> Adw.actionRowAddSuffix built widget) row.suffix
   pure built
 

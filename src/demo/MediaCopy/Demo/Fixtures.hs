@@ -178,7 +178,7 @@ offloadFactsPartial =
     }
   where
     held = V.take 4 mediaSourceFiles
-    partName = V.map (\pair -> fst pair) mediaSourceFiles V.!? 4
+    partName = V.map fst mediaSourceFiles V.!? 4
     partialTree =
       Tree
         { files = held <> maybe V.empty (\p -> V.singleton (rel (display p <> partSuffix), 400_000_000)) partName

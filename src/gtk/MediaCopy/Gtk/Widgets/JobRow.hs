@@ -19,7 +19,7 @@ import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Wording
 
 rowName :: JobId -> Text
-rowName (JobId n) = "job-" <> T.pack (show n)
+rowName (JobId n) = "job-" <> T.show n
 
 jobIdOfRow :: Gtk.ListBoxRow -> IO (Maybe JobId)
 jobIdOfRow listRow = do

@@ -40,7 +40,7 @@ aFreshOffloadIsSchemaValidAndVerifies tools =
     _events <- runEngineIO spec
     manifests <- mhlFilesIn dest
     assertBool "no manifest was written" (not (null manifests))
-    mapM_ (\file -> assertSchemaValidManifest tools file) manifests
+    mapM_ (assertSchemaValidManifest tools) manifests
     schemaCheckChain tools (chainFileIn dest) >>= assertOk "xsd-schema-check -df"
     verifyFolder tools dest >>= assertOk "ascmhl-debug verify"
     verifyDirectoryHashes tools dest >>= assertOk "ascmhl-debug verify -dh"
@@ -60,7 +60,7 @@ aSecondGenerationStillVerifies tools =
     verifySpec dest >>= \spec -> void (runEngineIO spec)
     manifests <- mhlFilesIn dest
     length manifests @?= 2
-    mapM_ (\file -> assertSchemaValidManifest tools file) manifests
+    mapM_ (assertSchemaValidManifest tools) manifests
     schemaCheckChain tools (chainFileIn dest) >>= assertOk "xsd-schema-check -df"
     verifyFolder tools dest >>= assertOk "ascmhl-debug verify"
     verifyDirectoryHashes tools dest >>= assertOk "ascmhl-debug verify -dh"
@@ -89,7 +89,7 @@ aSealFirstOffloadSealsTheMediaSource tools =
     _events <- runEngineIO spec
     sealed <- mhlFilesIn source
     assertBool "the seal wrote no manifest on the media source" (not (null sealed))
-    mapM_ (\file -> assertSchemaValidManifest tools file) sealed
+    mapM_ (assertSchemaValidManifest tools) sealed
     schemaCheckChain tools (chainFileIn source) >>= assertOk "xsd-schema-check -df on the media source"
     verifyFolder tools source >>= assertOk "ascmhl-debug verify on the media source"
     verifyDirectoryHashes tools source >>= assertOk "ascmhl-debug verify -dh on the media source"

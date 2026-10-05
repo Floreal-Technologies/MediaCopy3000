@@ -29,7 +29,7 @@ renderReport wording st plan mhlHist =
   ( line "MediaCopy 3000 report"
       <> renderBody wording st plan
       <> renderFailures st
-      <> foldMap (\hist -> renderHistory hist) mhlHist
+      <> foldMap renderHistory mhlHist
   )
     & TB.toLazyText
     & TL.toStrict
@@ -55,24 +55,24 @@ renderBody wording st plan =
   field "Job" (display (jobKind st.spec.job))
     <> renderJobDetails st.spec.job
     <> field "Created" (formatMhlTime st.spec.createdAt)
-    <> foldMap (\ready -> renderPlan ready) plan
+    <> foldMap renderPlan plan
     <> renderResult wording (jobKind st.spec.job) st.phase
     <> renderCounts st
-    <> foldMap (\p -> field "Manifest" (pathText p)) st.mhlPaths
-    <> foldMap (\origin -> field "Originals" origin) st.originsUsed
-    <> foldMap (\p -> field "Log" (pathText p)) st.logPath
+    <> foldMap (field "Manifest" . pathText) st.mhlPaths
+    <> foldMap (field "Originals") st.originsUsed
+    <> foldMap (field "Log" . pathText) st.logPath
 
 renderPlan :: JobPlan -> Builder
 renderPlan plan =
   line "Plan"
     <> field "  files" (count (V.length plan.steps))
-    <> field "  bytes" (T.pack (show plan.totalBytes))
+    <> field "  bytes" (T.show plan.totalBytes)
     <> field "  originals" plan.originsUsed
     <> renderExistingCopy plan.spec.job
-    <> foldMap (\pass -> renderSealPass pass) plan.sealPass
-    <> foldMap (\planned -> renderGeneration planned) (plannedGenerations plan)
-    <> foldMap (\target -> renderTarget target) plan.targets
-    <> foldMap (\finding -> renderFinding finding) plan.findings
+    <> foldMap renderSealPass plan.sealPass
+    <> foldMap renderGeneration (plannedGenerations plan)
+    <> foldMap renderTarget plan.targets
+    <> foldMap renderFinding plan.findings
 
 renderExistingCopy :: Job -> Builder
 renderExistingCopy = \case
@@ -85,7 +85,7 @@ renderSealPass pass =
     "  seal first"
     ( plural "file" (V.length pass.steps)
         <> ", "
-        <> T.pack (show pass.bytes)
+        <> T.show pass.bytes
         <> " bytes, on failure: "
         <> display pass.onFailure
     )
@@ -108,7 +108,7 @@ renderJobDetails :: Job -> Builder
 renderJobDetails job = case job of
   Offload oj ->
     field "Source" (pathText oj.source)
-      <> foldMap (\dest -> field "Destination" (pathText dest)) oj.destinations
+      <> foldMap (field "Destination" . pathText) oj.destinations
   (VerifyFolder _; SealMediaSource _) -> folderField
   where
     folderField = field "Folder" (pathText (jobRoot job))
@@ -147,7 +147,7 @@ renderFailures st =
   let failures = Map.toList st.files & filter (\pair -> isFailure (snd pair).status)
   in if null failures
        then mempty
-       else "\nFailures:\n" <> foldMap (\pair -> renderFailureLine pair) failures
+       else "\nFailures:\n" <> foldMap renderFailureLine failures
 
 renderFailureLine :: (RelPath, FileEntry) -> Builder
 renderFailureLine (path, entry) = case entry.status of
@@ -171,7 +171,7 @@ renderHistory :: MhlHistory -> Builder
 renderHistory hist =
   if null hist.generations
     then mempty
-    else "\nHistory:\n" <> foldMap (\gen -> renderGenerationLine gen) hist.generations
+    else "\nHistory:\n" <> foldMap renderGenerationLine hist.generations
 
 renderGenerationLine :: Generation -> Builder
 renderGenerationLine gen =

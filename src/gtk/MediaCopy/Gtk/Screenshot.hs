@@ -40,12 +40,12 @@ seeded environment window app showFrame startup = do
     prepare = do
       when startup.expand (expandAll window)
       when startup.scroll (scrollToEnd window)
-      mapM_ (\path -> void (GLib.timeoutAdd GLib.PRIORITY_DEFAULT settleMs (takeShot path))) startup.shot
+      mapM_ (GLib.timeoutAdd GLib.PRIORITY_DEFAULT settleMs . takeShot) startup.shot
       pure False
     settleMs = 3_500
     takeShot path = do
       outcome <- saveWindowPng window path
-      either (\err -> logWith environment (logAttention_ err)) pure outcome
+      either (logWith environment . logAttention_) pure outcome
       Gtk.windowDestroy window
       pure False
 

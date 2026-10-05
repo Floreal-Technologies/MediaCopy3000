@@ -195,7 +195,7 @@ copyAndVerify source writes sealed rel size = step `finally` void (trySync (remo
           _ -> pure written
       case attempt of
         Left e -> do
-          t <- asks @CreatorInfo (\creator -> creator.creationDate)
+          t <- asks @CreatorInfo (.creationDate)
           let check = checkAgainstSeal sealed srcHash
               outcome = IoError (T.pack (displayException e))
           pure FileStepResult {outcome, manifestEntry = Just (fileEntry rel size mtime check.hash FailedAction t)}
@@ -209,9 +209,9 @@ sourceHashFor
   -> Eff es ()
   -> Eff es (Hash, UTCTime)
 sourceHashFor srcPath writing sealed onFlush
-  | not (V.null writing) = hashVia (writeTemps srcPath writing onFlush) (\bs -> advanceProgress (fromIntegral (BS.length bs)))
+  | not (V.null writing) = hashVia (writeTemps srcPath writing onFlush) (advanceProgress . fromIntegral . BS.length)
   | Just h <- sealed = mtimeOf srcPath <&> \t -> (h, t)
-  | otherwise = hashOf FromCache srcPath (\bs -> advanceProgress (fromIntegral (BS.length bs)))
+  | otherwise = hashOf FromCache srcPath (advanceProgress . fromIntegral . BS.length)
 
 reuseOrReplace
   :: (Hashing es)
@@ -225,13 +225,13 @@ reuseOrReplace
 reuseOrReplace srcPath reusing rel mtime srcHash written = do
   checks <- V.mapM check reusing
   flushProgress
-  let replaced = V.mapMaybe (\c -> either Just (const Nothing) c) checks
+  let replaced = V.mapMaybe (either Just (const Nothing)) checks
   pure $ case replaced V.!? 0 of
     Nothing -> written
     Just actual -> FileStepResult {outcome = Replaced (Mismatch srcHash actual), manifestEntry = written.manifestEntry}
   where
     check w = do
-      (actual, _) <- hashOf FromDevice w.final (\bs -> advanceProgress (fromIntegral (BS.length bs)))
+      (actual, _) <- hashOf FromDevice w.final (advanceProgress . fromIntegral . BS.length)
       if actual == srcHash
         then pure (Right ())
         else do
@@ -242,7 +242,7 @@ reuseOrReplace srcPath reusing rel mtime srcHash written = do
               srcPath
               demoted
               (emit (FileStatusChanged rel Flushing))
-              (\bs -> advanceProgress (fromIntegral (BS.length bs)))
+              (advanceProgress . fromIntegral . BS.length)
           readBack <- publishAndVerify rel demoted mtime srcHash
           case readBack of
             Ok -> pure (Left actual)
@@ -261,7 +261,7 @@ publishCopy
   -> Eff es FileStepResult
 publishCopy writes sealed rel size mtime srcHash = do
   destOutcome <- publishAndVerify rel writes mtime srcHash
-  t <- asks @CreatorInfo (\creator -> creator.creationDate)
+  t <- asks @CreatorInfo (.creationDate)
   let sourceCheck = checkAgainstSeal sealed srcHash
       outcome = case destOutcome of
         Ok -> sourceCheck.outcome
@@ -289,7 +289,7 @@ verifyDestinations writes srcHash = go (V.toList writes)
   where
     go [] = pure Ok
     go (w : ws) = do
-      (actual, _) <- hashOf FromDevice w.final (\bs -> advanceProgress (fromIntegral (BS.length bs)))
+      (actual, _) <- hashOf FromDevice w.final (advanceProgress . fromIntegral . BS.length)
       if actual == srcHash then go ws else pure (HashMismatch (Mismatch srcHash actual))
 
 runPlan
@@ -325,7 +325,7 @@ runOffloadPlan plan copy = do
     copied <- runSteps copy.source recorded plan.steps
     forM_ copy.generations $ \planned -> do
       emit ManifestWriting
-      makeDirectories (V.map (\dir -> relToOsPath planned.folder dir) planned.directories)
+      makeDirectories (V.map (relToOsPath planned.folder) planned.directories)
       when (copy.carried > 0) $
         void (carryHistory copy.source planned.folder >>= orThrow . first (HistoryFaultAt copy.source))
       writeGeneration planned plan.ignorePatterns copied.entries
@@ -400,9 +400,9 @@ runStep root recorded step = case step.op of
   where
     path = relToOsPath root step.path
     hashStep report = runFileStep step $ do
-      (actual, mtime) <- hashOf FromDevice path (\bs -> advanceProgress (fromIntegral (BS.length bs)))
+      (actual, mtime) <- hashOf FromDevice path (advanceProgress . fromIntegral . BS.length)
       flushProgress
-      t <- asks @CreatorInfo (\creator -> creator.creationDate)
+      t <- asks @CreatorInfo (.creationDate)
       pure (report actual mtime t)
     reportNew actual mtime t =
       FileStepResult {outcome = New, manifestEntry = Just (fileEntry step.path step.size mtime actual Original t)}
@@ -422,9 +422,9 @@ runSteps
   -> Vector PlanStep
   -> Eff es PassTally
 runSteps root recorded steps =
-  traverse (\step -> runStep root recorded step) steps <&> \results ->
+  traverse (runStep root recorded) steps <&> \results ->
     PassTally
-      { entries = V.mapMaybe (\result -> result.manifestEntry) results
+      { entries = V.mapMaybe (.manifestEntry) results
       , failedPaths = Set.fromList [step.path | (step, result) <- zip (V.toList steps) (V.toList results), outcomeFailed result.outcome]
       }
 

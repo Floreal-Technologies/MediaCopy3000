@@ -49,7 +49,7 @@ writeGeneration planned patterns files = do
   let tree = buildTree hashedFiles planned.directories
   fmt <- ask @JobFormat
   rolled <- runErrorNoCallStack @DirectoryHashError (directoryHashes (hashBytes fmt) tree)
-  (rootPair, rows) <- orThrow (first (\err -> HashUndecodable err) rolled)
+  (rootPair, rows) <- orThrow (first HashUndecodable rolled)
   let dirEntry (path, pair) = do
         mtime <- mtimeOf (relToOsPath planned.folder path)
         pure (directoryEntry path mtime (dirHash t pair.content pair.structure))
@@ -93,9 +93,9 @@ requirePlaced files entries = case missing of
   [] -> Right ()
   paths -> Left (EntriesNotPlaced (V.fromList paths))
   where
-    placed = Set.fromList (V.toList (V.map (\e -> e.path) (fileEntries entries)))
+    placed = Set.fromList (V.toList (V.map (.path) (fileEntries entries)))
     missing =
       files
         & V.toList
-        & map (\e -> e.path)
+        & map (.path)
         & filter (\p -> not (Set.member p placed))

@@ -56,7 +56,7 @@ data AppearanceRows = AppearanceRows
 newAppearanceRows :: Wording -> Vector ThemeSection -> Vector ThemeSection -> IO AppearanceRows
 newAppearanceRows wording lightSections darkSections = do
   suppress <- newIORef False
-  baseNames <- Gtk.stringListNew (Just (V.toList (V.map (\value -> displayBase wording value) baseValues)))
+  baseNames <- Gtk.stringListNew (Just (V.toList (V.map (displayBase wording) baseValues)))
   baseRow <- new Adw.ComboRow [#title := "Base", #model := baseNames]
   (lightRow, lightDrop) <- newPaletteRow wording "Light palette" lightSections
   (darkRow, darkDrop) <- newPaletteRow wording "Dark palette" darkSections
@@ -90,7 +90,7 @@ reportChoices rows dispatch = do
 chosen :: AppearanceRows -> (UiMessage -> IO ()) -> IO Word32 -> Vector a -> (a -> UiMessage) -> IO ()
 chosen rows dispatch selected values report = unlessSuppressed rows.suppress $ do
   index <- selected
-  mapM_ (\value -> dispatch (report value)) (values V.!? fromIntegral index)
+  mapM_ (dispatch . report) (values V.!? fromIntegral index)
 
 paintAppearance :: AppearanceRows -> Appearance -> IO ()
 paintAppearance rows appearance = do
@@ -102,7 +102,7 @@ paintAppearance rows appearance = do
 
 select :: (Eq a) => IORef Bool -> (Word32 -> IO ()) -> Vector a -> a -> IO ()
 select suppress choose values wanted =
-  mapM_ (\index -> suppressing suppress (choose (fromIntegral index))) (V.elemIndex wanted values)
+  mapM_ (suppressing suppress . choose . fromIntegral) (V.elemIndex wanted values)
 
 installPreferencesAction :: Adw.Application -> Adw.ApplicationWindow -> Adw.Dialog -> IO ()
 installPreferencesAction app window dialog = do
@@ -118,7 +118,7 @@ baseValues :: Vector Base
 baseValues = V.fromList [minBound .. maxBound]
 
 themeRows :: Vector ThemeSection -> Vector Theme
-themeRows sections = V.concatMap (\section -> section.themes) sections
+themeRows sections = V.concatMap (.themes) sections
 
 themeModel :: Wording -> Vector ThemeSection -> IO Gtk.FlattenListModel
 themeModel wording sections = do
@@ -126,7 +126,7 @@ themeModel wording sections = do
   store <- Gio.listStoreNew modelType
   mapM_
     ( \section -> do
-        labels <- Gtk.stringListNew (Just (V.toList (V.map (\theme -> themeRowLabel wording theme) section.themes)))
+        labels <- Gtk.stringListNew (Just (V.toList (V.map (themeRowLabel wording) section.themes)))
         Gio.listStoreAppend store labels
     )
     sections

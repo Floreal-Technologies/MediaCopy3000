@@ -67,7 +67,7 @@ logName :: JobSpec -> Text
 logName spec =
   T.pack (formatTime defaultTimeLocale "%Y-%m-%d_%H%M%S" spec.createdAt)
     <> "-"
-    <> T.pack (show n)
+    <> T.show n
     <> "-"
     <> jobLabel spec.job
     <> "-"

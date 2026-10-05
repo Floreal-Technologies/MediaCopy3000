@@ -62,12 +62,12 @@ verifiesAFolderTheReferenceCreated tools =
     events <- runEngineIO spec
     assertBool
       ("verify reported a failure: " <> show (V.toList events))
-      (not (any (\event -> isFailureEvent event) (V.toList events)))
+      (not (any isFailureEvent (V.toList events)))
 
 readManifestsOf :: FilePath -> IO (Vector Manifest)
 readManifestsOf folder = do
   files <- mhlFilesIn folder
-  parsed <- traverse (\file -> parseManifestFile file) files
+  parsed <- traverse parseManifestFile files
   pure (V.fromList parsed)
 
 parseManifestFile :: FilePath -> IO Manifest
@@ -90,7 +90,7 @@ zeroByteHashFor format = case format of
 
 hasDirEntry :: RelPath -> Vector Manifest -> Bool
 hasDirEntry wanted manifests =
-  V.any (\manifest -> V.any (\entry -> isDirEntryFor wanted entry) manifest.entries) manifests
+  V.any (\manifest -> V.any (isDirEntryFor wanted) manifest.entries) manifests
 
 isDirEntryFor :: RelPath -> ManifestEntry -> Bool
 isDirEntryFor wanted entry = case entry of

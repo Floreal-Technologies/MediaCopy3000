@@ -78,9 +78,9 @@ stateOf algo =
               touch mba
               pure (Hash XXH64 (word64ToHex w))
           }
-    MD5 -> newIORef MD5.init <&> \ref -> ctxHasher spent ref MD5.update (\ctx -> Hash MD5 (toHex (MD5.finalize ctx)))
-    SHA1 -> newIORef SHA1.init <&> \ref -> ctxHasher spent ref SHA1.update (\ctx -> Hash SHA1 (toHex (SHA1.finalize ctx)))
-    C4 -> newIORef SHA512.init <&> \ref -> ctxHasher spent ref SHA512.update (\ctx -> Hash C4 (c4FromSha512 (SHA512.finalize ctx)))
+    MD5 -> newIORef MD5.init <&> \ref -> ctxHasher spent ref MD5.update (Hash MD5 . toHex . MD5.finalize)
+    SHA1 -> newIORef SHA1.init <&> \ref -> ctxHasher spent ref SHA1.update (Hash SHA1 . toHex . SHA1.finalize)
+    C4 -> newIORef SHA512.init <&> \ref -> ctxHasher spent ref SHA512.update (Hash C4 . c4FromSha512 . SHA512.finalize)
 
 ctxHasher :: IORef Bool -> IORef ctx -> (ctx -> ByteString -> ctx) -> (ctx -> Hash) -> HasherState
 ctxHasher spent ref update done =

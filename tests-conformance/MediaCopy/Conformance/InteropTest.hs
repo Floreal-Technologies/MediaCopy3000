@@ -33,7 +33,7 @@ ourGenerationFollowsTheirsInTheSameHistory tools =
     length manifests @?= 2
     rewritten <- TIO.readFile (chainFileIn mediaSource)
     assertBool "the reference's c4 chain entry was lost" (T.isInfixOf referenceC4 rewritten)
-    mapM_ (\file -> assertSchemaValidManifest tools file) manifests
+    mapM_ (assertSchemaValidManifest tools) manifests
     schemaCheckChain tools (chainFileIn mediaSource) >>= assertOk "xsd-schema-check -df"
     verifyFolder tools mediaSource >>= assertOk "ascmhl-debug verify"
     info <- infoFolder tools mediaSource

@@ -99,7 +99,7 @@ bench environment fileCount resultsPath app = do
 benchFiles :: Int -> Vector (RelPath, FileSize)
 benchFiles fileCount = V.generate fileCount (\index -> (Fixtures.rel (nameOf index), sizeOf index))
   where
-    nameOf index = "A001C" <> T.justifyRight 4 '0' (T.pack (show index)) <> "_260912_R1AB.mov"
+    nameOf index = "A001C" <> T.justifyRight 4 '0' (T.show index) <> "_260912_R1AB.mov"
     sizeOf index = fromIntegral (1_000_000_000 + index * 7_654_321)
 
 streamOf :: Vector (RelPath, FileSize) -> List Message
@@ -110,7 +110,7 @@ setupMessages files =
   [ RequestPlan job
   , PlanComputed spec (Right (Fixtures.readyPlan spec))
   , Ui ConfirmPlan
-  , EngineEvent benchJob (Planned (PlannedWork files (V.sum (V.map (\entry -> snd entry) files))))
+  , EngineEvent benchJob (Planned (PlannedWork files (V.sum (V.map snd files))))
   ]
   where
     job = Fixtures.offloadJob UseHistory
@@ -238,8 +238,8 @@ rowOf stamp result =
     , number result.files
     , number result.messages
     , number result.renders
-    , maybe "" (\seen -> number seen) result.layouts
-    , maybe "" (\seen -> number seen) result.paints
+    , maybe "" number result.layouts
+    , maybe "" number result.paints
     , number result.totalNs
     , number result.meanNs
     , number result.p50Ns
@@ -247,7 +247,7 @@ rowOf stamp result =
     , number result.maxNs
     ]
   where
-    number value = T.pack (show value)
+    number value = T.show value
 
 readBaseline :: FilePath -> Int -> IO (Maybe (Text, Result))
 readBaseline path fileCount = do
@@ -303,7 +303,7 @@ report result baseline path = do
     Nothing -> printf "no baseline for files=%d in %s\n\n" result.files path
     Just (stamp, _) -> printf "baseline %s from %s\n\n" (T.unpack stamp) path
   printf "%-24s %12s %12s %11s\n" ("" :: String) ("this run" :: String) ("baseline" :: String) ("change" :: String)
-  mapM_ (\metric -> printMetric metric) (metricsOf result (fmap (\pair -> snd pair) baseline))
+  mapM_ printMetric (metricsOf result (fmap snd baseline))
 
 data Metric = Metric
   { name :: String
@@ -315,13 +315,13 @@ data Metric = Metric
 metricsOf :: Result -> Maybe Result -> List Metric
 metricsOf result baseline =
   [ count "renders" (\seen -> Just seen.renders)
-  , count "frameclock layout" (\seen -> seen.layouts)
-  , count "frameclock after-paint" (\seen -> seen.paints)
-  , duration "render total ms" (\seen -> seen.totalNs)
-  , duration "render mean ms" (\seen -> seen.meanNs)
-  , duration "render p50 ms" (\seen -> seen.p50Ns)
-  , duration "render p99 ms" (\seen -> seen.p99Ns)
-  , duration "render max ms" (\seen -> seen.maxNs)
+  , count "frameclock layout" (.layouts)
+  , count "frameclock after-paint" (.paints)
+  , duration "render total ms" (.totalNs)
+  , duration "render mean ms" (.meanNs)
+  , duration "render p50 ms" (.p50Ns)
+  , duration "render p99 ms" (.p99Ns)
+  , duration "render max ms" (.maxNs)
   ]
   where
     count name readOut =

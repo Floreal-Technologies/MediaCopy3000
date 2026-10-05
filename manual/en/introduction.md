@@ -1,7 +1,7 @@
 # Introduction
 
 MediaCopy 3000 copies media and records what it copied. It is made for both
-digital imaging technicians (DITs) on a set, and for hobbyists who wants to
+digital imaging technicians (DITs) on a set, and for hobbyists who want to
 transfer media in a safe way.
 
 MediaCopy 3000 reads and writes the [ASC Media Hash List](mhl-format.md)

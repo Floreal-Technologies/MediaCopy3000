@@ -4,7 +4,6 @@ result-all-verified = terminé, tous les fichiers sont vérifiés
 result-all-sealed = terminé, tous les fichiers sont scellés
 result-with-failures = terminé avec { $count ->
      [one] { $count } échec
-     [many] { $count } d’échecs
     *[other] { $count } échecs
 }
 

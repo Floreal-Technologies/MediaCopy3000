@@ -24,7 +24,7 @@ import Text.XML
 import Text.XML.Cursor
 
 import Ascmhl.Hash
-import Ascmhl.Path (mkRelPath)
+import Ascmhl.Path (RelPath, mkRelPath)
 import Ascmhl.Schema qualified as Schema
 import Ascmhl.Types
 
@@ -37,7 +37,7 @@ parseMhlTime t =
 parseDoc :: Text -> Either Text Cursor
 parseDoc t =
   first
-    (\e -> displayException @SomeException e & T.pack & (\msg -> "ASC MHL: " <> msg))
+    (\e -> displayException @SomeException e & T.pack & ("ASC MHL: " <>))
     (fromDocument <$> parseText def (TL.fromStrict t))
 
 childText :: Text -> Cursor -> Maybe Text
@@ -89,8 +89,8 @@ attributesExcept known hc = case node hc of
 childrenExcept :: (Text -> Bool) -> Cursor -> Vector Node
 childrenExcept known c =
   kids
-    & filter (\child -> maybe True (\local -> not (known local)) (localName child))
-    & map (\child -> node child)
+    & filter (maybe True (not . known) . localName)
+    & map node
     & V.fromList
   where
     kids = c $/ anyElement
@@ -131,21 +131,26 @@ parseManifest txt = do
       , unknown = childrenExcept (\local -> local `elem` [Schema.creatorinfo, Schema.processinfo, Schema.hashes]) root
       }
 
+pathElement :: Text -> Cursor -> Either Text (Cursor, RelPath)
+pathElement what c = do
+  pathC <- require (angled Schema.path) (listToMaybe (c $/ laxElement Schema.path))
+  let pathValue = T.concat (pathC $/ content)
+  path <- maybe (Left ("ASC MHL: " <> what <> " is not relative: " <> pathValue)) Right (mkRelPath pathValue)
+  Right (pathC, path)
+
 parseEntry :: Cursor -> Either Text (Maybe ManifestEntry)
 parseEntry c = case localName c of
   Just local
-    | local == Schema.hash -> fmap (\e -> Just (ManifestFile e)) (parseFileEntry c)
-    | local == Schema.directoryhash -> fmap (\d -> Just (ManifestDir d)) (parseDirEntry c)
+    | local == Schema.hash -> fmap (Just . ManifestFile) (parseFileEntry c)
+    | local == Schema.directoryhash -> fmap (Just . ManifestDir) (parseDirEntry c)
   _ -> Right Nothing
 
 parseFileEntry :: Cursor -> Either Text HashEntry
 parseFileEntry c = do
-  pathC <- require (angled Schema.path) (listToMaybe (c $/ laxElement Schema.path))
-  let pathValue = T.concat (pathC $/ content)
-  path <- maybe (Left ("ASC MHL: path is not relative: " <> pathValue)) Right (mkRelPath pathValue)
+  (pathC, path) <- pathElement "path" c
   let size = fromMaybe 0 (attr Schema.size pathC >>= readIntegral)
   lastModified <- require Schema.lastmodificationdate (attr Schema.lastmodificationdate pathC >>= parseMhlTime)
-  let hashes = V.fromList (mapMaybe (\hc -> manifestHashOf hc) (c $/ anyElement))
+  let hashes = V.fromList (mapMaybe manifestHashOf (c $/ anyElement))
       known local = local == Schema.path || isJust (algoFromMhlElement local)
   pure
     HashEntry
@@ -172,9 +177,7 @@ manifestHashOf hc = do
 
 parseDirEntry :: Cursor -> Either Text DirectoryEntry
 parseDirEntry c = do
-  pathC <- require (angled Schema.path) (listToMaybe (c $/ laxElement Schema.path))
-  let pathValue = T.concat (pathC $/ content)
-  path <- maybe (Left ("ASC MHL: path is not relative: " <> pathValue)) Right (mkRelPath pathValue)
+  (pathC, path) <- pathElement "path" c
   lastModified <- require Schema.lastmodificationdate (attr Schema.lastmodificationdate pathC >>= parseMhlTime)
   hashes <- dirHashesOf (display path) c
   pure
@@ -188,12 +191,12 @@ parseDirEntry c = do
 
 dirHashesOf :: Text -> Cursor -> Either Text (Vector DirHash)
 dirHashesOf label c = do
-  paired <- traverse (\pair -> withStructure pair) contents
-  traverse_ (\s -> requireContent s) structures
+  paired <- traverse withStructure contents
+  traverse_ requireContent structures
   Right (V.fromList paired)
   where
     contents = mapMaybe (\hc -> fmap (\h -> (h, hc)) (hashElement hc)) (c $/ laxElement Schema.content &/ anyElement)
-    structures = mapMaybe (\hc -> hashElement hc) (c $/ laxElement Schema.structure &/ anyElement)
+    structures = mapMaybe hashElement (c $/ laxElement Schema.structure &/ anyElement)
     unpaired what algo = "ASC MHL: " <> label <> ": " <> display algo <> " " <> what
     withStructure (h, hc) = case find (\candidate -> candidate.algo == h.algo) structures of
       Nothing -> Left (unpaired "content has no matching structure" h.algo)
@@ -218,10 +221,8 @@ parseChain txt = do
   where
     entry c = do
       sequenceNr <- require Schema.sequencenr (attr Schema.sequencenr c >>= readIntegral)
-      pathC <- require (angled Schema.path) (listToMaybe (c $/ laxElement Schema.path))
-      let pathValue = T.concat (pathC $/ content)
-      path <- maybe (Left ("ASC MHL: chain path is not relative: " <> pathValue)) Right (mkRelPath pathValue)
+      (_, path) <- pathElement "chain path" c
       let kids = c $/ anyElement
-          c4 = kids & mapMaybe (\hc -> hashElement hc) & find (\h -> h.algo == C4)
+          c4 = kids & mapMaybe hashElement & find (\h -> h.algo == C4)
           isC4 local = algoFromMhlElement local == Just C4
       pure ChainEntry {sequenceNr, path, c4, unknown = childrenExcept (\local -> local == Schema.path || isC4 local) c}

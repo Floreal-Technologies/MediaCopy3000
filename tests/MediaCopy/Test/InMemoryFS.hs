@@ -16,10 +16,22 @@ module MediaCopy.Test.InMemoryFS
   , epoch
   , runFileSystemMem
   , slashedPath
+  , corruptFirstByte
+  , sampleHash
+  , offloadJob
+  , specOf
+  , sampleSpec
+  , statusesOf
+  , isReplaced
+  , isManifestIn
+  , newestManifestIn
   ) where
 
+import Ascmhl.Hash (Hash (..), HashAlgo (..))
 import Ascmhl.Layout (ascmhlDir)
 import Ascmhl.Path (RelPath, mkRelPath, pathText)
+import Ascmhl.Read (parseManifest)
+import Ascmhl.Types (Manifest)
 import Control.Monad (when)
 import Data.Bits (xor)
 import Data.ByteString (ByteString)
@@ -29,6 +41,7 @@ import Data.Function ((&))
 import Data.IORef
 import Data.Int (Int64)
 import Data.List (List, sort, sortOn)
+import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
@@ -46,12 +59,12 @@ import Effectful.Dispatch.Dynamic (interpret, localSeqUnlift)
 import Effectful.Exception (onException)
 import System.OsPath (OsPath, decodeUtf, dropTrailingPathSeparator, makeRelative, splitDirectories)
 import splice System.OsPath (osp)
-import System.OsString (OsChar, isPrefixOf, unsafeFromChar)
+import System.OsString (OsChar, isPrefixOf, isSuffixOf, unsafeFromChar)
 import System.OsString qualified as OsString
 
 import MediaCopy.Domain.FileSystem (ignorePatterns, relPathOf)
 import MediaCopy.Domain.FileSystem qualified as FS
-import MediaCopy.Domain.Job (FileSize)
+import MediaCopy.Domain.Job (FileOutcome (..), FileSize, FileStatus (..), Job (..), JobEvent (..), JobId (..), JobSpec (..), OffloadJob (..), SealFirst (..))
 import MediaCopy.Domain.Plan (PlannedWrite (..))
 import MediaCopy.Effects.FileSystem (FileSystem (..))
 
@@ -283,3 +296,34 @@ listHistoryMem folder fs
     firstComponent k = case splitDirectories (makeRelative dir k) of
       component : _ -> Just component
       [] -> Nothing
+
+sampleHash :: Hash
+sampleHash = Hash XXH64 "ef46db3751d8e999"
+
+offloadJob :: OsPath -> List OsPath -> SealFirst -> OffloadJob
+offloadJob source dests sealFirst =
+  OffloadJob {source, destinations = NE.fromList dests, sealFirst, existingCopy = Nothing}
+
+specOf :: Job -> JobSpec
+specOf job = JobSpec {jobId = JobId 1, job, createdAt = epoch}
+
+sampleSpec :: JobSpec
+sampleSpec = specOf (Offload (offloadJob [osp|/src|] [[osp|/dst|]] UseHistory))
+
+statusesOf :: RelPath -> Vector JobEvent -> List FileStatus
+statusesOf target events = mapMaybe matchStatus (V.toList events)
+  where
+    matchStatus (FileStatusChanged rel status) | rel == target = Just status
+    matchStatus _ = Nothing
+
+isReplaced :: FileStatus -> Bool
+isReplaced (Done (Replaced _)) = True
+isReplaced _ = False
+
+isManifestIn :: OsPath -> OsPath -> Bool
+isManifestIn root p = withTrailingSlash (slashedPath (ascmhlDir root)) `isPrefixOf` p && [osp|.mhl|] `isSuffixOf` p
+
+newestManifestIn :: OsPath -> MemFS -> Maybe Manifest
+newestManifestIn root fs = do
+  (_, (bytes, _)) <- Map.lookupMax (Map.filterWithKey (\k _ -> isManifestIn root k) fs.files)
+  either (const Nothing) Just (parseManifest (TE.decodeUtf8 bytes))

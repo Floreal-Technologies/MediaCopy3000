@@ -66,6 +66,8 @@ Le format ne prévoit pas de processus `verify` spécifique. C'est pourquoi une 
 | `sha1` | Lu ; continue d'être écrit pour un dossier déjà enregistré avec ce format |
 | `c4` | Utilisé uniquement pour la chaîne |
 
-Une tâche utilise un format unique pour tous les fichiers qu'elle traite. Ce format est déterminé par les enregistrements servant de référence pour la tâche ; il n'est jamais choisi manuellement. Si les enregistrements contiennent plusieurs formats, la tâche s'interrompt en raison du blocage : `hash format cannot be settled` (format de hash indéterminable). ## Lecture d'un manifeste sans cette application
+Une tâche utilise un format unique pour tous les fichiers qu'elle traite. Ce format est déterminé par les enregistrements servant de référence pour la tâche ; il n'est jamais choisi manuellement. Si les enregistrements contiennent plusieurs formats, la tâche s'interrompt en raison du blocage : `hash format cannot be settled` (format de hash indéterminable).
+
+## Lecture d'un manifeste sans cette application
 
 Les fichiers sont au format XML et sont conçus pour perdurer au-delà de tout outil spécifique. D'autres outils ASC MHL sont capables de lire les fichiers générés par MediaCopy 3000. La suite de tests de conformité présente dans ce dépôt vérifie cette compatibilité en la comparant à l'outil de référence ASC, `ascmhl`.

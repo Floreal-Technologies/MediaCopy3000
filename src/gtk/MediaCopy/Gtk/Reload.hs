@@ -58,9 +58,9 @@ reloadWording environment language publish warn revision streak = do
   wordingPath <- OsPath.decodeUtf (localeFile language)
   next <- (+ 1) <$> readIORef revision
   try @IOException (ByteString.readFile wordingPath) >>= \case
-    Left err -> fault wordingPath [T.pack (show err)]
+    Left err -> fault wordingPath [T.show err]
     Right bytes -> case decodeUtf8' bytes of
-      Left err -> fault wordingPath [T.pack (show err)]
+      Left err -> fault wordingPath [T.show err]
       Right source -> case parseWording language next source of
         Left junk -> fault wordingPath (map (\entry -> "cannot parse: " <> T.strip entry) (NE.toList junk))
         Right wording ->
@@ -69,7 +69,7 @@ reloadWording environment language publish warn revision streak = do
               writeIORef revision next
               writeIORef streak False
               publish wording
-              logWith environment (logInfo_ ("reloaded " <> T.pack wordingPath <> " (revision " <> T.pack (show next) <> ")"))
+              logWith environment (logInfo_ ("reloaded " <> T.pack wordingPath <> " (revision " <> T.show next <> ")"))
             faults -> fault wordingPath faults
   where
     fault :: FilePath -> List Text -> IO ()
@@ -80,7 +80,7 @@ reloadWording environment language publish warn revision streak = do
       writeIORef streak True
     summary wordingPath faults = case faults of
       [] -> T.pack wordingPath
-      first' : _ -> T.pack wordingPath <> ": " <> T.pack (show (length faults)) <> " faults; first: " <> first'
+      first' : _ -> T.pack wordingPath <> ": " <> T.show (length faults) <> " faults; first: " <> first'
 
 watchFile :: Environment -> Text -> FilePath -> IO () -> IO ()
 watchFile environment label path action =
@@ -100,7 +100,7 @@ watchFile environment label path action =
 scheduleReload :: IO () -> IORef (Maybe Word32) -> IO ()
 scheduleReload action pendingReload = do
   pending <- readIORef pendingReload
-  mapM_ (\sourceId -> GLib.sourceRemove sourceId) pending
+  mapM_ GLib.sourceRemove pending
   sourceId <- GLib.timeoutAdd GLib.PRIORITY_DEFAULT 200 $ do
     writeIORef pendingReload Nothing
     action

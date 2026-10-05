@@ -152,8 +152,8 @@ newReadyBody seal = do
 renderReadyBody :: (Wording, ReadyBody) -> JobPlan -> IO ()
 renderReadyBody (wording, body) plan = do
   renderRows body.summaryGroup body.summaryRows (summaryOf wording plan)
-  renderRows body.targetGroup body.targetRows (V.map (\target -> targetRow wording target) plan.targets)
-  renderRows body.findingGroup body.findingRows (V.map (\finding -> findingRow wording finding) (orderedFindings plan))
+  renderRows body.targetGroup body.targetRows (V.map (targetRow wording) plan.targets)
+  renderRows body.findingGroup body.findingRows (V.map (findingRow wording) (orderedFindings plan))
   renderActionRows body.scriptRows (InExpander body.scriptExpander) (scriptOf wording plan)
   renderSealChoice body.seal wording plan
 
@@ -289,8 +289,8 @@ scriptOf wording plan =
     , plainRow "Directories" (directoriesText plan)
     , plainRow "Ignores" (T.intercalate " · " (V.toList plan.ignorePatterns))
     ]
-    <> V.map (\planned -> generationRow wording planned) (plannedGenerations plan)
-    <> V.map (\step -> stepRow wording step) (V.take scriptSample plan.steps)
+    <> V.map (generationRow wording) (plannedGenerations plan)
+    <> V.map (stepRow wording) (V.take scriptSample plan.steps)
     <> overflowRow (V.length plan.steps)
 
 directoriesText :: JobPlan -> Text
