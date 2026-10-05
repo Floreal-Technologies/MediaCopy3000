@@ -6,7 +6,6 @@ module MediaCopy.Plugin.Process.Native
   ) where
 
 import Control.Exception (IOException, try)
-import Control.Monad (void)
 import System.Posix.Signals (Signal, sigKILL, sigTERM, signalProcessGroup)
 import System.Posix.Types (CPid)
 import System.Process (ProcessHandle, getPid)
@@ -23,4 +22,4 @@ killGroup :: ProcessHandle -> Group -> IO ()
 killGroup _ group = signal sigKILL group
 
 signal :: Signal -> Group -> IO ()
-signal sig (Group leader) = mapM_ (void . try @IOException . signalProcessGroup sig) leader
+signal sig (Group leader) = mapM_ (try @IOException . signalProcessGroup sig) leader

@@ -201,7 +201,7 @@ noPluginState =
 
 foldPluginReport :: PluginReport -> PluginState -> PluginState
 foldPluginReport report st = case report of
-  Annotated path notes -> st {annotations = Map.insertWith (flip <>) path notes st.annotations}
+  Annotated path notes -> st {annotations = Map.insertWith (flip (<>)) path notes st.annotations}
   Warned finding -> st {warnings = V.snoc st.warnings finding}
   InspectionsLeft left -> st {inspectionsLeft = left}
   NotInspected plugin left -> st {notInspected = Map.insert plugin left st.notInspected}
