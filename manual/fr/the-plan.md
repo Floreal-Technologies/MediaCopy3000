@@ -14,7 +14,7 @@ La fiche affiche « Lecture du dossier… » et « Aucun fichier modifié ». L'
 
 ## Une fois prêt
 
-Cette fiche se compose de quatre groupes :
+Cette fiche se compose de ces groupes :
 
 ![Un plan prêt à être exécuté](../en/images/plan-ready.png)
 
@@ -69,6 +69,24 @@ apparaissent en premier, suivis des avertissements.
 - Un **avertissement** n'interrompt rien. Prenez-en connaissance et décidez de la marche à suivre.
 
 La page [Constats](findings.md) répertorie tous les constats possibles et les actions à entreprendre pour chacun d'eux.
+
+Une [extension](plugins.md) peut aussi ajouter des constats. Le texte de chacun commence par le nom
+de l’extension.
+
+### Champs de tâche
+
+![Un plan avec un champ de tâche et des données pour le manifeste](../en/images/plan-plugins.png)
+
+Ce groupe montre les [champs de tâche](plugins.md#champs-de-tache) de chaque extension activée.
+Chaque ligne a le nom de l’extension, puis le nom du champ. Tapez une valeur, puis cliquez sur le
+bouton d’application. La fiche établit le plan à nouveau avec la valeur. Le groupe n’apparaît pas
+quand aucune extension ne demande de champ de tâche.
+
+### Enregistré dans le manifeste
+
+Ce groupe montre ce que les extensions ajoutent à chaque manifeste que la tâche écrit. Il a une
+ligne pour chaque auteur, et une ligne pour les métadonnées avec le nom des extensions qui les
+ajoutent. Le groupe n’apparaît pas quand aucune extension n’ajoute rien.
 
 ## Lorsque le plan ne peut pas être établi
 

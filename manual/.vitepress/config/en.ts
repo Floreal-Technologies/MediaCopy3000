@@ -39,6 +39,7 @@ function sidebarUserGuide(): DefaultTheme.SidebarItem[] {
     { text: "Findings", link: "findings" },
     { text: "Event log", link: "event-log"},
     { text: "The command line", link: "command-line"},
+    { text: "Plug-ins", link: "plugins" },
     { text: "Preferences", items: [{ text: "Appearance", link: "appearance" }] },
     { text: "Keyboard Shortcuts", link: "keyboard" },
   ]

@@ -56,6 +56,7 @@ function sidebarGuideUtilisateur(): DefaultTheme.SidebarItem[] {
     { text: "Constats", link: "findings" },
     { text: "Journal des événements", link: "event-log" },
     { text: "The command line", link: "command-line"},
+    { text: "Extensions", link: "plugins" },
     { text: "Préférences", items: [{ text: "Apparence", link: "appearance" }] },
     { text: "Raccourcis clavier", link: "keyboard" },
   ]

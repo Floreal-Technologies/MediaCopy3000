@@ -63,7 +63,10 @@ library domain
     MediaCopy.Domain.JobFormat
     MediaCopy.Domain.JobFormat.Internal
     MediaCopy.Domain.Plan
+    MediaCopy.Domain.Plugin
+    MediaCopy.Domain.PluginCatalog
     MediaCopy.Domain.Preflight
+    MediaCopy.Domain.Severity
 
   build-depends:
     ascmhl,
@@ -80,13 +83,14 @@ library domain
 library application
   import: options
   hs-source-dirs: src/application
-  -- cabal-gild: discover src/application src/application-posix/
+  -- cabal-gild: discover src/application src/application-posix/ src/application-linux/
   exposed-modules:
     MediaCopy.Effects.Emit
     MediaCopy.Effects.FileSystem
     MediaCopy.Effects.FileSystem.Native
     MediaCopy.Effects.FileSystem.Types
     MediaCopy.Effects.Hasher
+    MediaCopy.Effects.Plugins
     MediaCopy.Engine
     MediaCopy.Engine.Generation
     MediaCopy.Engine.Plan
@@ -94,11 +98,24 @@ library application
     MediaCopy.EventLog
     MediaCopy.Guard
     MediaCopy.Mhl.Store
+    MediaCopy.Plugin
+    MediaCopy.Plugin.Catalog
+    MediaCopy.Plugin.Discovery
+    MediaCopy.Plugin.Grants
+    MediaCopy.Plugin.Process
+    MediaCopy.Plugin.Process.Native
+    MediaCopy.Plugin.Secrets
+    MediaCopy.Plugin.Secrets.Native
+    MediaCopy.Plugin.Session
+    MediaCopy.Plugin.Trace
+    MediaCopy.Plugin.Wire
     MediaCopy.Signals
 
   other-modules: Paths_mediacopy3000
   autogen-modules: Paths_mediacopy3000
   build-depends:
+    aeson,
+    aeson-pretty,
     ascmhl,
     async,
     base,
@@ -115,7 +132,9 @@ library application
     mediacopy3000:domain,
     monad-time-effectful,
     os-string,
+    plugin-protocol,
     primitive,
+    process,
     stm,
     text,
     text-display,
@@ -126,9 +145,21 @@ library application
   if os(windows)
     hs-source-dirs: src/application-windows
     build-depends: Win32
+    extra-libraries: advapi32
   else
     hs-source-dirs: src/application-posix
     build-depends: unix
+
+    if os(osx)
+      hs-source-dirs: src/application-darwin
+      frameworks:
+        CoreFoundation
+        Security
+    else
+      hs-source-dirs: src/application-linux
+      build-depends:
+        gi-gio ^>=2.0,
+        gi-secret ^>=0.0.20,
 
 library interface
   import: options
@@ -199,12 +230,15 @@ library
     MediaCopy.Gtk.View
     MediaCopy.Gtk.Widgets.CloseConfirm
     MediaCopy.Gtk.Widgets.Common
+    MediaCopy.Gtk.Widgets.FieldRows
     MediaCopy.Gtk.Widgets.FileRow
     MediaCopy.Gtk.Widgets.History
     MediaCopy.Gtk.Widgets.JobDetail
     MediaCopy.Gtk.Widgets.JobRow
     MediaCopy.Gtk.Widgets.OffloadDialog
     MediaCopy.Gtk.Widgets.PlanSheet
+    MediaCopy.Gtk.Widgets.PluginsPage
+    MediaCopy.Gtk.Widgets.PluginStatus
     MediaCopy.Gtk.Widgets.Preferences
 
   other-modules: Paths_mediacopy3000
@@ -255,7 +289,10 @@ executable mediacopy3000
   main-is: Main.hs
   hs-source-dirs: app
   build-depends:
+    aeson,
+    ascmhl,
     base,
+    containers,
     effectful-core,
     filepath,
     mediacopy3000,
@@ -264,7 +301,9 @@ executable mediacopy3000
     mediacopy3000:domain,
     mediacopy3000:interface,
     optparse-applicative,
+    plugin-protocol,
     text,
+    text-display,
     time,
 
 executable render-bench

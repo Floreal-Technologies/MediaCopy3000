@@ -60,6 +60,7 @@ actionTable =
     , always "win.next-job" "Next Job" ["<Control>Page_Down"] (Just NavigationSection) (Just (Send SelectNextJob))
     , always "win.previous-job" "Previous Job" ["<Control>Page_Up"] (Just NavigationSection) (Just (Send SelectPreviousJob))
     , always "app.preferences" "Preferences" ["<Control>comma"] (Just GeneralSection) Nothing
+    , always "app.plugins" "Plug-ins" [] Nothing Nothing
     , always "app.about" "About MediaCopy 3000" [] Nothing (Just ShowAbout)
     , always "win.show-help-overlay" "Keyboard Shortcuts" ["<Control>question"] (Just GeneralSection) Nothing
     , always "window.close" "Close Window" ["<Control>w"] (Just GeneralSection) Nothing
@@ -135,6 +136,7 @@ buildMenu = do
   menuRow jobs "win.clear-finished"
   general <- Gio.menuNew
   menuRow general "app.preferences"
+  menuRow general "app.plugins"
   menuRow general "win.show-help-overlay"
   menuRow general "app.about"
   Gio.menuAppendSection menu Nothing jobs

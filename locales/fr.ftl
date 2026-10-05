@@ -91,3 +91,11 @@ toast-job-finished = { $label } : { $result }
 toast-job-failed = { $label } : échec – { $message }
 dialog-save-plan = Enregistrer le plan
 dialog-save-report = Enregistrer le rapport
+
+## Plug-ins
+
+plugin-finding = { $plugin } : { $title }
+plugin-unavailable = extension indisponible
+plugin-field-missing = le champ { $field } n’a pas de valeur valide
+plugin-bad-output = l’extension a envoyé une réponse invalide
+toast-plugin = { $label } : { $message }

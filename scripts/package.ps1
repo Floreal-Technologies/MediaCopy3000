@@ -55,6 +55,20 @@ foreach ($dll in $dlls) {
 Write-Host "bundled $($dlls.Count) DLLs"
 if ($dlls.Count -lt 20) { throw "only $($dlls.Count) DLLs resolved; ntldd output was not understood" }
 
+$credits = Get-ChildItem -Recurse -Filter credits.exe dist-newstyle -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+if (-not $credits) { throw 'credits.exe not found under dist-newstyle; run cabal build first' }
+$pluginDir = "$Stage/plugins/tech.floreal.credits"
+Copy-Into $credits.FullName "$pluginDir/bin/credits.exe"
+Copy-Into plugins/credits/plugin.json "$pluginDir/plugin.json"
+$pluginDlls = & "$Ucrt\bin\ntldd.exe" -R $credits.FullName |
+    ForEach-Object { if ($_ -match '=>\s+(\S.*?)\s+\(') { $Matches[1] } } |
+    Where-Object { $_ -and $_ -notmatch '^[A-Za-z]:\\[Ww][Ii][Nn][Dd][Oo][Ww][Ss]\\' } |
+    Sort-Object -Unique
+foreach ($dll in $pluginDlls) {
+    if (Test-Path $dll) { Copy-Into $dll "$pluginDir/bin/$(Split-Path -Leaf $dll)" }
+}
+
 $loaders = "$Stage/lib/gdk-pixbuf-2.0/2.10.0/loaders"
 New-Item -ItemType Directory -Path $loaders -Force | Out-Null
 Copy-Item "$Ucrt/lib/gdk-pixbuf-2.0/2.10.0/loaders/*.dll" $loaders -Force

@@ -77,6 +77,7 @@ jobs:
             libharfbuzz-dev \
             liblzma-dev \
             libpango1.0-dev \
+            libsecret-1-dev \
             libxxhash-dev \
             zlib1g-dev
           echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
@@ -98,7 +99,7 @@ jobs:
 
       - name: Test
         run: |
-          cabal test core-test ascmhl-test
+          cabal test core-test ascmhl-test plugin-protocol-test
 
       - name: Set up just
         uses: extractions/setup-just@v4
@@ -172,10 +173,10 @@ jobs:
           restore-keys: ${{ runner.os }}-ghc-9.14.1-
 
       - name: Build
-        run: cabal build exe:mediacopy3000
+        run: cabal build exe:mediacopy3000 exe:credits
 
       - name: Test
-        run: cabal test core-test ascmhl-test
+        run: cabal test core-test ascmhl-test plugin-protocol-test
 
       - name: Report what the build resolved
         shell: pwsh
@@ -216,6 +217,7 @@ jobs:
             libharfbuzz-dev \
             liblzma-dev \
             libpango1.0-dev \
+            libsecret-1-dev \
             libxxhash-dev \
             zlib1g-dev
           echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
@@ -280,6 +282,7 @@ jobs:
             libharfbuzz-dev \
             liblzma-dev \
             libpango1.0-dev \
+            libsecret-1-dev \
             libxxhash-dev \
             zlib1g-dev \
             rpm \
@@ -391,7 +394,7 @@ jobs:
           restore-keys: ${{ runner.os }}-ghc-9.14.1-
 
       - name: Build
-        run: cabal build exe:mediacopy3000
+        run: cabal build exe:mediacopy3000 exe:credits
 
       - name: Stage the tree and build the MSI
         shell: pwsh

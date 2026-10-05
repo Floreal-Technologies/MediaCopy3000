@@ -22,6 +22,7 @@ jobs:
           version: 1.6.0.2
       - run: cabal-gild --input mediacopy3000.cabal --mode check
       - run: cabal-gild --input ascmhl/ascmhl.cabal --mode check
+      - run: cabal-gild --input plugin-protocol/plugin-protocol.cabal --mode check
   hlint:
     runs-on: ubuntu-latest
     steps:
@@ -35,5 +36,5 @@ jobs:
       - name: 'Run HLint'
         uses: haskell-actions/hlint-run@v2
         with:
-          path: '["app/", "src/", "ascmhl/", "tests/", "tests-conformance/"]'
+          path: '["app/", "src/", "ascmhl/", "plugin-protocol/", "tests/", "tests-conformance/"]'
           fail-on: warning

@@ -39,6 +39,22 @@ Le blocage « la destination contient des fichiers absents de la source » en il
 | `source is empty` | La source multimédia ne contient aucun fichier. | Vérifiez que vous avez sélectionné le bon dossier. La tâche peut s'exécuter mais n'enregistrera rien. |
 | `folder is already sealed` | La source multimédia contient déjà une génération, et cette tâche en créerait une autre. | Désactivez l'option **Sceller d'abord la source multimédia** ou utilisez **Vérifier le dossier…**. |
 
+## Constats des extensions
+
+Une [extension](plugins.md) peut ajouter ses propres constats. Leur texte vient de l’extension,
+après son nom. Une extension ne peut donner un blocage que si vous lui accordez `block`.
+
+MediaCopy 3000 donne lui-même trois constats sur les extensions :
+
+| La feuille indique | Signification | Que faire |
+|---|---|---|
+| `extension indisponible` | L’extension n’a pas démarré, s’est arrêtée, ou n’a pas répondu. Le détail donne la raison. | Lancez `mediacopy3000 plan` et lisez sa sortie d’erreur. Réparez l’extension, ou mettez `enabled` à `false` dans `plugins.json`. |
+| `le champ … n’a pas de valeur valide` | Un réglage ou un champ de tâche de l’extension n’a pas de valeur, ou une valeur que l’extension n’accepte pas. | Donnez la valeur dans `plugins.json`, ou avec `--plugin-field`. |
+| `l’extension a envoyé une réponse invalide` | La réponse ne respecte pas le protocole, par exemple des métadonnées hors de l’espace de noms de l’extension. | Prévenez l’auteur de l’extension. Le détail donne la raison. |
+
+Chacun des trois est un blocage pour un contributeur, et pour un inspecteur qui a la capacité
+`block`. Pour toute autre extension, c’est un avertissement.
+
 ## Constatations du rapport
 
 Chaque constatation figure dans le bloc `Plan` du rapport enregistré, accompagnée de sa gravité et de ses détails :

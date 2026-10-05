@@ -15,6 +15,10 @@ module MediaCopy.Demo.Fixtures
   , partialPlan
   , verifyPlan
   , sealPlan
+  , pluginCatalog
+  , pluginSpec
+  , pluginPlan
+  , pluginReports
   , history
   , paletteListing
   , hashOf
@@ -26,9 +30,9 @@ module MediaCopy.Demo.Fixtures
 import Ascmhl.Build (chainFromListing, creatorInfo, dirHash, directoryEntry, fileEntry, newManifest, orderedEntries)
 import Ascmhl.Hash (Hash (..), HashAlgo (..))
 import Ascmhl.Path (RelPath, mkRelPath)
-import Ascmhl.Types (Chain (..), DirHash, HashAction (..), Manifest, ManifestEntry, MhlHistory, ProcessKind (..), historyOf)
+import Ascmhl.Types (Author (..), Chain (..), DirHash, Fragment (..), HashAction (..), Manifest, ManifestEntry, MhlHistory, ProcessKind (..), historyOf)
 import Data.Int (Int64)
-import Data.List (sortOn)
+import Data.List (List, sortOn)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -41,8 +45,11 @@ import System.OsPath (OsPath, unsafeEncodeUtf, (</>))
 
 import MediaCopy.Domain.FileSystem (Tree (..), ignorePatterns, partSuffix)
 import MediaCopy.Domain.Job
-import MediaCopy.Domain.Plan (JobPlan)
+import MediaCopy.Domain.Plan (JobPlan, withPluginPlan)
+import MediaCopy.Domain.Plugin
+import MediaCopy.Domain.PluginCatalog
 import MediaCopy.Domain.Preflight (GenerationFacts (..), HistoryRule (..), OffloadFacts (..), TargetFacts (..), decideGeneration, decideOffload)
+import MediaCopy.Domain.Severity (Severity (..))
 import MediaCopy.Interface.Theme (FamilyInfo (..), FamilyListing (..), PaletteMode (..), ThemeListing (..))
 
 at :: UTCTime
@@ -98,7 +105,7 @@ sealJob :: OsPath -> Job
 sealJob folder = SealMediaSource SealJob {folder}
 
 specFor :: JobId -> Job -> JobSpec
-specFor jid job = JobSpec {jobId = jid, job, createdAt = at}
+specFor jid job = JobSpec {jobId = jid, job, createdAt = at, pluginFields = Map.empty}
 
 recordedHashes :: Map RelPath Hash
 recordedHashes = Map.fromList (V.toList (V.map (\pair -> (fst pair, hashOf "4f9a1c3b2d7e8051")) mediaSourceFiles))
@@ -199,6 +206,91 @@ verifyPlan spec = decideGeneration spec RequireHistory verifyFacts
 
 sealPlan :: JobSpec -> JobPlan
 sealPlan spec = decideGeneration spec AllowFresh sealFacts
+
+credentials, credits, delivery :: PluginRef
+credentials = PluginRef {id = "tech.floreal.c2pa-reader", name = "Content Credentials"}
+credits = PluginRef {id = "tech.floreal.credits", name = "Credits"}
+delivery = PluginRef {id = "tech.floreal.s3", name = "S3 delivery"}
+
+pluginCatalog :: PluginCatalog
+pluginCatalog =
+  PluginCatalog
+    { entries =
+        V.fromList
+          [ PluginEntry
+              { plugin = credentials
+              , version = "1.0.0"
+              , folder = "/home/you/.local/share/mediacopy3000/plugins/tech.floreal.c2pa-reader"
+              , roles = V.singleton "inspector"
+              , enabled = True
+              , trace = False
+              , capabilities = V.fromList [CapabilityView "files.read" Granted, CapabilityView "block" Declined]
+              , settings = V.empty
+              , jobFields = V.empty
+              , active = True
+              , problem = Nothing
+              }
+          , PluginEntry
+              { plugin = credits
+              , version = "1.2.0"
+              , folder = "/home/you/.local/share/mediacopy3000/plugins/tech.floreal.credits"
+              , roles = V.singleton "contributor"
+              , enabled = True
+              , trace = False
+              , capabilities = V.fromList [CapabilityView "files.read" Granted, CapabilityView "manifest.write" Granted]
+              , settings =
+                  V.fromList
+                    [ FieldView "dit" "DIT name" TextShape True (Value "Jane Doe")
+                    , FieldView "email" "DIT email" TextShape False (Value "jane@example.com")
+                    , FieldView "token" "Signing token" SecretShape False SecretStored
+                    ]
+              , jobFields = V.singleton (FieldView "operator" "Camera operator" TextShape True NoValue)
+              , active = True
+              , problem = Nothing
+              }
+          , PluginEntry
+              { plugin = delivery
+              , version = "0.9.0"
+              , folder = "/home/you/.local/share/mediacopy3000/plugins/tech.floreal.s3"
+              , roles = V.singleton "deliverer"
+              , enabled = False
+              , trace = False
+              , capabilities = V.fromList [CapabilityView "files.read" Granted, CapabilityView "network" Unanswered]
+              , settings = V.singleton (FieldView "bucket" "Bucket" TextShape True NoValue)
+              , jobFields = V.empty
+              , active = False
+              , problem = Nothing
+              }
+          ]
+    , rejected = V.singleton ("/home/you/.local/share/mediacopy3000/plugins/old-tool", "plugin.json needs plug-in API 2, and this MediaCopy 3000 speaks API 1")
+    , problem = Nothing
+    }
+
+pluginSpec :: JobId -> Job -> JobSpec
+pluginSpec jid job = JobSpec {jobId = jid, job, createdAt = at, pluginFields = Map.singleton credits.id (Map.singleton "operator" "Sam Roe")}
+
+pluginPlan :: JobSpec -> JobPlan
+pluginPlan spec =
+  withPluginPlan
+    PluginPlan
+      { active = V.fromList [credentials, credits]
+      , findings = V.singleton PluginFinding {plugin = credentials, severity = Warning, about = Said PluginSays {key = "c2pa-present", title = "5 clips carry Content Credentials", detail = "A001C001_260912_R1AB.mov and 4 more"}}
+      , contributions =
+          Contributions
+            { authors = V.fromList [Author "Jane Doe" (Just "jane@example.com") Nothing (Just "DIT"), Author "Sam Roe" Nothing Nothing (Just "camera operator")]
+            , fileMetadata = Map.fromList [(path, Fragment V.empty) | (path, _) <- V.toList mediaSourceFiles]
+            , manifestMetadata = Nothing
+            , contributors = V.singleton credits
+            }
+      }
+    (readyPlan spec)
+
+pluginReports :: List PluginReport
+pluginReports =
+  [ Annotated (rel "A001C001_260912_R1AB.mov") (V.singleton Annotation {plugin = credentials, key = "signer", label = "Signer", value = "Sony"})
+  , Produced (V.singleton Artifact {plugin = credentials, path = osp "/home/you/.local/state/mediacopy3000/jobs/2026-09-12_140300-1-CARD_A001-offload/artifacts/tech.floreal.c2pa-reader/credentials.pdf", label = "Credentials report", mediaType = "application/pdf"})
+  , Warned PluginFinding {plugin = credentials, severity = Warning, about = Said PluginSays {key = "c2pa-invalid", title = "1 clip has a credential that does not validate", detail = "A001C004_260912_R1AB.mov"}}
+  ]
 
 offloadOf :: Job -> OffloadJob
 offloadOf = \case

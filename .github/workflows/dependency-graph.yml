@@ -50,6 +50,7 @@ jobs:
             libharfbuzz-dev \
             liblzma-dev \
             libpango1.0-dev \
+            libsecret-1-dev \
             libxxhash-dev \
             zlib1g-dev
 

@@ -7,8 +7,9 @@ module MediaCopy.Gtk.Runtime
   ) where
 
 import Control.Concurrent.Async
+import Control.Concurrent.MVar (MVar, newMVar, withMVar)
 import Control.Exception
-import Control.Monad (forM_, void, when)
+import Control.Monad (forM_, unless, void, when)
 import Data.GI.Base (AttrOp (On, (:=)), new, on)
 import Data.GI.Base.GError (catchGErrorJustDomain)
 import Data.IORef
@@ -19,7 +20,9 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Display (display)
 import Data.Text.Encoding (encodeUtf8)
+import Data.Text.IO qualified as TIO
 import Data.Time (getCurrentTime)
+import Data.Vector (Vector)
 import Effectful (runEff)
 import Effectful.Time (runTime)
 import GI.Adw qualified as Adw
@@ -29,15 +32,19 @@ import GI.Gtk qualified as Gtk
 import Network.HostName qualified as HostName
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.File.OsPath (writeFile')
-import System.OsPath (OsPath, encodeFS)
+import System.IO (stderr)
+import System.OsPath (OsPath, decodeFS, encodeFS)
 
 import MediaCopy.Domain.Job (JobEvent (..), JobId, JobSpec (..))
-import MediaCopy.Domain.Plan (JobPlan (..))
+import MediaCopy.Domain.Plan (JobPlan (..), planBlocked)
+import MediaCopy.Domain.Plugin (PluginReport (..))
+import MediaCopy.Domain.PluginCatalog (CatalogChange)
 import MediaCopy.Effects.Emit (runEmitIO)
 import MediaCopy.Effects.FileSystem (defaultChunkSize, runFileSystemIO)
 import MediaCopy.Effects.Hasher (runHasher)
+import MediaCopy.Effects.Plugins (runPluginsSession)
 import MediaCopy.Engine
-import MediaCopy.EventLog (withEventLog)
+import MediaCopy.EventLog (artifactsFolder, withEventLog)
 import MediaCopy.Gtk.Environment (Environment, withEnvironment)
 import MediaCopy.Gtk.Reload (loadCss, loadWording)
 import MediaCopy.Gtk.Screenshot (Startup (..), seeded)
@@ -49,6 +56,10 @@ import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Translation.Embedded
 import MediaCopy.Interface.Wording (noHistoryText)
 import MediaCopy.Model
+import MediaCopy.Plugin (PluginSetup (..), loadPluginSetup, planWithPlugins)
+import MediaCopy.Plugin.Catalog (applyChange, loadCatalog)
+import MediaCopy.Plugin.Grants (Ready)
+import MediaCopy.Plugin.Session (SessionConfig (..), Stage (RunStage), observe, withSession)
 import MediaCopy.Report (renderPlanText)
 import MediaCopy.Signals (onStopSignal)
 
@@ -57,6 +68,8 @@ data Runtime = Runtime
   , widgets :: Widgets
   , engine :: IORef (Maybe (JobId, Async ()))
   , workers :: IORef (Set (Async ()))
+  , catalogLock :: MVar ()
+  , planner :: IORef (Maybe (JobId, Async ()))
   }
 
 start :: Maybe Startup -> IO ()
@@ -90,6 +103,9 @@ buildAndPresent runtimeRef environment startup app = do
   desktop <- readDesktopBase themeAdapter
   modelRef <- newIORef (initialModel startedAt desktop)
   engine <- newIORef Nothing
+  workers <- newIORef Set.empty
+  catalogLock <- newMVar ()
+  planner <- newIORef Nothing
   let dispatchNow msg =
         readIORef runtimeRef >>= \case
           Nothing -> pure ()
@@ -105,8 +121,7 @@ buildAndPresent runtimeRef environment startup app = do
       (themeSections (embeddedWording English) DarkPalette palettes)
       (dispatchNow . Ui)
   loadCss environment
-  workers <- newIORef Set.empty
-  let runtime = Runtime {modelRef, widgets, engine, workers}
+  let runtime = Runtime {modelRef, widgets, engine, workers, catalogLock, planner}
   writeIORef runtimeRef (Just runtime)
   loadWording
     environment
@@ -119,6 +134,7 @@ buildAndPresent runtimeRef environment startup app = do
   model <- readIORef modelRef
   widgets.render model
   Gtk.windowPresent widgets.window
+  when (isNothing startup) (catalogWorker runtime)
   let showFrame frame = do
         writeIORef modelRef frame
         widgets.render frame
@@ -168,6 +184,10 @@ runCommand runtime = \case
   LoadHistory jobId folder -> loadHistory runtime jobId folder
   WriteFile path text -> writeFile' path (encodeUtf8 text)
   CloseWindow -> Gtk.windowDestroy runtime.widgets.window
+  OpenFileDialog toMessage -> openFileDialog runtime toMessage
+  LoadCatalog -> catalogWorker runtime
+  ApplyChange change -> changeWorker runtime change
+  LaunchFile path -> launchFile runtime path
 
 installCloseRequest :: Adw.ApplicationWindow -> (Message -> IO ()) -> IO ()
 installCloseRequest window dispatchNow =
@@ -199,6 +219,37 @@ openSaveDialog runtime title suggested toMessage = do
   Gtk.fileDialogSave dialog (Just runtime.widgets.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
     toasting runtime (sendPicked runtime toMessage (Gtk.fileDialogSaveFinish dialog result))
 
+openFileDialog :: Runtime -> (OsPath -> Message) -> IO ()
+openFileDialog runtime toMessage = do
+  dialog <- new Gtk.FileDialog [#title := "Choose a File"]
+  Gtk.fileDialogOpen dialog (Just runtime.widgets.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
+    toasting runtime (sendPicked runtime toMessage (Gtk.fileDialogOpenFinish dialog result))
+
+launchFile :: Runtime -> OsPath -> IO ()
+launchFile runtime path = do
+  file <- decodeFS path >>= Gio.fileNewForPath
+  launcher <- Gtk.fileLauncherNew (Just file)
+  Gtk.fileLauncherLaunch launcher (Just runtime.widgets.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
+    toasting runtime (void (Gtk.fileLauncherLaunchFinish launcher result))
+
+catalogWorker :: Runtime -> IO ()
+catalogWorker runtime = void $ async (withMVar runtime.catalogLock (const (reloadCatalog runtime)))
+
+changeWorker :: Runtime -> CatalogChange -> IO ()
+changeWorker runtime change =
+  void $ async $ withMVar runtime.catalogLock $ \() -> do
+    guarded (applyChange change) >>= \case
+      Left err -> toastFailure runtime err
+      Right (Left problem) -> postMessage runtime (ShowToast problem)
+      Right (Right ()) -> pure ()
+    reloadCatalog runtime
+
+reloadCatalog :: Runtime -> IO ()
+reloadCatalog runtime =
+  guarded loadCatalog >>= \case
+    Left err -> toastFailure runtime err
+    Right catalog -> postMessage runtime (CatalogLoaded catalog)
+
 startJob :: Runtime -> JobPlan -> IO ()
 startJob runtime plan = do
   let spec = plan.spec
@@ -207,9 +258,18 @@ startJob runtime plan = do
   previous <- readIORef runtime.engine
   worker <- tracked runtime $ do
     mapM_ (waitCatch . snd) previous
+    setup <- loadPluginSetup
+    root <- artifactsFolder spec
+    model <- readIORef runtime.modelRef
     withEventLog spec (renderPlanText spec plan) $ \logPath logLine -> do
       forM_ logPath (sink . LogOpened)
-      runEff (runFileSystemIO defaultChunkSize (runHasher (runTime (runEmitIO (\ev -> logLine ev >> sink ev) (executePlan (T.pack host) plan)))))
+      let reported report = do
+            logLine (PluginReported report)
+            unless (logOnly report) (sink (PluginReported report))
+      if planBlocked plan
+        then runEff (runFileSystemIO defaultChunkSize (runHasher (runTime (runEmitIO (\ev -> logLine ev >> sink ev) (executePlan (T.pack host) plan)))))
+        else withSession (pluginConfig model.wording setup.ready root reported) RunStage plan $ \session ->
+          runEff (runFileSystemIO defaultChunkSize (runHasher (runTime (runEmitIO (\ev -> logLine ev >> observe session ev >> sink ev) (runPluginsSession session (executePlanWithPlugins (T.pack host) plan))))))
   writeIORef runtime.engine (Just (spec.jobId, worker))
   void $ async $ do
     outcome <- waitCatch worker
@@ -231,12 +291,34 @@ loadHistory runtime jobId folder = void $ async $ do
     Right (Just hist) -> postMessage runtime (HistoryLoaded jobId hist)
 
 planWorker :: Runtime -> JobSpec -> IO ()
-planWorker runtime spec =
-  void $ tracked runtime $ do
-    attempt <- guarded (runEff (runFileSystemIO defaultChunkSize (planJob spec)))
+planWorker runtime spec = do
+  worker <- tracked runtime $ do
+    model <- readIORef runtime.modelRef
+    attempt <- guarded $ do
+      plan <- runEff (runFileSystemIO defaultChunkSize (planJob spec))
+      setup <- loadPluginSetup
+      forM_ setup.grantsProblem (postMessage runtime . ShowToast)
+      root <- artifactsFolder spec
+      planWithPlugins (pluginConfig model.wording setup.ready root (TIO.hPutStrLn stderr . display)) plan
     case attempt of
       Left err -> postMessage runtime (PlanComputed spec (Left (T.pack (displayException err))))
       Right plan -> postMessage runtime (PlanComputed spec (Right plan))
+  previous <- atomicModifyIORef' runtime.planner (\held -> (Just (spec.jobId, worker), held))
+  forM_ previous $ \(jid, old) -> when (jid == spec.jobId) (void (async (cancel old)))
+
+pluginConfig :: Wording -> Vector Ready -> OsPath -> (PluginReport -> IO ()) -> SessionConfig
+pluginConfig wording plugins root report =
+  SessionConfig
+    { plugins
+    , locale = languageCode wording.language
+    , report
+    , artifactRoot = root
+    }
+
+logOnly :: PluginReport -> Bool
+logOnly = \case
+  Logged _ _ -> True
+  _ -> False
 
 clearWhen :: JobId -> Maybe (JobId, Async ()) -> Maybe (JobId, Async ())
 clearWhen finished held = case held of

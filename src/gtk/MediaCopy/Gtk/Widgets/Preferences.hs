@@ -14,10 +14,11 @@ import GI.Adw qualified as Adw
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 
-import MediaCopy.Gtk.Widgets.Common (flatNamed, newLabel, suppressing, unlessSuppressed)
+import MediaCopy.Gtk.Widgets.Common (flatNamed, newLabel, renderCell, suppressing, unlessSuppressed)
+import MediaCopy.Gtk.Widgets.PluginsPage (PluginsPage (..), newPluginsPage)
 import MediaCopy.Interface.Theme
 import MediaCopy.Interface.Translation
-import MediaCopy.Model (UiMessage (..))
+import MediaCopy.Model (Model (..), UiMessage (..))
 
 newPreferences
   :: Adw.Application
@@ -26,10 +27,10 @@ newPreferences
   -> Vector ThemeSection
   -> Vector ThemeSection
   -> (UiMessage -> IO ())
-  -> IO (Appearance -> IO ())
+  -> IO (Model -> IO ())
 newPreferences app window wording lightSections darkSections dispatch = do
   dialog <- new Adw.PreferencesDialog [#title := "Preferences"]
-  page <- new Adw.PreferencesPage [#title := "General", #iconName := "preferences-system-symbolic"]
+  page <- new Adw.PreferencesPage [#name := "general", #title := "General", #iconName := "preferences-system-symbolic"]
   group <- new Adw.PreferencesGroup [#title := "Appearance", #description := "Applies to this run only"]
   rows <- newAppearanceRows wording lightSections darkSections
   Adw.preferencesGroupAdd group rows.baseRow
@@ -37,10 +38,14 @@ newPreferences app window wording lightSections darkSections dispatch = do
   Adw.preferencesGroupAdd group rows.darkRow
   Adw.preferencesPageAdd page group
   Adw.preferencesDialogAdd dialog page
-  asDialog <- Adw.toDialog dialog
+  plugins <- newPluginsPage dispatch
+  Adw.preferencesDialogAdd dialog plugins.page
   reportChoices rows dispatch
-  installPreferencesAction app window asDialog
-  pure (paintAppearance rows)
+  installPreferencesAction app window dialog "preferences" "general"
+  installPreferencesAction app window dialog "plugins" "plugins"
+  pure $ \model -> do
+    paintAppearance rows model.appearance
+    renderCell plugins.cell model.plugins
 
 data AppearanceRows = AppearanceRows
   { baseRow :: Adw.ComboRow
@@ -104,13 +109,15 @@ select :: (Eq a) => IORef Bool -> (Word32 -> IO ()) -> Vector a -> a -> IO ()
 select suppress choose values wanted =
   mapM_ (suppressing suppress . choose . fromIntegral) (V.elemIndex wanted values)
 
-installPreferencesAction :: Adw.Application -> Adw.ApplicationWindow -> Adw.Dialog -> IO ()
-installPreferencesAction app window dialog = do
+installPreferencesAction :: Adw.Application -> Adw.ApplicationWindow -> Adw.PreferencesDialog -> Text -> Text -> IO ()
+installPreferencesAction app window dialog actionName pageName = do
   action <-
     new
       Gio.SimpleAction
-      [ #name := "preferences"
-      , On #activate (\_param -> Adw.dialogPresent dialog (Just window))
+      [ #name := actionName
+      , On #activate $ \_param -> do
+          Adw.preferencesDialogSetVisiblePageName dialog pageName
+          Adw.dialogPresent dialog (Just window)
       ]
   Gio.actionMapAddAction app action
 

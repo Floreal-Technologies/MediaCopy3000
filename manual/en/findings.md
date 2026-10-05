@@ -45,6 +45,22 @@ of the media source. A file it does not know can be lost, so the sheet refuses t
 | `source is empty` | The media source holds no files. | Check that you picked the right folder. The job can run and will record nothing. |
 | `folder is already sealed` | The media source already holds a generation, and this job would write another. | Turn off **Seal the media source first**, or use **Verify Folder…**. |
 
+## Findings from plug-ins
+
+A [plug-in](plugins.md) can add its own findings. Their text comes from the plug-in, after its name.
+A plug-in can give a blocker only when you grant it `block`.
+
+MediaCopy 3000 itself gives three findings about plug-ins:
+
+| The sheet says | What it means | What to do |
+|---|---|---|
+| `plug-in unavailable` | The plug-in did not start, stopped, or gave no answer. The detail gives the reason. | Run `mediacopy3000 plan` and read its error output. Repair the plug-in, or set `enabled` to `false` in `plugins.json`. |
+| `the field … has no valid value` | A setting or a job field of the plug-in has no value, or a value that the plug-in does not accept. | Give the value in `plugins.json`, or with `--plugin-field`. |
+| `plug-in sent a bad answer` | The answer does not obey the protocol, for example metadata outside the namespace of the plug-in. | Tell the author of the plug-in. The detail gives the reason. |
+
+Each of the three is a blocker for a contributor, and for an inspector that has the `block` grant.
+For any other plug-in, it is a warning.
+
 ## Findings in the report
 
 Every finding goes into the `Plan` block of the saved report, with its severity and its detail:

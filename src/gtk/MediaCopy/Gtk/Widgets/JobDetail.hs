@@ -25,9 +25,10 @@ import GI.Pango qualified as Pango
 
 import MediaCopy.Domain.Job hiding (Progress)
 import MediaCopy.Gtk.Actions (actionButton)
-import MediaCopy.Gtk.Widgets.Common (nameAccessible, newLabel, paddedBox, suppressing, toggleClass, unlessSuppressed)
+import MediaCopy.Gtk.Widgets.Common (nameAccessible, newLabel, paddedBox, renderCell, suppressing, toggleClass, unlessSuppressed)
 import MediaCopy.Gtk.Widgets.FileRow (FileRow (..), newFileRow)
 import MediaCopy.Gtk.Widgets.History (HistoryView (..), newHistoryView, renderHistory)
+import MediaCopy.Gtk.Widgets.PluginStatus (PluginStatus (..), newPluginStatus)
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Wording
 import MediaCopy.Model (FileFilter (..), JobEntry (..), Model (..), UiMessage (..))
@@ -43,6 +44,7 @@ newJobDetail dispatch = do
   progress <- newProgress
   counters <- newCounters
   history <- newHistoryView
+  plugins <- newPluginStatus dispatch
   suppress <- newIORef False
   filterButtons <- newFilterButtons suppress dispatch
   files <- newFileListPane
@@ -54,6 +56,7 @@ newJobDetail dispatch = do
   Gtk.boxAppend root progress.bar
   Gtk.boxAppend root progress.line
   Gtk.boxAppend root counters.box
+  Gtk.boxAppend root plugins.group
   Gtk.boxAppend root history.root
   Gtk.boxAppend root filterButtons.box
   Gtk.boxAppend root files.header
@@ -67,6 +70,7 @@ newJobDetail dispatch = do
           renderHeading heading loaded state
           renderProgress progress model.now model.wording state (rateOf state)
           renderCounters counters loaded state
+          renderCell plugins.cell (model.wording, state.plugins)
           renderHistory history model.wording (historyFor loaded state)
           suppressing suppress (selectFilter filterButtons model.fileFilter)
           diffFileList files model state

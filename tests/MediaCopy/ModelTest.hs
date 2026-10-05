@@ -252,7 +252,7 @@ requestPlanAsksForOne :: Assertion
 requestPlanAsksForOne = do
   let (model, cmds) = update (RequestPlan (offloadJob UseHistory)) m0
   length (filter isComputePlan cmds) @?= 1
-  model.planPhase @?= Planning JobSpec {jobId = JobId 1, job = offloadJob UseHistory, createdAt = at}
+  model.planPhase @?= Planning JobSpec {jobId = JobId 1, job = offloadJob UseHistory, createdAt = at, pluginFields = Map.empty}
   Map.keys model.jobs @?= []
 
 discardPlanQueuesNothing :: Assertion

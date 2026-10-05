@@ -2,13 +2,20 @@
 
 module Main (main) where
 
+import Ascmhl.Path (pathText)
 import Control.Exception (SomeException, displayException, try)
+import Control.Monad (forM_)
 import Data.List (List)
 import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
+import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Display (display)
 import Data.Text.IO qualified as T
 import Data.Time (getCurrentTime)
 import Effectful (runEff)
+import MediaCopy.Plugin.Manifest (PluginManifest (..))
 import Options.Applicative
 import System.Environment (getArgs, lookupEnv)
 import System.Exit (ExitCode (..), die, exitWith)
@@ -17,11 +24,16 @@ import System.OsPath (OsPath, encodeUtf)
 
 import MediaCopy.Demo (Scene (..), lookupScene, sceneNames)
 import MediaCopy.Domain.Job
-import MediaCopy.Domain.Plan (planBlocked)
+import MediaCopy.Domain.Plan (JobPlan, planBlocked)
 import MediaCopy.Effects.FileSystem (defaultChunkSize, runFileSystemIO)
 import MediaCopy.Engine (planJob)
+import MediaCopy.EventLog (artifactsFolder)
 import MediaCopy.Gtk.Runtime qualified as Runtime
 import MediaCopy.Gtk.Screenshot (Startup (..))
+import MediaCopy.Plugin (PluginSetup (..), loadPluginSetup, planWithPlugins)
+import MediaCopy.Plugin.Discovery (Installed (..), Rejected (..))
+import MediaCopy.Plugin.Grants (Inactive (..))
+import MediaCopy.Plugin.Session (SessionConfig (..))
 import MediaCopy.Report (renderPlanText)
 
 main :: IO ()
@@ -63,13 +75,18 @@ parseAndRun args =
 
 data Command
   = ListScenes
-  | PlanOnly Job
+  | PlanOnly Job PluginOptions
   | Gui
+
+data PluginOptions = PluginOptions
+  { enabled :: Bool
+  , fields :: Map Text (Map Text Text)
+  }
 
 run :: Command -> IO ()
 run = \case
   ListScenes -> mapM_ T.putStrLn sceneNames
-  PlanOnly job -> planCommand job
+  PlanOnly job options -> planCommand job options
   Gui -> do
     T.putStrLn banner
     startup >>= Runtime.start
@@ -83,15 +100,32 @@ commandInfo =
 commandParser :: Parser Command
 commandParser =
   flag' ListScenes (long "list-scenes" <> help "Print the demo scene names, one per line, and exit")
-    <|> hsubparser (command "plan" (info (PlanOnly <$> planParser) (progDesc "Print a plan without the window")))
+    <|> hsubparser (command "plan" (info planParser (progDesc "Print a plan without the window")))
 
-planParser :: Parser Job
+planParser :: Parser Command
 planParser =
   hsubparser
-    ( command "offload" (info offloadParser (progDesc "Plan an offload of SOURCE into every DEST"))
-        <> command "verify" (info (VerifyFolder . VerifyJob <$> folderArg) (progDesc "Plan a verify of FOLDER against its history"))
-        <> command "seal" (info (SealMediaSource . SealJob <$> folderArg) (progDesc "Plan a seal of FOLDER"))
+    ( command "offload" (info (PlanOnly <$> offloadParser <*> pluginOptions) (progDesc "Plan an offload of SOURCE into every DEST"))
+        <> command "verify" (info (PlanOnly . VerifyFolder . VerifyJob <$> folderArg <*> pluginOptions) (progDesc "Plan a verify of FOLDER against its history"))
+        <> command "seal" (info (PlanOnly . SealMediaSource . SealJob <$> folderArg <*> pluginOptions) (progDesc "Plan a seal of FOLDER"))
     )
+
+pluginOptions :: Parser PluginOptions
+pluginOptions =
+  PluginOptions
+    <$> (not <$> switch (long "no-plugins" <> help "Start no plug-in"))
+    <*> (foldr addField Map.empty <$> many (option fieldReader (long "plugin-field" <> metavar "ID.KEY=VALUE" <> help "Give the job field KEY of the plug-in ID")))
+  where
+    addField (pluginId, key, given) = Map.insertWith Map.union pluginId (Map.singleton key given)
+
+fieldReader :: ReadM (Text, Text, Text)
+fieldReader = eitherReader $ \raw ->
+  let (name, given) = T.breakOn "=" (T.pack raw)
+      (pluginPart, key) = T.breakOnEnd "." name
+      pluginId = T.dropEnd 1 pluginPart
+  in if T.null given || T.null key || T.null pluginId
+       then Left ("not ID.KEY=VALUE: " <> raw)
+       else Right (pluginId, key, T.drop 1 given)
 
 offloadParser :: Parser Job
 offloadParser =
@@ -114,18 +148,36 @@ folderArg = argument pathReader (metavar "FOLDER")
 pathReader :: ReadM OsPath
 pathReader = eitherReader (\raw -> maybe (Left ("not a usable path: " <> raw)) Right (encodeUtf raw))
 
-planCommand :: Job -> IO ()
-planCommand job = do
+planCommand :: Job -> PluginOptions -> IO ()
+planCommand job options = do
   hSetEncoding stdout utf8
   hSetEncoding stderr utf8
   now <- getCurrentTime
-  let spec = JobSpec {jobId = JobId 1, job, createdAt = now}
-  attempt <- try @SomeException (runEff (runFileSystemIO defaultChunkSize (planJob spec)))
+  let spec = JobSpec {jobId = JobId 1, job, createdAt = now, pluginFields = options.fields}
+  attempt <- try @SomeException $ do
+    plan <- runEff (runFileSystemIO defaultChunkSize (planJob spec))
+    if options.enabled then withPlugins spec plan else pure plan
   case attempt of
     Left err -> T.hPutStrLn stderr (T.pack (displayException err)) >> exitWith (ExitFailure 2)
     Right plan -> do
       T.putStr (renderPlanText spec plan)
       exitWith (if planBlocked plan then ExitFailure 1 else ExitSuccess)
+
+withPlugins :: JobSpec -> JobPlan -> IO JobPlan
+withPlugins spec plan = do
+  setup <- loadPluginSetup
+  forM_ setup.grantsProblem (T.hPutStrLn stderr)
+  forM_ setup.rejected (\rejected -> T.hPutStrLn stderr ("plug-in folder " <> pathText rejected.folder <> " " <> rejected.reason))
+  forM_ setup.inactive (\inactive -> T.hPutStrLn stderr ("plug-in " <> inactive.installed.manifest.name <> " " <> inactive.reason))
+  root <- artifactsFolder spec
+  planWithPlugins
+    SessionConfig
+      { plugins = setup.ready
+      , locale = "en"
+      , report = T.hPutStrLn stderr . display
+      , artifactRoot = root
+      }
+    plan
 
 startup :: IO (Maybe Startup)
 startup =

@@ -39,6 +39,7 @@ import MediaCopy.Domain.History (HistoryError (..))
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.JobFormat.Internal (JobFormat (..))
 import MediaCopy.Domain.Plan
+import MediaCopy.Domain.Plugin (noPluginPlan)
 import MediaCopy.Domain.Preflight
 import MediaCopy.Effects.Emit (Emit, runEmitCollect)
 import MediaCopy.Effects.FileSystem (FileSystem)
@@ -114,6 +115,7 @@ samplePlanWithFree free findings =
     , sealPass = Nothing
     , generations = 0
     , findings
+    , plugins = noPluginPlan
     }
 
 warningDoesNotBlock :: Assertion

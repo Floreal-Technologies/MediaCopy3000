@@ -5,25 +5,32 @@ module MediaCopy.Gtk.Widgets.PlanSheet
   ) where
 
 import Ascmhl.Path (pathText)
+import Ascmhl.Types (Author (..))
 import Ascmhl.Write (formatMhlTime)
-import Control.Monad (void, when)
+import Control.Monad (void, when, zipWithM_)
 import Data.Function ((&))
 import Data.GI.Base
-import Data.IORef (IORef, newIORef)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Data.List (List)
 import Data.Map.Strict qualified as Map
+import Data.Maybe (catMaybes, isJust, isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Display (display)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import GI.Adw qualified as Adw
+import GI.GLib qualified as GLib
 import GI.Gtk qualified as Gtk
 import System.OsPath (takeFileName)
 
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.JobFormat (formatAlgo)
 import MediaCopy.Domain.Plan
+import MediaCopy.Domain.Plugin
+import MediaCopy.Domain.PluginCatalog (FieldShape, FieldValue (..), FieldView (..), enabledJobFields)
 import MediaCopy.Gtk.Widgets.Common
+import MediaCopy.Gtk.Widgets.FieldRows (FieldActions (..), FieldRow (..), fieldRow)
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Wording
 import MediaCopy.Model
@@ -31,6 +38,7 @@ import MediaCopy.Model
 data PlanSheet = PlanSheet
   { phaseCell :: Cell (Wording, PlanPhase)
   , openCell :: Cell Bool
+  , fieldsCell :: Cell (Vector (PluginRef, Vector FieldView), Map.Map Text (Map.Map Text Text))
   }
 
 newPlanSheet :: Adw.ApplicationWindow -> (UiMessage -> IO ()) -> IO PlanSheet
@@ -51,8 +59,9 @@ newPlanSheet window dispatch = do
   let sheet = Sheet {dialog = shell.dialog, startBtn = shell.primaryButton, saveBtn, stack, errorPage, body}
   phaseCell <- newCell (renderPhase sheet)
   openCell <- newOpenCell shell.dialog window
+  fieldsCell <- newCell (renderJobFields body dispatch)
   onDialogClosed shell.dialog openCell (dispatch DiscardPlan)
-  pure PlanSheet {phaseCell, openCell}
+  pure PlanSheet {phaseCell, openCell, fieldsCell}
 
 data Sheet = Sheet
   { dialog :: Adw.Dialog
@@ -92,10 +101,16 @@ renderPhase sheet (wording, phase) = case phase of
     set sheet.saveBtn [#sensitive := False]
     Gtk.stackSetVisibleChildName sheet.stack "planning"
   PlanError message -> do
-    set sheet.errorPage [#description := message]
+    escaped <- GLib.markupEscapeText message (-1)
+    set sheet.errorPage [#description := escaped]
     set sheet.startBtn [#sensitive := False]
     set sheet.saveBtn [#sensitive := False]
     Gtk.stackSetVisibleChildName sheet.stack "error"
+  Refreshing plan _ -> do
+    renderReadyBody (wording, sheet.body) plan
+    set sheet.startBtn [#sensitive := False]
+    set sheet.saveBtn [#sensitive := False]
+    Gtk.stackSetVisibleChildName sheet.stack "ready"
   Ready plan -> do
     set sheet.dialog [#title := "Plan · " <> jobLabel plan.spec.job]
     renderReadyBody (wording, sheet.body) plan
@@ -111,6 +126,10 @@ data ReadyBody = ReadyBody
   , targetRows :: IORef (Vector Adw.ActionRow)
   , findingGroup :: Adw.PreferencesGroup
   , findingRows :: IORef (Vector Adw.ActionRow)
+  , manifestGroup :: Adw.PreferencesGroup
+  , manifestRows :: IORef (Vector Adw.ActionRow)
+  , fieldGroup :: Adw.PreferencesGroup
+  , fieldRows :: IORef (Maybe (List (Text, Text, Text, FieldShape, Bool), List FieldRow))
   , scriptExpander :: Adw.ExpanderRow
   , scriptRows :: IORef (Vector Adw.ActionRow)
   , seal :: SealControls
@@ -122,10 +141,14 @@ newReadyBody seal = do
   summaryGroup <- new Adw.PreferencesGroup [#title := "This Job"]
   targetGroup <- new Adw.PreferencesGroup [#title := "Destinations"]
   findingGroup <- new Adw.PreferencesGroup [#title := "Findings"]
+  manifestGroup <- new Adw.PreferencesGroup [#title := "Recorded in the Manifest", #description := "Plug-ins add this to each manifest the job writes"]
   Gtk.boxAppend readyBox summaryGroup
   Gtk.boxAppend readyBox seal.group
   Gtk.boxAppend readyBox targetGroup
+  fieldGroup <- new Adw.PreferencesGroup [#title := "Job Fields", #description := "Values that plug-ins ask for this job", #visible := False]
   Gtk.boxAppend readyBox findingGroup
+  Gtk.boxAppend readyBox fieldGroup
+  Gtk.boxAppend readyBox manifestGroup
   scriptGroup <- new Adw.PreferencesGroup [#title := "Details"]
   scriptExpander <- new Adw.ExpanderRow [#title := "Steps", #expanded := False]
   Adw.preferencesGroupAdd scriptGroup scriptExpander
@@ -134,6 +157,8 @@ newReadyBody seal = do
   summaryRows <- newIORef V.empty
   targetRows <- newIORef V.empty
   findingRows <- newIORef V.empty
+  manifestRows <- newIORef V.empty
+  fieldRows <- newIORef Nothing
   scriptRows <- newIORef V.empty
   pure
     ReadyBody
@@ -144,6 +169,10 @@ newReadyBody seal = do
       , targetRows
       , findingGroup
       , findingRows
+      , manifestGroup
+      , manifestRows
+      , fieldGroup
+      , fieldRows
       , scriptExpander
       , scriptRows
       , seal
@@ -153,7 +182,8 @@ renderReadyBody :: (Wording, ReadyBody) -> JobPlan -> IO ()
 renderReadyBody (wording, body) plan = do
   renderRows body.summaryGroup body.summaryRows (summaryOf wording plan)
   renderRows body.targetGroup body.targetRows (V.map (targetRow wording) plan.targets)
-  renderRows body.findingGroup body.findingRows (V.map (findingRow wording) (orderedFindings plan))
+  renderRows body.findingGroup body.findingRows (findingRowsOf wording plan)
+  renderRows body.manifestGroup body.manifestRows (manifestRowsOf plan.plugins.contributions)
   renderActionRows body.scriptRows (InExpander body.scriptExpander) (scriptOf wording plan)
   renderSealChoice body.seal wording plan
 
@@ -229,6 +259,39 @@ renderPlanSheet :: PlanSheet -> Model -> IO ()
 renderPlanSheet widgets current = do
   renderCell widgets.phaseCell (current.wording, current.planPhase)
   renderCell widgets.openCell (isOpen current.planPhase)
+  let given = case current.planPhase of
+        Planning spec -> spec.pluginFields
+        Refreshing _ spec -> spec.pluginFields
+        Ready plan -> plan.spec.pluginFields
+        _ -> Map.empty
+  renderCell widgets.fieldsCell (enabledJobFields current.plugins, given)
+
+renderJobFields :: ReadyBody -> (UiMessage -> IO ()) -> (Vector (PluginRef, Vector FieldView), Map.Map Text (Map.Map Text Text)) -> IO ()
+renderJobFields body dispatch (wanted, given) = do
+  let layout = [(ref.id, ref.name, field.key, field.shape, field.required) | (ref, plugin) <- V.toList wanted, field <- V.toList plugin]
+      fields = [(ref, field) | (ref, plugin) <- V.toList wanted, field <- V.toList plugin]
+  readIORef body.fieldRows >>= \case
+    Just (shown, rows) | shown == layout -> zipWithM_ (\row (ref, field) -> row.refresh (current ref field)) rows fields
+    previous -> do
+      mapM_ (mapM_ (\row -> Adw.preferencesGroupRemove body.fieldGroup row.row) . snd) previous
+      rows <- traverse (uncurry jobFieldRow) fields
+      mapM_ (\row -> Adw.preferencesGroupAdd body.fieldGroup row.row) rows
+      writeIORef body.fieldRows (Just (layout, rows))
+      Gtk.widgetSetVisible body.fieldGroup (not (null rows))
+  where
+    current ref field = maybe NoValue Value (Map.lookup ref.id given >>= Map.lookup field.key)
+    jobFieldRow ref field =
+      let send value = dispatch (SetJobField ref.id field.key value)
+      in fieldRow
+           FieldActions
+             { setText = send
+             , setBool = \flag -> send (if flag then "true" else "false")
+             , setSecret = send
+             , clear = send ""
+             , pickPath = dispatch (PickJobFieldPath ref.id field.key)
+             }
+           (ref.name <> ": ")
+           FieldView {key = field.key, label = field.label, shape = field.shape, required = field.required, value = current ref field}
 
 isOpen :: PlanPhase -> Bool
 isOpen phase = case phase of
@@ -242,8 +305,31 @@ sealSubtitle wording plan = case plan.sealPass of
     | plan.generations == 0 -> "the media source has no history; sealing records its hashes before a byte is copied"
     | otherwise -> "the media source already holds " <> plural "generation" plan.generations <> ", which the copies are checked against"
 
-orderedFindings :: JobPlan -> Vector Finding
-orderedFindings plan = blockers plan <> V.filter (\finding -> finding.severity == Warning) plan.findings
+findingRowsOf :: Wording -> JobPlan -> Vector Row
+findingRowsOf wording plan =
+  V.map (findingRow wording) (blockers plan)
+    <> V.map (pluginFindingRow wording) (pluginBlockers plan.plugins)
+    <> V.map (findingRow wording) (V.filter (\finding -> finding.severity == Warning) plan.findings)
+    <> V.map (pluginFindingRow wording) (V.filter (\finding -> finding.severity == Warning) plan.plugins.findings)
+
+pluginFindingRow :: Wording -> PluginFinding -> Row
+pluginFindingRow wording finding =
+  let (title, detail) = pluginFindingTexts wording finding
+  in (plainRow title detail) {cssClass = Just (case finding.severity of Blocker -> "error"; Warning -> "warning")}
+
+manifestRowsOf :: Contributions -> Vector Row
+manifestRowsOf contributions =
+  V.map authorRow contributions.authors <> metadataRow
+  where
+    authorRow author = plainRow author.name (T.intercalate " · " (catMaybes [author.role, author.email, author.phone]))
+    metadataRow
+      | Map.null contributions.fileMetadata && isNothing contributions.manifestMetadata = V.empty
+      | otherwise =
+          V.singleton
+            ( plainRow
+                ("Metadata for " <> plural "file" (Map.size contributions.fileMetadata) <> (if isJust contributions.manifestMetadata then " and the manifest" else ""))
+                (T.intercalate ", " (V.toList (V.map (\ref -> ref.name) contributions.contributors)))
+            )
 
 summaryOf :: Wording -> JobPlan -> Vector Row
 summaryOf wording plan =

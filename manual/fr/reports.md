@@ -63,6 +63,36 @@ MISSING Sidecar/A001C001.wav
 
 Une opération de vérification ou de scellement (*seal*) inclut également une section `History:`, avec une ligne pour chaque génération.
 
+## Les extensions dans le rapport
+
+Une tâche avec des [extensions](plugins.md) ajoute des lignes au bloc `Plan` :
+
+```
+  plug-in: Content Credentials (tech.floreal.c2pa-reader)
+  warning: Content Credentials: 2 clips carry Content Credentials – A001C001.MP4, A001C002.MP4
+  author: Jane Doe (DIT)
+  metadata: 3 files, manifest – Credits
+```
+
+Elle reçoit aussi une section `Plug-ins:`, avec une ligne pour chaque événement :
+
+```
+Plug-ins:
+WARNING  Credits: plug-in unavailable – the plug-in stopped with exit code 4
+NOT INSPECTED  Content Credentials  3 files
+NOTE  A001C001.MP4  Content Credentials  Signer: Sony
+PRODUCED  PDF report  Report  /home/vous/.local/state/mediacopy3000/jobs/<tâche>/artifacts/tech.floreal.pdf/report.pdf
+DELIVERED  S3 upload  s3://footage/A001/report.pdf
+```
+
+| Ligne | Signification |
+|---|---|
+| `WARNING` | Une extension a échoué pendant la tâche, ou a donné un avertissement sur un fichier. |
+| `NOT INSPECTED` | Les fichiers qu’un inspecteur n’a pas inspectés, après deux échecs. |
+| `NOTE` | Une note d’une extension sur un fichier. |
+| `PRODUCED` | Un fichier qu’un producteur a écrit. |
+| `DELIVERED`, `NOT DELIVERED` | Un fichier qu’un livreur a envoyé, ou n’a pas pu envoyer. |
+
 ## Pourquoi le plan y figure
 
 Le bloc `Plan` est l'élément qui transforme le rapport en une piste d'audit.

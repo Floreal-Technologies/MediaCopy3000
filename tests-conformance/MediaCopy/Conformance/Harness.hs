@@ -16,6 +16,7 @@ import Data.ByteString qualified as BS
 import Data.Function ((&))
 import Data.List (List, sort)
 import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.Map.Strict qualified as Map
 import Data.Time (UTCTime (..), fromGregorian)
 import Data.Vector (Vector)
 import Effectful
@@ -67,12 +68,13 @@ offloadSpecWith sealFirst source parent = do
       { jobId = JobId 1
       , job = Offload OffloadJob {source = src, destinations = dst :| [], sealFirst, existingCopy = Nothing}
       , createdAt = epoch
+      , pluginFields = Map.empty
       }
 
 verifySpec :: FilePath -> IO JobSpec
 verifySpec folder = do
   f <- osPathOf folder
-  pure JobSpec {jobId = JobId 1, job = VerifyFolder VerifyJob {folder = f}, createdAt = epoch}
+  pure JobSpec {jobId = JobId 1, job = VerifyFolder VerifyJob {folder = f}, createdAt = epoch, pluginFields = Map.empty}
 
 epoch :: UTCTime
 epoch = UTCTime (fromGregorian 1970 1 1) 0
