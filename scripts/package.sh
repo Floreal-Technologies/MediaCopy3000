@@ -256,9 +256,9 @@ for fmt in "${FORMATS[@]}"; do
       build_osxpkg "mediacopy3000-${VERSION_LABEL}-$(min_os_for "$fmt")-${ARCH}.pkg"
       continue
       ;;
-    deb) EXTRA=(-d libgtk-4-1 -d 'libadwaita-1-0 (>= 1.7)' -d libsecret-1-0); EXT=deb ;;
-    rpm) EXTRA=(-d gtk4 -d 'libadwaita >= 1.7' -d libsecret); EXT=rpm ;;
-    pacman) EXTRA=(-d gtk4 -d 'libadwaita>=1.7' -d libsecret); EXT=pkg.tar.zst ;;
+    deb) EXTRA=(-d libgtk-4-1 -d 'libadwaita-1-0 (>= 1.7)'); EXT=deb ;;
+    rpm) EXTRA=(-d gtk4 -d 'libadwaita >= 1.7'); EXT=rpm ;;
+    pacman) EXTRA=(-d gtk4 -d 'libadwaita>=1.7'); EXT=pkg.tar.zst ;;
   esac
   PKG_NAME="mediacopy3000-${VERSION_LABEL}-$(min_os_for "$fmt")-${ARCH}.${EXT}"
   echo "==> fpm -t $fmt ($PKG_NAME)"

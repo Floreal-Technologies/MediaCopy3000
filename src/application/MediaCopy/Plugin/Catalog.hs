@@ -14,9 +14,7 @@ import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Bifunctor (first)
 import Data.ByteString.Lazy qualified as LBS
 import Data.Either (fromRight, isRight)
-import Data.Functor ((<&>))
 import Data.Map.Strict qualified as Map
-import Data.Maybe (listToMaybe)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -33,7 +31,6 @@ import MediaCopy.Domain.PluginCatalog
 import MediaCopy.Effects.FileSystem (defaultChunkSize, runFileSystemIO, writeTextAtomically)
 import MediaCopy.Plugin.Discovery
 import MediaCopy.Plugin.Grants
-import MediaCopy.Plugin.Secrets (deleteSecret, secretExists, storeSecret)
 import MediaCopy.Plugin.Wire (fieldValues)
 
 -- $setup
@@ -44,59 +41,46 @@ loadCatalog = do
   found <- pluginRoots >>= discover
   grantFile <- grantsPath >>= loadGrants
   let grantMap = fromRight Map.empty grantFile
-  entries <- traverse (entryOf grantMap) (V.toList found.installed)
   pure
     PluginCatalog
-      { entries = V.fromList entries
+      { entries = V.map (entryOf grantMap) found.installed
       , rejected = V.map (\entry -> (pathText entry.folder, entry.reason)) found.rejected
       , problem = either Just (const Nothing) grantFile
       }
 
-entryOf :: Map.Map PluginId Grant -> Installed -> IO PluginEntry
-entryOf grantMap installed = do
-  let manifest = installed.manifest
-      PluginId pluginId = manifest.id
-      grant = Map.lookup manifest.id grantMap
-      enabled = maybe False (.enabled) grant
-      trace = maybe False (.trace) grant
-      answerOf capability = case grant of
-        Just g
-          | Set.member capability g.grants -> Granted
-          | Set.member capability g.declined -> Declined
-        _ -> Unanswered
-      stored = maybe Map.empty (.settings) grant
-  settings <- traverse (settingView pluginId stored) (V.toList manifest.settings)
-  let activated = activate grantMap installed
-      inactive = either (\entry -> Just entry.reason) (const Nothing) activated
-      keyring = listToMaybe [reason | FieldView {value = SecretUnreadable reason} <- settings]
-      present = Map.union stored (Map.fromList [(field.key, String "") | field <- settings, field.value == SecretStored])
-      labelOf key = maybe key (.label) (V.find (\field -> field.key == key) manifest.settings)
-      unset = either (\key -> Just ("needs a valid value for " <> labelOf key)) (const Nothing) (fieldValues manifest.settings present)
-  pure
-    PluginEntry
-      { plugin = PluginRef {id = pluginId, name = manifest.name}
-      , version = manifest.version
-      , folder = pathText installed.folder
-      , roles = V.map roleName manifest.roles
-      , enabled
-      , trace
-      , capabilities = V.map (\capability -> CapabilityView {name = capabilityName capability, answer = answerOf capability}) manifest.capabilities
-      , settings = V.fromList settings
-      , jobFields = V.map (\field -> viewOf field NoValue) manifest.jobFields
-      , active = isRight activated
-      , problem = if enabled then inactive <|> keyring <|> unset else Nothing
-      }
+entryOf :: Map.Map PluginId Grant -> Installed -> PluginEntry
+entryOf grantMap installed =
+  PluginEntry
+    { plugin = PluginRef {id = pluginId, name = manifest.name}
+    , version = manifest.version
+    , folder = pathText installed.folder
+    , roles = V.map roleName manifest.roles
+    , enabled
+    , trace = maybe False (.trace) grant
+    , capabilities = V.map (\capability -> CapabilityView {name = capabilityName capability, answer = answerOf capability}) manifest.capabilities
+    , settings = V.map (settingView stored) manifest.settings
+    , jobFields = V.map (\field -> viewOf field NoValue) manifest.jobFields
+    , active = isRight activated
+    , problem = if enabled then inactive <|> unset else Nothing
+    }
+  where
+    manifest = installed.manifest
+    PluginId pluginId = manifest.id
+    grant = Map.lookup manifest.id grantMap
+    enabled = maybe False (.enabled) grant
+    answerOf capability = case grant of
+      Just g
+        | Set.member capability g.grants -> Granted
+        | Set.member capability g.declined -> Declined
+      _ -> Unanswered
+    stored = maybe Map.empty (.settings) grant
+    activated = activate grantMap installed
+    inactive = either (\entry -> Just entry.reason) (const Nothing) activated
+    labelOf key = maybe key (.label) (V.find (\field -> field.key == key) manifest.settings)
+    unset = either (\key -> Just ("needs a valid value for " <> labelOf key)) (const Nothing) (fieldValues manifest.settings stored)
 
-settingView :: Text -> Map.Map Text Value -> Field -> IO FieldView
-settingView pluginId stored field = case field.kind of
-  SecretField ->
-    secretExists pluginId field.key <&> \case
-      Left reason -> viewOf field (SecretUnreadable reason)
-      Right True -> viewOf field SecretStored
-      Right False
-        | Map.member field.key stored -> viewOf field SecretInFile
-        | otherwise -> viewOf field NoValue
-  _ -> pure (viewOf field (maybe NoValue (Value . valueText) (Map.lookup field.key stored <|> field.defaultValue)))
+settingView :: Map.Map Text Value -> Field -> FieldView
+settingView stored field = viewOf field (maybe NoValue (Value . valueText) (Map.lookup field.key stored <|> field.defaultValue))
 
 viewOf :: Field -> FieldValue -> FieldView
 viewOf field value = FieldView {key = field.key, label = field.label, shape = shapeOf field.kind, required = field.required, value}
@@ -104,7 +88,7 @@ viewOf field value = FieldView {key = field.key, label = field.label, shape = sh
 shapeOf :: FieldKind -> FieldShape
 shapeOf = \case
   TextField -> TextShape
-  SecretField -> SecretShape
+  SecretField -> TextShape
   BoolField -> BoolShape
   ChoiceField choices -> ChoiceShape choices
   PathField -> PathShape
@@ -117,25 +101,22 @@ valueText = \case
   other -> decodeUtf8Lenient (LBS.toStrict (encodePretty other))
 
 applyChange :: CatalogChange -> IO (Either Text ())
-applyChange = \case
-  SetSecret pluginId key (SecretText value) -> storeSecret pluginId key value
-  ClearSecret pluginId key -> deleteSecret pluginId key
-  change -> do
-    path <- grantsPath
-    present <- doesFileExist path
-    current <-
-      if present
-        then do
-          bytes <- try @IOException (FileIO.readFile' path)
-          pure (either (Left . T.show) (first T.pack . eitherDecodeStrict) bytes)
-        else pure (Right (object []))
-    case current >>= editGrants change of
-      Left problem -> pure (Left ("plugins.json: " <> problem))
-      Right edited -> do
-        written <- try @IOException $ do
-          createDirectoryIfMissing True (takeDirectory path)
-          runEff (runFileSystemIO defaultChunkSize (writeTextAtomically path (decodeUtf8Lenient (LBS.toStrict (encodePretty edited)) <> "\n")))
-        pure (either (\e -> Left ("plugins.json cannot be written: " <> T.show e)) Right written)
+applyChange change = do
+  path <- grantsPath
+  present <- doesFileExist path
+  current <-
+    if present
+      then do
+        bytes <- try @IOException (FileIO.readFile' path)
+        pure (either (Left . T.show) (first T.pack . eitherDecodeStrict) bytes)
+      else pure (Right (object []))
+  case current >>= editGrants change of
+    Left problem -> pure (Left ("plugins.json: " <> problem))
+    Right edited -> do
+      written <- try @IOException $ do
+        createDirectoryIfMissing True (takeDirectory path)
+        runEff (runFileSystemIO defaultChunkSize (writeTextAtomically path (decodeUtf8Lenient (LBS.toStrict (encodePretty edited)) <> "\n")))
+      pure (either (\e -> Left ("plugins.json cannot be written: " <> T.show e)) Right written)
 
 -- |
 -- >>> editGrants (SetAnswer "tech.floreal.probe" "block" Granted) (object [])
@@ -185,8 +166,6 @@ editGrants change = \case
       ClearSetting _ key ->
         let settings = fromRight KeyMap.empty (objectAt "settings" entry)
         in KeyMap.insert "settings" (Object (KeyMap.delete (Key.fromText key) settings)) entry
-      SetSecret {} -> entry
-      ClearSecret {} -> entry
 
 changedPlugin :: CatalogChange -> Text
 changedPlugin = \case
@@ -195,5 +174,3 @@ changedPlugin = \case
   SetAnswer pluginId _ _ -> pluginId
   SetSetting pluginId _ _ -> pluginId
   ClearSetting pluginId _ -> pluginId
-  SetSecret pluginId _ _ -> pluginId
-  ClearSecret pluginId _ -> pluginId

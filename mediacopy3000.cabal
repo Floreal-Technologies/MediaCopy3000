@@ -83,7 +83,7 @@ library domain
 library application
   import: options
   hs-source-dirs: src/application
-  -- cabal-gild: discover src/application src/application-posix/ src/application-linux/
+  -- cabal-gild: discover src/application src/application-posix/
   exposed-modules:
     MediaCopy.Effects.Emit
     MediaCopy.Effects.FileSystem
@@ -104,8 +104,6 @@ library application
     MediaCopy.Plugin.Grants
     MediaCopy.Plugin.Process
     MediaCopy.Plugin.Process.Native
-    MediaCopy.Plugin.Secrets
-    MediaCopy.Plugin.Secrets.Native
     MediaCopy.Plugin.Session
     MediaCopy.Plugin.Trace
     MediaCopy.Plugin.Wire
@@ -145,21 +143,9 @@ library application
   if os(windows)
     hs-source-dirs: src/application-windows
     build-depends: Win32
-    extra-libraries: advapi32
   else
     hs-source-dirs: src/application-posix
     build-depends: unix
-
-    if os(osx)
-      hs-source-dirs: src/application-darwin
-      frameworks:
-        CoreFoundation
-        Security
-    else
-      hs-source-dirs: src/application-linux
-      build-depends:
-        gi-gio ^>=2.0,
-        gi-secret ^>=0.0.20,
 
 library interface
   import: options

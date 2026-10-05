@@ -22,7 +22,6 @@ import MediaCopy.Gtk.Widgets.Common (suppressing, unlessSuppressed)
 data FieldActions = FieldActions
   { setText :: Text -> IO ()
   , setBool :: Bool -> IO ()
-  , setSecret :: Text -> IO ()
   , clear :: IO ()
   , pickPath :: IO ()
   }
@@ -58,15 +57,6 @@ fieldRow actions prefix field = do
         handle (Adw.comboRowGetSelected row <&> \index -> maybe actions.clear actions.setText (choices V.!? (fromIntegral index - 1)))
       shown <- Adw.toPreferencesRow row
       pure FieldRow {row = shown, refresh = quietly . Adw.comboRowSetSelected row . indexOf}
-    SecretShape -> do
-      row <- new Adw.PasswordEntryRow [#useMarkup := False, #showApplyButton := True]
-      set row [#title := title <> secretState field.value]
-      void $ on row #apply $ do
-        text <- Gtk.editableGetText row
-        Gtk.editableSetText row ""
-        later (if T.null text then actions.clear else actions.setSecret text)
-      shown <- Adw.toPreferencesRow row
-      pure FieldRow {row = shown, refresh = \value -> Adw.preferencesRowSetTitle row (title <> secretState value)}
     _ -> do
       row <- new Adw.EntryRow [#useMarkup := False, #text := textOf field.value, #showApplyButton := True]
       set row [#title := title]
@@ -88,9 +78,3 @@ fieldRow actions prefix field = do
     textOf = \case
       Value text -> text
       _ -> ""
-    secretState = \case
-      SecretStored -> " – stored in the keyring"
-      SecretInFile -> " – set in plugins.json"
-      SecretUnreadable _ -> " – the keyring refused"
-      Value _ -> " – set"
-      NoValue -> ""

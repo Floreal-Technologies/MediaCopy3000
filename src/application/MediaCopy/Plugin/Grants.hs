@@ -85,7 +85,6 @@ data Ready = Ready
   { installed :: Installed
   , granted :: Set Capability
   , settings :: Map Text Value
-  , keyring :: Maybe Text
   , trace :: Bool
   }
   deriving stock (Eq, Show)
@@ -107,7 +106,7 @@ activate :: Map PluginId Grant -> Installed -> Either Inactive Ready
 activate grantMap installed = case Map.lookup installed.manifest.id grantMap of
   Just grant
     | grant.enabled -> case unanswered grant of
-        [] -> Right Ready {installed, granted = Set.intersection grant.grants declared, settings = grant.settings, keyring = Nothing, trace = grant.trace}
+        [] -> Right Ready {installed, granted = Set.intersection grant.grants declared, settings = grant.settings, trace = grant.trace}
         missing -> Left Inactive {installed, reason = "asks for " <> T.intercalate ", " (map capabilityName missing) <> ", which is neither granted nor declined"}
   _ -> Left Inactive {installed, reason = "is not enabled"}
   where

@@ -72,28 +72,6 @@ an enabled plug-in does not run.
 
 If you add or remove a plug-in folder while the preferences are open, click **Look Again**.
 
-### Secret settings
-
-A secret setting, for example a password or a token, goes into the keyring of the system. It never
-goes into `plugins.json`.
-
-| System | Keyring |
-|---|---|
-| Linux | The Secret Service, for example GNOME Keyring or KWallet |
-| Flatpak | The keyring of the sandbox, through the Secret portal. If the desktop has no Secret portal, the Secret Service. |
-| macOS | The Keychain |
-| Windows | The Credential Manager |
-
-The row of a stored secret says `stored in the keyring`. The field stays empty. To remove the
-secret, apply an empty value.
-
-If the keyring refuses, for example because it is locked, the row says `the keyring refused`, and
-the subtitle of the plug-in gives the reason. The plug-in does not run. The plan gives the finding
-`plug-in unavailable`, with the reason `the keyring refused: …`.
-
-If `plugins.json` holds a secret, the row says `set in plugins.json`, and the plug-in gets it. A
-secret in the keyring wins. Apply the secret in the row, then remove it from the file.
-
 ### The file `plugins.json`
 
 MediaCopy 3000 keeps your answers and the settings in the file `plugins.json`. You can also edit
@@ -124,7 +102,7 @@ this file yourself, for example to install the same plug-ins on many computers.
    ```
 
 3. Put each capability that the plug-in asks for in `grants` or in `declined`.
-4. Put a value for each setting of the plug-in in `settings`. Put no secret in this file.
+4. Put a value for each setting of the plug-in in `settings`.
 5. If the preferences are open, click **Look Again**.
 
 MediaCopy 3000 keeps the keys of `plugins.json` that it does not know when it writes the file.
@@ -256,9 +234,6 @@ Each line of the file is one JSON object:
 - `dir`: `out` for a message to the plug-in, `in` for a line on its standard output, `stderr` for a
   line on its error output.
 - `message`: the line, if it is JSON. Otherwise `text` holds the line as text.
-
-In `initialize`, the value of each secret setting is `<redacted>`. The other settings are in clear
-text.
 
 MediaCopy 3000 does not delete trace files. Turn off **Trace Messages** when you do not need it. A
 trace that cannot be written adds one line to the event log of the job, and the plug-in runs on.

@@ -8,7 +8,6 @@ module MediaCopy.Domain.PluginCatalog
   , PluginCatalog (..)
   , emptyCatalog
   , Setting (..)
-  , SecretText (..)
   , CatalogChange (..)
   , enabledJobFields
   ) where
@@ -22,10 +21,10 @@ import MediaCopy.Domain.Plugin (PluginRef (..))
 data Answer = Granted | Declined | Unanswered
   deriving stock (Bounded, Enum, Eq, Show)
 
-data FieldShape = TextShape | SecretShape | BoolShape | ChoiceShape (Vector Text) | PathShape
+data FieldShape = TextShape | BoolShape | ChoiceShape (Vector Text) | PathShape
   deriving stock (Eq, Show)
 
-data FieldValue = NoValue | Value Text | SecretStored | SecretInFile | SecretUnreadable Text
+data FieldValue = NoValue | Value Text
   deriving stock (Eq, Show)
 
 data FieldView = FieldView
@@ -71,23 +70,12 @@ emptyCatalog = PluginCatalog {entries = V.empty, rejected = V.empty, problem = N
 data Setting = SettingText Text | SettingBool Bool
   deriving stock (Eq, Show)
 
--- |
--- >>> SetSecret "tech.floreal.probe" "token" (SecretText "abc")
--- SetSecret "tech.floreal.probe" "token" <secret>
-newtype SecretText = SecretText Text
-  deriving stock (Eq)
-
-instance Show SecretText where
-  showsPrec _ _ = showString "<secret>"
-
 data CatalogChange
   = SetEnabled Text Bool
   | SetTrace Text Bool
   | SetAnswer Text Text Answer
   | SetSetting Text Text Setting
   | ClearSetting Text Text
-  | SetSecret Text Text SecretText
-  | ClearSecret Text Text
   deriving stock (Eq, Show)
 
 -- |

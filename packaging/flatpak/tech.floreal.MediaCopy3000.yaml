@@ -9,7 +9,6 @@ finish-args:
   - --socket=wayland
   - --device=dri
   - --filesystem=host
-  - --talk-name=org.freedesktop.secrets
   - --env=mediacopy3000_datadir=/app/share/mediacopy3000
 add-extensions:
   tech.floreal.MediaCopy3000.Plugin:

@@ -286,7 +286,6 @@ renderJobFields body dispatch (wanted, given) = do
            FieldActions
              { setText = send
              , setBool = \flag -> send (if flag then "true" else "false")
-             , setSecret = send
              , clear = send ""
              , pickPath = dispatch (PickJobFieldPath ref.id field.key)
              }

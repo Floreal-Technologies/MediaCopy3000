@@ -242,7 +242,7 @@ pluginCatalog =
                   V.fromList
                     [ FieldView "dit" "DIT name" TextShape True (Value "Jane Doe")
                     , FieldView "email" "DIT email" TextShape False (Value "jane@example.com")
-                    , FieldView "token" "Signing token" SecretShape False SecretStored
+                    , FieldView "token" "Signing token" TextShape False NoValue
                     ]
               , jobFields = V.singleton (FieldView "operator" "Camera operator" TextShape True NoValue)
               , active = True

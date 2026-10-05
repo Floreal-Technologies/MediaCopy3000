@@ -77,29 +77,6 @@ la ligne dit pourquoi une extension activée ne démarre pas.
 Si vous ajoutez ou retirez un dossier d’extension pendant que les préférences sont ouvertes,
 cliquez sur **Chercher à nouveau** (Look Again).
 
-### Réglages secrets
-
-Un réglage secret, par exemple un mot de passe ou un jeton, va dans le trousseau du système. Il ne
-va jamais dans `plugins.json`.
-
-| Système | Trousseau |
-|---|---|
-| Linux | Le Secret Service, par exemple GNOME Keyring ou KWallet |
-| Flatpak | Le trousseau du bac à sable, par le portail Secret. Si le bureau n’a pas de portail Secret, le Secret Service. |
-| macOS | Le trousseau (Keychain) |
-| Windows | Le gestionnaire d’identification (Credential Manager) |
-
-La ligne d’un secret gardé indique `stored in the keyring`. Le champ reste vide. Pour retirer le
-secret, appliquez une valeur vide.
-
-Si le trousseau refuse, par exemple parce qu’il est verrouillé, la ligne indique
-`the keyring refused`, et le sous-titre de l’extension donne la raison. L’extension ne démarre pas.
-Le plan donne le constat `plug-in unavailable`, avec la raison `the keyring refused: …`.
-
-Si `plugins.json` contient un secret, la ligne indique `set in plugins.json`, et l’extension le
-reçoit. Un secret du trousseau l’emporte. Appliquez le secret dans la ligne, puis retirez-le du
-fichier.
-
 ### Le fichier `plugins.json`
 
 MediaCopy 3000 garde vos réponses et les réglages dans le fichier `plugins.json`. Vous pouvez aussi
@@ -131,8 +108,7 @@ ordinateurs.
    ```
 
 3. Mettez chaque capacité que l’extension demande dans `grants` ou dans `declined`.
-4. Mettez une valeur pour chaque réglage de l’extension dans `settings`. Ne mettez aucun secret
-   dans ce fichier.
+4. Mettez une valeur pour chaque réglage de l’extension dans `settings`.
 5. Si les préférences sont ouvertes, cliquez sur **Chercher à nouveau** (Look Again).
 
 Quand MediaCopy 3000 écrit `plugins.json`, il garde les clés qu’il ne connaît pas.
@@ -269,9 +245,6 @@ Chaque ligne du fichier est un objet JSON :
 - `dir` : `out` pour un message vers l’extension, `in` pour une ligne de sa sortie standard,
   `stderr` pour une ligne de sa sortie d’erreur.
 - `message` : la ligne, si elle est en JSON. Sinon, `text` contient la ligne sous forme de texte.
-
-Dans `initialize`, la valeur de chaque réglage secret est `<redacted>`. Les autres réglages sont en
-clair.
 
 MediaCopy 3000 ne supprime pas les fichiers de trace. Désactivez **Tracer les messages** quand vous
 n’en avez pas besoin. Une trace qui ne peut pas être écrite ajoute une ligne au journal des

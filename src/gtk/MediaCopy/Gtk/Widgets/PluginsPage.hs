@@ -206,8 +206,7 @@ settingRow send dispatch pluginId field =
     FieldActions
       { setText = send . SetSetting pluginId field.key . SettingText
       , setBool = send . SetSetting pluginId field.key . SettingBool
-      , setSecret = send . SetSecret pluginId field.key . SecretText
-      , clear = send (if field.shape == SecretShape then ClearSecret pluginId field.key else ClearSetting pluginId field.key)
+      , clear = send (ClearSetting pluginId field.key)
       , pickPath = dispatch (PickPluginPath pluginId field.key)
       }
     ""

@@ -143,10 +143,9 @@ startAll registry config stage plan wanted = do
   pure (V.fromList members, V.fromList faults)
 
 fieldCheck :: Map Text (Map Text Text) -> Stage -> Ready -> Either PluginFinding (Map Text Value, Map Text Value)
-fieldCheck given stage ready = case (ready.keyring, fields) of
-  (Just problem, _) -> Left (fault (Unavailable problem))
-  (_, Left key) -> Left (fault (FieldMissing key))
-  (_, Right values) -> Right values
+fieldCheck given stage ready = case fields of
+  Left key -> Left (fault (FieldMissing key))
+  Right values -> Right values
   where
     fault reason = PluginFinding {plugin = pluginRef ready.installed, severity = startSeverity stage ready, about = Faulted reason}
     manifest = ready.installed.manifest
@@ -188,7 +187,7 @@ startMember registry config stage plan ready = do
               , onProgress = \_ -> pure ()
               , trace =
                   if ready.trace
-                    then Just TraceTarget {pluginId = ref.id, stage = stageName stage, secretKeys = Set.fromList [field.key | field <- V.toList ready.installed.manifest.settings, field.kind == SecretField]}
+                    then Just TraceTarget {pluginId = ref.id, stage = stageName stage}
                     else Nothing
               }
       worker <- mask_ $ do
