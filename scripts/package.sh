@@ -91,9 +91,8 @@ min_os_for() {
 
 echo "==> Building mediacopy3000 ${VERSION}"
 CONFIGURE_FLAGS=(--project-file=cabal.release.project --datadir="${PREFIX}/share" --datasubdir=mediacopy3000)
-cabal build exe:mediacopy3000 exe:credits "${CONFIGURE_FLAGS[@]}"
+cabal build exe:mediacopy3000 "${CONFIGURE_FLAGS[@]}"
 BIN="$(cabal list-bin mediacopy3000 "${CONFIGURE_FLAGS[@]}" | tail -1)"
-CREDITS_BIN="$(cabal list-bin exe:credits "${CONFIGURE_FLAGS[@]}" | tail -1)"
 
 echo "==> Staging filesystem root"
 STAGING="dist-package/root"
@@ -113,13 +112,6 @@ install_themes() {
   done < <(find assets/themes -type f | sort)
 }
 
-install_plugins() {
-  local root="$1"
-  install_file 644 plugins/credits/plugin.json "${root}/tech.floreal.credits/plugin.json"
-  install_file 755 "$CREDITS_BIN" "${root}/tech.floreal.credits/bin/credits"
-  strip "${root}/tech.floreal.credits/bin/credits"
-}
-
 macos_bundle() {
   local brew_prefix contents loaders_src loaders_dst loader iconset size
   brew_prefix="$(brew --prefix)"
@@ -128,11 +120,6 @@ macos_bundle() {
   install_file 755 "$BIN" "${contents}/MacOS/mediacopy3000-bin"
   strip "${contents}/MacOS/mediacopy3000-bin"
   install_file 755 packaging/macos/launcher.sh "${contents}/MacOS/mediacopy3000"
-  install_plugins "${contents}/PlugIns"
-  if otool -L "${contents}/PlugIns/tech.floreal.credits/bin/credits" | tail -n +2 | grep -Ev '^[[:space:]]+/(usr/lib|System)/'; then
-    echo "error: the credits plug-in links a library outside the system; bundle it first" >&2
-    exit 1
-  fi
   sed "s/@VERSION@/${VERSION}/g" packaging/macos/Info.plist > "${contents}/Info.plist"
 
   install_file 644 assets/styles.css \
@@ -169,8 +156,7 @@ macos_bundle() {
   codesign --force -s - \
     "${contents}/Frameworks/"*.dylib \
     "${loaders_dst}"/* \
-    "${contents}/MacOS/mediacopy3000-bin" \
-    "${contents}/PlugIns/tech.floreal.credits/bin/credits"
+    "${contents}/MacOS/mediacopy3000-bin"
 
   iconset="${ROOT}/dist-package/mediacopy3000.iconset"
   mkdir -p "$iconset"
@@ -190,7 +176,6 @@ else
   strip "${STAGING}${PREFIX}/bin/mediacopy3000"
   install_file 644 assets/styles.css "${STAGING}${PREFIX}/share/mediacopy3000/assets/styles.css"
   install_themes "${STAGING}${PREFIX}/share/mediacopy3000"
-  install_plugins "${STAGING}${PREFIX}/lib/mediacopy3000/plugins"
   install_file 644 assets/tech.floreal.MediaCopy3000.desktop \
     "${STAGING}${PREFIX}/share/applications/tech.floreal.MediaCopy3000.desktop"
   install_file 644 assets/tech.floreal.MediaCopy3000.svg \
