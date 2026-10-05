@@ -239,9 +239,6 @@ The folder `plugins/credits` in the source code holds the plug-in Credits. It is
 in Haskell, built with the library `plugin-protocol`, under the BSD 3-Clause License. Copy it to start
 a new plug-in.
 
-The file `plugin-protocol/schema/protocol-1.schema.json` in the source code describes each message
-and `plugin.json`.
-
 A plug-in must obey these rules:
 
 - It stops when its standard input closes.

@@ -249,9 +249,6 @@ Le dossier `plugins/credits` du code source contient l’extension Credits. C’
 complète en Haskell, construite avec la bibliothèque `plugin-protocol`, sous licence BSD 3-Clause.
 Copiez-la pour commencer une nouvelle extension.
 
-Le fichier `plugin-protocol/schema/protocol-1.schema.json` du code source décrit chaque message et
-`plugin.json`.
-
 Une extension doit respecter ces règles :
 
 - Elle s’arrête quand son entrée standard se ferme.
