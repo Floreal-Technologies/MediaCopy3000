@@ -32,7 +32,7 @@ gatherTarget :: (FileSystem :> es) => OsPath -> OsPath -> Eff es TargetFacts
 gatherTarget source parent = do
   let root = destinationPath parent source
   free <- freeSpaceOf parent <&> either (const Nothing) Just
-  history <- historyHashes root <&> fmap (fmap (\pair -> fst pair))
+  history <- historyHashes root <&> fmap (fmap fst)
   existing <- walk root
   pure
     TargetFacts

@@ -35,7 +35,7 @@ newtype FormatError = MixedFormats (List HashAlgo)
 -- "ASC MHL: the originals hold more than one hash format: md5, sha1"
 instance Display FormatError where
   displayBuilder (MixedFormats mixed) =
-    displayBuilder ("ASC MHL: the originals hold more than one hash format: " <> T.intercalate ", " (map (\algo -> display algo) mixed))
+    displayBuilder ("ASC MHL: the originals hold more than one hash format: " <> T.intercalate ", " (map display mixed))
 
 -- |
 -- >>> settleFormat Map.empty Set.empty
@@ -54,4 +54,4 @@ settleFormat expected present = case (algosOf (Map.restrictKeys expected present
   ([], _) -> Right (JobFormat preferredAlgo)
 
 algosOf :: Map RelPath Hash -> List HashAlgo
-algosOf hashes = hashes & Map.elems & map (\h -> h.algo) & Set.fromList & Set.toList
+algosOf hashes = hashes & Map.elems & map (.algo) & Set.fromList & Set.toList

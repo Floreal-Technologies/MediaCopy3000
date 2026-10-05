@@ -185,13 +185,13 @@ newtype MhlHistory = MhlHistory {generations :: Vector Generation}
 -- >>> algosText (Set.fromList [SHA1, XXH64])
 -- "xxh64/sha1"
 algosText :: Set HashAlgo -> Text
-algosText algos = algos & Set.toList & map (\algo -> display algo) & T.intercalate "/"
+algosText algos = algos & Set.toList & map display & T.intercalate "/"
 
 orderedChainEntries :: Chain -> List ChainEntry
-orderedChainEntries chain = chain.entries & V.toList & sortOn (\entry -> entry.sequenceNr)
+orderedChainEntries chain = chain.entries & V.toList & sortOn (.sequenceNr)
 
 highestGeneration :: Chain -> Int
-highestGeneration chain = chain.entries & V.map (\entry -> entry.sequenceNr) & V.toList & foldr max 0
+highestGeneration chain = chain.entries & V.map (.sequenceNr) & V.toList & foldr max 0
 
 latestHashes :: Vector Manifest -> Map RelPath Hash
 latestHashes manifests = foldl step Map.empty manifests
@@ -199,7 +199,7 @@ latestHashes manifests = foldl step Map.empty manifests
     step acc m = foldl (\a e -> maybe a (\h -> Map.insert e.path h a) (pick e.hashes)) acc (fileEntries m.entries)
     pick hs = case V.find (\mh -> mh.hash.algo == preferredAlgo) hs of
       Just mh -> Just mh.hash
-      Nothing -> fmap (\mh -> mh.hash) (hs V.!? 0)
+      Nothing -> fmap (.hash) (hs V.!? 0)
 
 historyOf :: Vector (Int, Manifest) -> MhlHistory
 historyOf ms = MhlHistory (V.map gen ms)
@@ -208,9 +208,9 @@ historyOf ms = MhlHistory (V.map gen ms)
       Generation
         { number = n
         , creator = m.creator
-        , algos = allHashes & V.toList & map (\mh -> mh.hash.algo) & Set.fromList
+        , algos = allHashes & V.toList & map (.hash.algo) & Set.fromList
         , process = m.process
         , failures = V.length (V.filter (\mh -> mh.action == FailedAction) allHashes)
         }
       where
-        allHashes = foldMap (\e -> e.hashes) (fileEntries m.entries)
+        allHashes = foldMap (.hashes) (fileEntries m.entries)

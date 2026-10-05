@@ -53,7 +53,7 @@ runEngineIO spec =
     & runHasher
     & runFileSystemIO defaultChunkSize
     & runEff
-    & fmap (\result -> snd result)
+    & fmap snd
 
 offloadSpec :: FilePath -> FilePath -> IO JobSpec
 offloadSpec source parent = offloadSpecWith UseHistory source parent

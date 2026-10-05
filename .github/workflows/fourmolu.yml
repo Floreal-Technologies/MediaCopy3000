@@ -4,13 +4,13 @@ on:
   pull_request:
     paths:
       - "**.hs"
-      - .github/workflows/fourmolu.yaml
+      - .github/workflows/fourmolu.yml
   push:
     branches:
       - main
     paths:
       - "**.hs"
-      - .github/workflows/fourmolu.yaml
+      - .github/workflows/fourmolu.yml
 
 jobs:
   fourmolu-formatting:

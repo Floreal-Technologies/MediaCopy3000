@@ -75,7 +75,7 @@ instance Exception WordingFault
 
 parseFtl :: Text -> Either (NonEmpty Text) Resource
 parseFtl source = do
-  resource <- first (\message -> pure (T.pack message)) (parseResource source)
+  resource <- first (pure . T.pack) (parseResource source)
   let potentialJunk =
         Maybe.mapMaybe
           ( \case

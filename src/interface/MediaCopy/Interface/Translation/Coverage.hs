@@ -42,8 +42,8 @@ expectedWording wording =
     <> map (targetStateText wording) [minBound ..]
     <> map (findingText wording) [minBound ..]
     <> map (displayBase wording) [minBound ..]
-    <> map (\mode -> themeRowLabel wording (SystemTheme mode)) [minBound ..]
-    <> map (\section -> section.heading) (V.toList (themeSections wording minBound V.empty))
+    <> map (themeRowLabel wording . SystemTheme) [minBound ..]
+    <> map (.heading) (V.toList (themeSections wording minBound V.empty))
 
 fileStatuses :: List FileStatus
 fileStatuses =

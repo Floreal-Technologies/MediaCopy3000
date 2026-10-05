@@ -43,9 +43,9 @@ renderHistory view wording history = do
 
 renderGenerations :: Adw.ExpanderRow -> IORef (Vector Adw.ActionRow) -> Wording -> Maybe MhlHistory -> IO ()
 renderGenerations expander rows wording history = do
-  let generations = maybe V.empty (\loaded -> loaded.generations) history
+  let generations = maybe V.empty (.generations) history
   set expander [#subtitle := plural "generation" (V.length generations)]
-  renderActionRows rows (InExpander expander) (V.map (\gen -> generationRow wording gen) generations)
+  renderActionRows rows (InExpander expander) (V.map (generationRow wording) generations)
 
 generationRow :: Wording -> Generation -> Row
 generationRow wording generation =
@@ -64,7 +64,7 @@ generationSubtitle wording generation =
   generation.creator.hostname
     <> " — "
     <> generation.creator.toolName
-    <> maybe "" (\version -> " " <> version) generation.creator.toolVersion
+    <> maybe "" (" " <>) generation.creator.toolVersion
     <> " · "
     <> algosText generation.algos
     <> " · "

@@ -51,7 +51,7 @@ buildTree files dirs = nodeFor (RelPath "") ""
     groupByParent keyed =
       keyed
         & map (\pair -> (parentOf (fst pair), [snd pair]))
-        & Map.fromListWith (\new old -> old <> new)
+        & Map.fromListWith (flip (<>))
     filesByParent :: Map Text (List (Text, Hash))
     filesByParent =
       files
@@ -70,7 +70,7 @@ buildTree files dirs = nodeFor (RelPath "") ""
         , name = nm
         , files =
             Map.findWithDefault [] (display rp) filesByParent
-              & sortOn (\entry -> fst entry)
+              & sortOn fst
               & V.fromList
         , subdirs =
             Map.findWithDefault [] (display rp) dirsByParent
@@ -85,8 +85,8 @@ buildTree files dirs = nodeFor (RelPath "") ""
 
 hashOfHashList :: (Error DirectoryHashError :> es) => (ByteString -> Eff es Hash) -> Vector Hash -> Eff es Hash
 hashOfHashList hashWith hashes = do
-  let sorted = hashes & V.toList & sortOn (\h -> h.value)
-  chunks <- traverse (\h -> requireBytes h) sorted
+  let sorted = hashes & V.toList & sortOn (.value)
+  chunks <- traverse requireBytes sorted
   hashWith (BS.concat chunks)
 
 requireBytes :: (Error DirectoryHashError :> es) => Hash -> Eff es ByteString
@@ -105,11 +105,11 @@ directoryHashes
   -> DirNode
   -> Eff es (DirHashes, Vector (RelPath, DirHashes))
 directoryHashes hashWith node = do
-  subResults <- traverse (\sub -> directoryHashes hashWith sub) (V.toList node.subdirs)
+  subResults <- traverse (directoryHashes hashWith) (V.toList node.subdirs)
   let paired = zip (V.toList node.subdirs) subResults
       childRows = V.concat (map (\(sub, result) -> snd result <> V.singleton (sub.path, fst result)) paired)
       childContents = V.fromList (map (\(_, result) -> (fst result).content) paired)
-      fileHashes = V.map (\entry -> snd entry) node.files
+      fileHashes = V.map snd node.files
   contentHash <- hashOfHashList hashWith (childContents <> fileHashes)
   fileStructures <- traverse (\entry -> perChild hashWith (fst entry) (snd entry)) (V.toList node.files)
   dirStructures <- traverse (\(sub, result) -> perChild hashWith sub.name (fst result).structure) paired

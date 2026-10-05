@@ -43,11 +43,8 @@ import MediaCopy.Interface.Translation.Messages
 -- >>> import MediaCopy.Interface.Translation (SupportedLanguage (..))
 -- >>> import MediaCopy.Interface.Translation.Embedded (embeddedWording)
 
--- |
--- >>> count (3 :: Int)
--- "3"
 count :: (Show a) => a -> Text
-count n = T.pack (show n)
+count n = T.show n
 
 -- |
 -- >>> humanBytes (embeddedWording English) 0

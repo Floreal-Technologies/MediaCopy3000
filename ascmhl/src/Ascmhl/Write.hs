@@ -30,7 +30,7 @@ formatMhlTime t = T.pack (formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S%Q%Ez" 
 
 manifestFileName :: Int -> Text -> UTCTime -> Text
 manifestFileName n folder t =
-  T.justifyRight 4 '0' (T.pack (show n))
+  T.justifyRight 4 '0' (T.show n)
     <> "_"
     <> folder
     <> "_"
@@ -64,7 +64,7 @@ keptLocalName = \case
   _ -> ""
 
 inSchemaOrder :: List (Text, Node) -> List Node
-inSchemaOrder named = named & sortOn (\pair -> position (fst pair)) & map (\pair -> snd pair)
+inSchemaOrder named = named & sortOn (position . fst) & map snd
   where
     position name = fromMaybe (V.length Schema.hashFormatOrder) (V.elemIndex name Schema.hashFormatOrder)
 
@@ -187,7 +187,7 @@ hashDateAttr hashDate = maybe [] (\t -> [(Schema.hashdate, formatMhlTime t)]) ha
 sizeAttr :: Int64 -> List (Text, Text)
 sizeAttr = \case
   0 -> []
-  bytes -> [(Schema.size, T.pack (show bytes))]
+  bytes -> [(Schema.size, T.show bytes)]
 
 renderChain :: Chain -> Text
 renderChain c = renderDoc root
@@ -195,6 +195,6 @@ renderChain c = renderDoc root
     n = Schema.chainNs
     root = Element (nsName n Schema.ascmhldirectory) Map.empty (V.toList (V.map entry c.entries))
     entry e =
-      el n Schema.hashlist [(Schema.sequencenr, T.pack (show e.sequenceNr))] $
+      el n Schema.hashlist [(Schema.sequencenr, T.show e.sequenceNr)] $
         el n Schema.path [] [txt (display e.path)]
           : (maybe [] (\h -> [el n (display h.algo) [] [txt h.value]]) e.c4 <> kept e.unknown)

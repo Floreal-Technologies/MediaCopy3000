@@ -34,15 +34,15 @@ instance Display PlanViolation where
     EntryWithoutHash path -> "ASC MHL: manifest entry carries no hash: " <> displayBuilder path
     EntriesNotPlaced paths ->
       "ASC MHL: manifest entries not placed in the tree: "
-        <> displayBuilder (paths & V.toList & map (\path -> display path) & T.intercalate ", ")
+        <> displayBuilder (paths & V.toList & map display & T.intercalate ", ")
     OriginalsUnresolved e -> displayBuilder e
     GenerationRaced folder planned found ->
       "ASC MHL: the history moved under "
         <> displayBuilder (pathText folder)
         <> ": the plan named generation "
-        <> displayBuilder (T.pack (show planned))
+        <> displayBuilder (T.show planned)
         <> ", the chain now gives "
-        <> displayBuilder (T.pack (show found))
+        <> displayBuilder (T.show found)
     ManifestNameUnusable path ->
       "ASC MHL: the manifest file name is not a relative path: " <> displayBuilder (pathText path)
     HashUndecodable err -> displayBuilder err
@@ -55,4 +55,4 @@ instance Display PlanViolation where
       "ASC MHL: the seal wrote no history under " <> displayBuilder (pathText source)
 
 orThrow :: (Error PlanViolation :> es) => Either PlanViolation a -> Eff es a
-orThrow = either (\violation -> throwError violation) pure
+orThrow = either throwError pure

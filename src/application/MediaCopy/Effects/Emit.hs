@@ -27,5 +27,5 @@ runEmitIO sink = interpret_ $ \case
 
 runEmitCollect :: Eff (Emit : es) a -> Eff es (a, Vector JobEvent)
 runEmitCollect action = do
-  (a, evs) <- reinterpret_ (runState []) (\case Emit ev -> modify (\xs -> ev : xs)) action
+  (a, evs) <- reinterpret_ (runState []) (\case Emit ev -> modify (ev :)) action
   pure (a, V.fromList (reverse evs))

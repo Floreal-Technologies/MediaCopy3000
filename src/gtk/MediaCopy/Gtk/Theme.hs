@@ -106,7 +106,7 @@ readThemeListing environment = do
     then pure Nothing
     else do
       directories <- childDirectories root
-      listed <- mapM (\family -> familyListing environment root family) directories
+      listed <- mapM (familyListing environment root) directories
       pure (Just (root, ThemeListing {families = V.fromList listed}))
 
 themeRoot :: FilePath
@@ -116,7 +116,7 @@ familyListing :: Environment -> FilePath -> FilePath -> IO FamilyListing
 familyListing environment root family = do
   info <- familyInfo environment (root </> family)
   directories <- childDirectories (root </> family)
-  listed <- mapM (\directory -> modeListing (root </> family) directory) directories
+  listed <- mapM (modeListing (root </> family)) directories
   pure FamilyListing {directory = T.pack family, info, modes = V.fromList (catMaybes listed)}
 
 modeListing :: FilePath -> FilePath -> IO (Maybe (PaletteMode, Vector Text))

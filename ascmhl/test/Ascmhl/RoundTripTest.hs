@@ -24,7 +24,7 @@ import Ascmhl.Types
 import Ascmhl.Write
 
 orFail :: (Show e) => Either e a -> IO a
-orFail e = either (\err -> assertFailure (show err)) pure e
+orFail e = either (assertFailure . show) pure e
 
 fixturePath :: FilePath
 fixturePath = "test/fixtures/ascmhl/0001_A002R2EC_2026-05-09_170200.mhl"
@@ -32,7 +32,7 @@ fixturePath = "test/fixtures/ascmhl/0001_A002R2EC_2026-05-09_170200.mhl"
 tests :: TestTree
 tests =
   testGroup
-    "Domain.Mhl"
+    "Ascmhl.RoundTrip"
     [ testGroup
         "time format"
         [ testCase "formats and parses" formatsAndParses
@@ -48,7 +48,6 @@ tests =
         , testCase "round-trips through render" roundTripsThroughRender
         , testCase "rejects garbage" rejectsGarbage
         , testCase "rejects a path that escapes the folder" rejectsEscapingPath
-        , testCase "parses a zero-byte file with no size attribute" parsesAZeroByteFileWithNoSizeAttribute
         , testCase "parses the root hash and ignore patterns" parsesTheRootHashAndIgnorePatterns
         , testCase "parses a directory hash entry" parsesADirectoryHashEntry
         ]
@@ -102,8 +101,8 @@ parsesTheFixture = do
       m.process @?= ProcessTransfer
       m.creator.hostname @?= "dit-laptop"
       let files = fileEntries m.entries
-      map (\e -> e.path) (V.toList files) @?= [RelPath "Sidecar/notes.txt", RelPath "A002C001.MXF"]
-      map (\e -> e.size) (V.toList files) @?= [0, 4096]
+      map (.path) (V.toList files) @?= [RelPath "Sidecar/notes.txt", RelPath "A002C001.MXF"]
+      map (.size) (V.toList files) @?= [0, 4096]
       (files V.! 0).hashes
         @?= V.fromList
           [ ManifestHash {hash = Hash MD5 "d41d8cd98f00b204e9800998ecf8427e", action = Original, hashDate = Just fixtureHashDate, extraAttrs = Map.empty}
@@ -121,19 +120,12 @@ rejectsGarbage :: Assertion
 rejectsGarbage =
   assertBool "parseManifest \"<nope/>\" should be Left" (either (const True) (const False) (parseManifest "<nope/>"))
 
-parsesAZeroByteFileWithNoSizeAttribute :: Assertion
-parsesAZeroByteFileWithNoSizeAttribute = do
-  txt <- TIO.readFile fixturePath
-  m <- orFail (parseManifest txt)
-  let files = fileEntries m.entries
-  map (\e -> e.size) (V.toList files) @?= [0, 4096]
-
 parsesTheRootHashAndIgnorePatterns :: Assertion
 parsesTheRootHashAndIgnorePatterns = do
   txt <- TIO.readFile fixturePath
   m <- orFail (parseManifest txt)
-  V.map (\d -> d.content) m.rootHash @?= V.singleton (Hash XXH64 "8d02114c32e28cbe")
-  V.map (\d -> d.structure) m.rootHash @?= V.singleton (Hash XXH64 "f557f8ca8e5a88ef")
+  V.map (.content) m.rootHash @?= V.singleton (Hash XXH64 "8d02114c32e28cbe")
+  V.map (.structure) m.rootHash @?= V.singleton (Hash XXH64 "f557f8ca8e5a88ef")
   m.ignorePatterns @?= V.fromList [".DS_Store", "ascmhl"]
 
 parsesADirectoryHashEntry :: Assertion
@@ -147,8 +139,8 @@ parsesADirectoryHashEntry = do
               ManifestFile _ -> Nothing
           )
           m.entries
-  V.map (\d -> d.path) dirs @?= V.singleton (RelPath "Sidecar")
-  V.map (\d -> d.content) (V.concatMap (\d -> d.hashes) dirs) @?= V.singleton (Hash XXH64 "f1d7771e64cb3720")
+  V.map (.path) dirs @?= V.singleton (RelPath "Sidecar")
+  V.map (.content) (V.concatMap (.hashes) dirs) @?= V.singleton (Hash XXH64 "f1d7771e64cb3720")
 
 chainParsesAndRoundTripsTheFixture :: Assertion
 chainParsesAndRoundTripsTheFixture = do
@@ -186,7 +178,7 @@ keepsTheCaseOfAC4ChainHash :: Assertion
 keepsTheCaseOfAC4ChainHash = do
   txt <- TIO.readFile "test/fixtures/ascmhl/ascmhl_chain_c4.xml"
   c <- orFail (parseChain txt)
-  V.mapMaybe (\e -> fmap (\h -> h.value) e.c4) c.entries
+  V.mapMaybe (\e -> fmap (.value) e.c4) c.entries
     @?= V.singleton "c447Fm3BJZQ62765jMZJH4m28hrDM7Szbj9CUmj4F4gnvyDYXYz4WfnK2nYRhFvRgYEectEXYBYWLDpLo6XGNAfKdt"
   parseChain (renderChain c) @?= Right c
 
@@ -226,9 +218,9 @@ buildsOneGenerationPerManifest = do
   m <- orFail (parseManifest txt)
   let MhlHistory gens = historyOf (V.singleton (1, m))
       gensList = V.toList gens
-  map (\g -> g.number) gensList @?= [1]
+  map (.number) gensList @?= [1]
   map (\g -> Set.toList g.algos) gensList @?= [[XXH64, MD5]]
-  map (\g -> g.failures) gensList @?= [0]
+  map (.failures) gensList @?= [0]
 
 rejectsEscapingPath :: Assertion
 rejectsEscapingPath = do
@@ -298,11 +290,11 @@ appendGenerationKeepsOrderingAndSetsC4 = do
               , ChainEntry {sequenceNr = 1, path = RelPath "0001_card_2026-09-12_140300.mhl", c4 = Nothing, unknown = V.empty}
               ]
           )
-      minted = Hash C4 "c43GfLJbkPgkFvEMXfEzMg1V5GkYJQFQKSZQHsAzvuJ4WJ4FRQqYfvA9JTBpFTVFpJcZHvJYfFvJJFQFTvJpFvJqFf"
+      minted = Hash C4 "c459dsjfscH38cYeXXYogktxf4Cd9ibshE3BHUo6a58hBXmRQdZrAkZzsWcbWtDg5oQstpDuni4Hirj75GEmTc1sFT"
       appended = appendGeneration given 3 (RelPath "0003_card_2026-09-14_090000.mhl") minted
-  V.map (\e -> e.sequenceNr) appended.entries @?= V.fromList [1, 2, 3]
-  V.map (\e -> e.c4) appended.entries @?= V.fromList [Nothing, Just earlier, Just minted]
-  V.map (\e -> e.path) appended.entries
+  V.map (.sequenceNr) appended.entries @?= V.fromList [1, 2, 3]
+  V.map (.c4) appended.entries @?= V.fromList [Nothing, Just earlier, Just minted]
+  V.map (.path) appended.entries
     @?= V.fromList
       [ RelPath "0001_card_2026-09-12_140300.mhl"
       , RelPath "0002_card_2026-09-13_091500.mhl"

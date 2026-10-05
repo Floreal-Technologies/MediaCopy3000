@@ -75,12 +75,12 @@ actionLabel :: Text -> Text
 actionLabel wanted =
   actionTable
     & V.find (\spec -> spec.name == Just wanted)
-    & maybe wanted (\spec -> spec.label)
+    & maybe wanted (.label)
 
 actionButton :: Text -> List Text -> IO Gtk.Button
 actionButton actionName classes = do
   button <- new Gtk.Button [#label := actionLabel actionName, #actionName := actionName]
-  mapM_ (\klass -> Gtk.widgetAddCssClass button klass) classes
+  mapM_ (Gtk.widgetAddCssClass button) classes
   pure button
 
 headerAction :: Adw.HeaderBar -> Text -> List Text -> IO ()
@@ -90,7 +90,7 @@ headerAction header actionName classes = do
 
 installActions :: Adw.Application -> Adw.ApplicationWindow -> (UiMessage -> IO ()) -> IO (Gio.Menu, Model -> IO ())
 installActions app window dispatch = do
-  gated <- V.foldM (\acc spec -> installOne app window dispatch acc spec) [] actionTable
+  gated <- V.foldM (installOne app window dispatch) [] actionTable
   overlay <- buildShortcutsWindow
   appWindow <- Gtk.toApplicationWindow window
   Gtk.applicationWindowSetHelpOverlay appWindow (Just overlay)
@@ -148,7 +148,7 @@ buildShortcutsWindow :: IO Gtk.ShortcutsWindow
 buildShortcutsWindow = do
   shortcuts <- new Gtk.ShortcutsWindow []
   section <- new Gtk.ShortcutsSection [#sectionName := "shortcuts", #maxHeight := 12]
-  mapM_ (\wanted -> addGroup section wanted) [JobsSection, NavigationSection, GeneralSection]
+  mapM_ (addGroup section) [JobsSection, NavigationSection, GeneralSection]
   Gtk.shortcutsWindowAddSection shortcuts section
   pure shortcuts
 
@@ -157,7 +157,7 @@ addGroup section wanted = do
   let rows = V.filter (\spec -> spec.section == Just wanted) actionTable
   unless (V.null rows) $ do
     group <- new Gtk.ShortcutsGroup [#title := display wanted]
-    V.mapM_ (\spec -> addShortcut group spec) rows
+    V.mapM_ (addShortcut group) rows
     Gtk.shortcutsSectionAddGroup section group
 
 addShortcut :: Gtk.ShortcutsGroup -> ActionSpec -> IO ()

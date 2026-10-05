@@ -7,10 +7,10 @@ transférer leurs données de manière sécurisée.
 
 MediaCopy 3000 s'interface avec le standard
 [ASC Media Hash List](mhl-format.md).
-Un manifeste dans ce format guarantie deux choses au sujet d'une copie :
+Un manifeste dans ce format garantit deux choses au sujet d'une copie :
 **L'intégrité** (les octets n'ont pas changé) et la **complétude** (tous les
-fichiers sont présents). Chaque tâche de transfer écris un manifeste et l'ajoute
-à la chaîne du dossier de destination. Cette chaîne constitute l'historique de
+fichiers sont présents). Chaque tâche de transfert écrit un manifeste et l'ajoute
+à la chaîne du dossier de destination. Cette chaîne constitue l'historique de
 vos fichiers.
 
 ![La file d'attente des tâches](../en/images/queue.png)

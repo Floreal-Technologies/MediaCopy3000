@@ -92,6 +92,7 @@ library application
     MediaCopy.Engine.Plan
     MediaCopy.Engine.Violation
     MediaCopy.EventLog
+    MediaCopy.Guard
     MediaCopy.Mhl.Store
 
   other-modules: Paths_mediacopy3000

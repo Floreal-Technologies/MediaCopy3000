@@ -80,8 +80,8 @@ readSource facts =
     , totalBytes = sum (V.map snd files)
     }
   where
-    files = maybe V.empty (\tree -> tree.files) facts.sourceTree
-    dirs = maybe V.empty (\tree -> tree.dirs) facts.sourceTree
+    files = maybe V.empty (.files) facts.sourceTree
+    dirs = maybe V.empty (.dirs) facts.sourceTree
     (chain, recorded) = readOr (Chain {entries = V.empty}, Map.empty) facts.sourceHistory
 
 decideOffload :: JobSpec -> OffloadJob -> OffloadFacts -> JobPlan
@@ -94,7 +94,7 @@ decideOffload spec job facts =
     , originsUsed = originsUsedText job.sealFirst src.expected
     , steps
     , totalBytes = src.totalBytes
-    , bytesToRead = V.sum (V.map stepBytesToRead steps) + maybe 0 (\pass -> pass.bytes) sealing
+    , bytesToRead = V.sum (V.map stepBytesToRead steps) + maybe 0 (.bytes) sealing
     , creates = createdFolders source dests sealing
     , ignorePatterns
     , findings
@@ -105,13 +105,13 @@ decideOffload spec job facts =
     source = job.source
     src = readSource facts
     sealing = planSealPass spec.createdAt source src.dirs src.chain job.sealFirst src.recorded src.files
-    dests = V.map (\target -> target.root) facts.targets
+    dests = V.map (.root) facts.targets
     classified = V.map (classify job.existingCopy src.fileSet src.dirSet src.byPath) facts.targets
-    targets = V.map (\c -> c.target) classified
-    destsHeld = V.zip dests (V.map (\c -> c.finals) classified)
+    targets = V.map (.target) classified
+    destsHeld = V.zip dests (V.map (.finals) classified)
     carried = carriedGenerations src.chain sealing
     destGenerations = destGenerationsOf spec.createdAt src.dirs carried facts.targets
-    plannedDests = V.mapMaybe (\result -> either (const Nothing) Just result) destGenerations
+    plannedDests = V.mapMaybe (either (const Nothing) Just) destGenerations
     formatResult = settleFormat src.expected src.fileSet
     steps = copySteps job destsHeld sealing src
     findings =
@@ -122,7 +122,7 @@ decideOffload spec job facts =
       , blockerFor formatCode formatResult
       , sealOverHistoryWarning sealing src.chain
       , targetFindings (V.length dests) steps classified
-      , classified & V.toList & concatMap (\c -> c.findings)
+      , classified & V.toList & concatMap (.findings)
       , destHistoryBlocker destGenerations
       ]
         & concat
@@ -168,7 +168,7 @@ copySteps job destsHeld sealing src =
 expectationOf :: Maybe SealPass -> Map RelPath Hash -> RelPath -> Expected
 expectationOf sealing expected path = case sealing of
   Just _ -> FromSealPass
-  Nothing -> maybe NoOriginal (\sealed -> Recorded sealed) (Map.lookup path expected)
+  Nothing -> maybe NoOriginal Recorded (Map.lookup path expected)
 
 sealOverHistoryWarning :: Maybe SealPass -> Chain -> List Finding
 sealOverHistoryWarning sealing chain = case sealing of
@@ -211,8 +211,8 @@ decideGeneration spec rule facts =
     }
   where
     folder = jobRoot spec.job
-    disk = maybe V.empty (\tree -> tree.files) facts.tree
-    dirs = maybe V.empty (\tree -> tree.dirs) facts.tree
+    disk = maybe V.empty (.files) facts.tree
+    dirs = maybe V.empty (.dirs) facts.tree
     (chain, expected) = readOr (Chain {entries = V.empty}, Map.empty) facts.history
     formatResult = settleFormat expected (Set.fromList (V.toList (V.map fst disk)))
     steps = generationSteps expected disk
@@ -246,27 +246,27 @@ planSealPass t source dirs chain sealFirst recorded files = case sealFirst of
     in Just
          SealPass
            { steps
-           , bytes = sum (V.map (\step -> step.size) steps)
+           , bytes = sum (V.map (.size) steps)
            , onFailure = policy
            , generation = generationAt t ProcessInPlace source dirs chain
            }
 
 sealedWarning :: Chain -> Finding
 sealedWarning chain =
-  Finding {severity = Warning, code = AlreadySealed, detail = "generation " <> T.pack (show (highestGeneration chain))}
+  Finding {severity = Warning, code = AlreadySealed, detail = "generation " <> T.show (highestGeneration chain)}
 
 stepsInPathOrder :: Vector (RelPath, a) -> (RelPath -> a -> PlanStep) -> Vector PlanStep
 stepsInPathOrder rows build =
   rows
     & V.toList
-    & sortOn (\pair -> fst pair)
+    & sortOn fst
     & map (\pair -> build (fst pair) (snd pair))
     & V.fromList
 
 generationSteps :: Map RelPath Hash -> Vector (RelPath, FileSize) -> Vector PlanStep
 generationSteps expected disk =
   stepsInPathOrder
-    (planVerify expected (V.map (\pair -> fst pair) disk))
+    (planVerify expected (V.map fst disk))
     (\path op -> PlanStep {path, size = Map.findWithDefault 0 path sizes, op, writes = V.empty})
   where
     sizes = Map.fromList (V.toList disk)

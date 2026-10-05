@@ -104,11 +104,11 @@ runFileSystemIO :: (IOE :> es) => Int -> Eff (FileSystem : es) a -> Eff es a
 runFileSystemIO chunkSize =
   interpret $ \env -> \case
     Walk root -> liftIO (walkIO root)
-    FreeSpaceOf p -> trySync (liftIO (freeSpaceIO p)) <&> first (\e -> T.pack (displayException e))
+    FreeSpaceOf p -> trySync (liftIO (freeSpaceIO p)) <&> first (T.pack . displayException)
     StreamFile mode path onChunk ->
-      localSeqUnliftIO env (\unlift -> streamFileIO mode chunkSize path (\bs -> unlift (onChunk bs)))
+      localSeqUnliftIO env (\unlift -> streamFileIO mode chunkSize path (unlift . onChunk))
     WriteTemps source writes onFlush onChunk ->
-      localSeqUnliftIO env (\unlift -> writeTempsIO chunkSize source (V.toList writes) (unlift onFlush) (\bs -> unlift (onChunk bs)))
+      localSeqUnliftIO env (\unlift -> writeTempsIO chunkSize source (V.toList writes) (unlift onFlush) (unlift . onChunk))
     Publish writes mtime -> liftIO $ do
       forM_ writes $ \w -> do
         Dir.renamePath w.temp w.final
@@ -119,7 +119,7 @@ runFileSystemIO chunkSize =
     ReadText p -> liftIO (readTextIO p)
     ListHistory folder -> liftIO (listHistoryIO folder)
     WriteTextAtomically p t -> liftIO (writeTextAtomicallyIO p t)
-    MakeDirectories dirs -> liftIO (V.mapM_ (\dir -> Dir.createDirectoryIfMissing True dir) dirs)
+    MakeDirectories dirs -> liftIO (V.mapM_ (Dir.createDirectoryIfMissing True) dirs)
 
 writeBufferBytes :: Int
 writeBufferBytes = 4 * 1024 * 1024
@@ -167,7 +167,7 @@ classifyChild dir name
       pure (Just (full, entry))
 
 relPathIO :: OsPath -> OsPath -> IO RelPath
-relPathIO root full = either (\message -> ioError (userError (T.unpack message))) pure (relPathOf root full)
+relPathIO root full = either (ioError . userError . T.unpack) pure (relPathOf root full)
 
 freeSpaceIO :: OsPath -> IO Int64
 freeSpaceIO p = do
@@ -191,7 +191,7 @@ writeTempsIO :: Int -> OsPath -> List PlannedWrite -> IO () -> (ByteString -> IO
 writeTempsIO chunkSize source writes onFlush onChunk =
   withWriters temps fanOut `onException` traverse_ removeFileIfExists temps
   where
-    temps = map (\w -> w.temp) writes
+    temps = map (.temp) writes
     fanOut handles = do
       mtime <- streamFileIO FromCache chunkSize source (\bs -> traverse_ (\h -> BS.hPut h bs) handles >> onChunk bs)
       onFlush

@@ -62,7 +62,7 @@ loadManifests folder entries = go [] entries
 readChain :: (FileSystem :> es) => OsPath -> Vector OsPath -> Eff es (Bool, Either HistoryError Chain)
 readChain folder names =
   readText (chainPath folder) <&> \case
-    Just txt -> (True, first (\e -> ChainNotParsed (chainPath folder) e) (parseChain txt))
+    Just txt -> (True, first (ChainNotParsed (chainPath folder)) (parseChain txt))
     Nothing -> (False, Right (chainFromListing (mhlFileNames names)))
 
 loadChain :: (FileSystem :> es) => OsPath -> Eff es (Either HistoryError (Maybe Chain))
@@ -83,7 +83,7 @@ historyHashes folder =
   loadHistory folder <&> fmap (fmap (\loaded -> (loaded.chain, hashesOf loaded)))
 
 hashesOf :: LoadedHistory -> Map RelPath Hash
-hashesOf loaded = latestHashes (V.map (\pair -> snd pair) loaded.manifests)
+hashesOf loaded = latestHashes (V.map snd loaded.manifests)
 
 resolveOriginals :: (FileSystem :> es) => OsPath -> Eff es (Either HistoryError (Maybe (Map RelPath Hash)))
 resolveOriginals source =

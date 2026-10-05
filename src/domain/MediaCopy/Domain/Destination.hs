@@ -86,7 +86,7 @@ classify choice sourceFiles sourceDirs sourceByPath target = case target.existin
   Just tree ->
     let held = heldOf sourceFiles sourceDirs tree
         destChain = readOr (Chain {entries = V.empty}) target.history
-        hasParts = V.any (\pair -> isJust (stripPart (fst pair))) tree.files
+        hasParts = V.any (isJust . stripPart . fst) tree.files
         empty = Map.null held.finals && isNothing held.firstForeign && not hasParts && V.null destChain.entries
         foreignFinding p = Finding {severity = Blocker, code = DestinationForeign, detail = display p}
         blocked = catMaybes [fmap foreignFinding held.firstForeign, chainCheck sourceByPath destChain]

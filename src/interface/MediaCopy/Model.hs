@@ -203,7 +203,7 @@ updateUi :: UiMessage -> Model -> (Model, List Command)
 updateUi msg model = case msg of
   PickSource -> (model, [OpenFolderDialog SourcePicked])
   AddDestination -> (model, [OpenFolderDialog DestinationPicked])
-  RemoveDestination i -> (model & #draft % _Just % #destinations %~ (\dests -> deleteAt i dests), [])
+  RemoveDestination i -> (model & #draft % _Just % #destinations %~ deleteAt i, [])
   OpenOffloadDialog -> (model {draft = Just OffloadDraft {mediaSource = Nothing, destinations = []}}, [])
   CloseOffloadDialog -> (model {draft = Nothing}, [])
   SetBase wanted -> (model {appearance = model.appearance {base = wanted}}, [])

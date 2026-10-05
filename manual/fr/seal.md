@@ -40,8 +40,8 @@ La génération enregistre le processus effectué « sur place » (*in-place*).
 
 ## Sceller un dossier déjà scellé
 
-Le plan affiche un avertissement indiquant que le « dossier est déjà scellé
-» et précise la génération qu'il contient déjà. La tâche peut tout de même
+Le plan affiche un avertissement indiquant que le « dossier est déjà scellé »
+et précise la génération qu'il contient déjà. La tâche peut tout de même
 être exécutée. Elle écrit une seconde génération indiquant que les fichiers
 produisent toujours les mêmes empreintes ; il s'agit, dans les faits, d'une
 vérification.

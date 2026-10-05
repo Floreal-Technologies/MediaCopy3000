@@ -62,9 +62,6 @@ data WriteMode
   | Reuse
   deriving stock (Bounded, Enum, Eq, Show)
 
--- |
--- >>> map display [WriteNew, Overwrite, Reuse]
--- ["copy","overwrite","reuse"]
 instance Display WriteMode where
   displayBuilder = \case
     WriteNew -> "copy"
@@ -126,9 +123,6 @@ stepBytesToRead step =
 data TargetState = Fresh | NotEmpty | Absent | Partial
   deriving stock (Bounded, Enum, Eq, Show)
 
--- |
--- >>> map display [Fresh, NotEmpty, Absent, Partial]
--- ["empty","not empty","will be created","partial copy"]
 instance Display TargetState where
   displayBuilder = \case
     Fresh -> "empty"
@@ -170,9 +164,6 @@ data FindingCode
   | AlreadySealed
   deriving stock (Bounded, Enum, Eq, Ord, Show)
 
--- |
--- >>> display DestinationForeign
--- "destination holds files that are not on the media source"
 instance Display FindingCode where
   displayBuilder = \case
     SourceMissing -> "source not found"
@@ -197,10 +188,6 @@ data Finding = Finding
   }
   deriving stock (Eq, Ord, Show)
 
--- | >>> findingIf False Finding {severity = Warning, code = NoSeal, detail = "card"}
--- []
--- >>> findingIf True Finding {severity = Warning, code = NoSeal, detail = "card"}
--- [Finding {severity = Warning, code = NoSeal, detail = "card"}]
 findingIf :: Bool -> Finding -> List Finding
 findingIf holds finding
   | holds = [finding]
@@ -223,8 +210,6 @@ historyCode = \case
   ChainEmpty _ -> ChainNamesNoManifest
   (ManifestNotFound _; ManifestNotParsed _ _; HistoryUnreadable _ _) -> ManifestUnreadable
 
--- | >>> formatCode (MixedFormats [])
--- FormatUnsettled
 formatCode :: FormatError -> FindingCode
 formatCode = \case
   MixedFormats _ -> FormatUnsettled
@@ -288,7 +273,7 @@ planEquivalent a b = blankFree a == blankFree b
 planRaceChecks :: JobPlan -> Vector (OsPath, Int)
 planRaceChecks plan = case plan.execution of
   RecordAt record -> V.singleton (record.folder, record.generation.number)
-  CopyInto copy -> V.singleton (copy.source, maybe (copy.carried + 1) (\pass -> pass.generation.number) plan.sealPass)
+  CopyInto copy -> V.singleton (copy.source, maybe (copy.carried + 1) (.generation.number) plan.sealPass)
 
 plannedGenerations :: JobPlan -> Vector PlannedGeneration
 plannedGenerations plan = sealed <> executed

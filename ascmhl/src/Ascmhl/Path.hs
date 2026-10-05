@@ -16,7 +16,7 @@ import System.OsPath (OsPath, decodeUtf, unsafeEncodeUtf, (</>))
 -- "a.mxf"
 pathText :: OsPath -> Text
 pathText p = case decodeUtf p of
-  Nothing -> T.pack (show p)
+  Nothing -> T.show p
   Just s -> T.pack s
 
 newtype RelPath = RelPath Text
