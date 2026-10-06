@@ -1,10 +1,11 @@
 import { defineConfig } from 'vitepress'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 import en from './en'
 import fr from './fr'
 
 const base = process.env.DOCS_BASE ?? '/mediacopy3000'
 
-export default defineConfig({
+export default withMermaid(defineConfig({
   title: 'MediaCopy 3000',
   description: 'Verified media offload and ASC MHL verification for videographers',
   base,
@@ -14,6 +15,10 @@ export default defineConfig({
 
   rewrites: {
     'en/:rest*': ':rest*',
+  },
+
+  vite: {
+    optimizeDeps: { include: ['mermaid'] },
   },
 
   locales: {
@@ -58,4 +63,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

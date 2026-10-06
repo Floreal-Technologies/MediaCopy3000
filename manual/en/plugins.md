@@ -1,20 +1,19 @@
 # Plug-ins
 
-A plug-in adds functions to MediaCopy 3000. It is a separate program. MediaCopy 3000 starts it for
-each job and sends it messages. You control the plug-ins on the page **Plug-ins** of the
-preferences.
+Plug-ins add functions to MediaCopy 3000 as separate programs.
+You can control the plug-ins on the page **Plug-ins** of the preferences.
 
-A plug-in never changes a media file. It never writes a manifest. It gives data to MediaCopy 3000,
-and MediaCopy 3000 checks the data and writes it.
+Plug-ins typically provide additional data to MediaCopy 3000, or interface with the files
+without modifying them.
 
 ## What a plug-in can do
 
-A plug-in asks for capabilities. Each capability is one thing that MediaCopy 3000 lets it do. You
-grant or decline each one.
+A plug-in asks for capabilities, which are permissions that MediaCopy 3000 lets it do.
+The user can approve or decline the usage of those capabilities.
 
 | Capability | When it runs | What it does |
 |---|---|---|
-| `files.read` | At any time | Reads the media files. MediaCopy 3000 enforces nothing. The plug-in promises it. |
+| `files.read` | At any time | Reads the media files. |
 | `plan.inspect` | When the plan is made | Adds findings to the plan. |
 | `files.inspect` | After each file is verified | Adds notes about each verified file to the report. |
 | `block` | With `plan.inspect` | Stops a job with a blocker. Without it, a blocker from the plug-in becomes a warning. |
@@ -47,9 +46,6 @@ Plug-ins that come with MediaCopy 3000 are in a different folder:
 If two folders hold the same identifier, the folder for your account wins, and the folder of
 plug-ins that come with MediaCopy 3000 loses. You can thus install a newer version of such a plug-in
 for your account.
-
-The page **Plug-ins** of the preferences lists each plug-in folder that is not valid, with the
-reason, in the group **Not Valid**. `mediacopy3000 plan` writes the same reasons on the error output.
 
 ## Enable a plug-in
 
@@ -191,7 +187,7 @@ seconds or less.
 ## Write a plug-in
 
 A plug-in reads messages on its standard input and writes answers on its standard output. Each
-message is one JSON-RPC 2.0 object on one line. MediaCopy 3000 sends these requests:
+message is one [JSON-RPC 2.0](https://www.jsonrpc.org/) object on one line. MediaCopy 3000 sends these requests:
 
 | Method | When |
 |---|---|
@@ -257,6 +253,105 @@ title, a label or a log line, with a space.
 The event log of a job holds at most 1,024 lines that wait to be written. While it is full, new
 lines are lost, and lines of MediaCopy 3000 too. A plug-in that writes many lines at once can thus
 make the log lose lines.
+
+These diagrams show the messages between MediaCopy 3000 and a plug-in, one for each phase.
+
+### Discovery
+
+MediaCopy 3000 finds the plug-ins and records your answers before any job:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant MC3K as MediaCopy 3000
+    participant Store as plugins.json
+
+    MC3K->>MC3K: Scan the plug-in folders, validate plugin.json
+    MC3K->>Store: Read granted and declined capabilities, settings, trace
+    User->>MC3K: Enable, grant or decline capabilities, set settings
+    MC3K->>Store: Write the answers
+```
+
+### Plan stage
+
+When the plan is made, MediaCopy 3000 starts one session with each plug-in that has a hook:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant MC3K as MediaCopy 3000
+    participant Plugin as Plug-in process
+
+    User->>MC3K: Make the plan
+    MC3K->>MC3K: Check the job fields
+    MC3K->>Plugin: start
+    MC3K->>Plugin: initialize {settings, jobFields, grants, locale, job}
+    Plugin-->>MC3K: result
+    opt plan.inspect granted
+        MC3K->>Plugin: inspect/plan {job, files}
+        Plugin-->>MC3K: findings
+        note right of MC3K: The `block` capability issues a blocker.<br/>Otherwise it is a warning.
+    end
+    opt manifest.write granted
+        MC3K->>Plugin: contribute {job, files}
+        Plugin-->>MC3K: authors, fileMetadata, manifestMetadata
+        note right of MC3K: MediaCopy 3000 checks the namespace, the XML and the paths.<br/>A bad answer is a blocker.
+    end
+    MC3K->>Plugin: shutdown
+    MC3K->>Plugin: close standard input (stop after 5 s)
+    MC3K->>MC3K: Join the contributions by identifier, record the active plug-ins in the plan
+    MC3K-->>User: Plan with findings and "Recorded in the Manifest"
+```
+
+### Run stage
+
+When the job runs, MediaCopy 3000 starts again only the plug-ins with `files.inspect` that are
+active in the plan:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant MC3K as MediaCopy 3000
+    participant Plugin as Plug-in process
+
+    User->>MC3K: Start the job
+    MC3K->>Plugin: start
+    MC3K->>Plugin: initialize
+    Plugin-->>MC3K: result
+    loop each verified file
+        MC3K->>Plugin: inspect/file {file}
+        Plugin-->>MC3K: notes for the report
+    end
+    alt the plug-in fails
+        MC3K->>Plugin: start again, send the same file again
+        note right of MC3K: After a second failure, the files that are left are `not inspected`.
+    end
+    MC3K->>Plugin: shutdown
+    MC3K->>Plugin: close standard input
+    MC3K-->>User: Report with the notes for each file
+```
+
+### At any time
+
+At any time while the plug-in runs, in both phases:
+
+```mermaid
+sequenceDiagram
+    participant MC3K as MediaCopy 3000
+    participant Plugin as Plug-in process
+    participant Log as Event log / trace
+
+    par
+        Plugin-)MC3K: $/progress (resets the 30 s silence limit)
+        Plugin-)MC3K: $/log
+        Plugin-)Log: lines on the error output
+        MC3K-)Log: trace file, if Trace Messages is on
+    end
+    note over MC3K,Log: Upon cancellation, MediaCopy 3000 stops everything in 3s or less.
+```
 
 ### Write into the manifest
 

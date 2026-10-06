@@ -1,20 +1,19 @@
 # Extensions
 
-Une extension ajoute des fonctions à MediaCopy 3000. C’est un programme séparé. MediaCopy 3000 le
-démarre pour chaque tâche et lui envoie des messages. Vous gérez les extensions dans la page
-**Extensions** (Plug-ins) des préférences.
+Les extensions ajoutent des fonctions à MediaCopy 3000 sous la forme de programmes séparés.
+Vous gérez les extensions dans la page **Extensions** (Plug-ins) des préférences.
 
-Une extension ne modifie jamais un fichier de médias. Elle n’écrit jamais un manifeste. Elle donne
-des données à MediaCopy 3000, qui les vérifie et les écrit.
+Les extensions donnent en général des données supplémentaires à MediaCopy 3000, ou interagissent
+avec les fichiers sans les modifier.
 
 ## Ce qu’une extension peut faire
 
-Une extension demande des capacités. Chaque capacité est une chose que MediaCopy 3000 lui permet de
-faire. Vous accordez ou refusez chacune.
+Une extension demande des capacités, c’est-à-dire des permissions que MediaCopy 3000 lui donne.
+L’utilisateur peut accorder ou refuser l’usage de ces capacités.
 
 | Capacité | Quand elle agit | Ce qu’elle fait |
 |---|---|---|
-| `files.read` | À tout moment | Lit les fichiers de médias. MediaCopy 3000 n’impose rien. L’extension le promet. |
+| `files.read` | À tout moment | Lit les fichiers de médias. |
 | `plan.inspect` | Quand le plan est fait | Ajoute des constats au plan. |
 | `files.inspect` | Après la vérification de chaque fichier | Ajoute au rapport des notes sur chaque fichier vérifié. |
 | `block` | Avec `plan.inspect` | Arrête une tâche par un blocage. Sans elle, un blocage de l’extension devient un avertissement. |
@@ -46,10 +45,6 @@ Les extensions fournies avec MediaCopy 3000 sont dans un autre dossier :
 Si deux dossiers ont le même identifiant, le dossier de votre compte l’emporte, et le dossier des
 extensions fournies avec MediaCopy 3000 perd. Vous pouvez donc installer pour votre compte une
 version plus récente d’une telle extension.
-
-La page **Extensions** (Plug-ins) des préférences liste chaque dossier d’extension non valide, avec
-la raison, dans le groupe **Non valides** (Not Valid). `mediacopy3000 plan` écrit les mêmes raisons
-sur la sortie d’erreur.
 
 ## Activer une extension
 
@@ -199,7 +194,8 @@ lancés, en 3 secondes au plus.
 ## Écrire une extension
 
 Une extension lit des messages sur son entrée standard et écrit ses réponses sur sa sortie standard.
-Chaque message est un objet JSON-RPC 2.0 sur une ligne. MediaCopy 3000 envoie ces requêtes :
+Chaque message est un objet [JSON-RPC 2.0](https://www.jsonrpc.org/) sur une ligne. MediaCopy 3000
+envoie ces requêtes :
 
 | Méthode | Quand |
 |---|---|
@@ -268,6 +264,106 @@ texte qui vient d’une extension, comme un titre, un libellé ou une ligne du j
 Le journal des événements d’une tâche contient au plus 1 024 lignes en attente d’écriture. Tant
 qu’il est plein, les nouvelles lignes sont perdues, celles de MediaCopy 3000 aussi. Une extension
 qui écrit beaucoup de lignes à la fois peut donc faire perdre des lignes au journal.
+
+Ces diagrammes montrent les messages entre MediaCopy 3000 et une extension, un pour chaque phase.
+
+### Découverte
+
+MediaCopy 3000 trouve les extensions et enregistre vos réponses avant toute tâche :
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Utilisateur
+    participant MC3K as MediaCopy 3000
+    participant Store as plugins.json
+
+    MC3K->>MC3K: Parcourt les dossiers d’extensions, valide plugin.json
+    MC3K->>Store: Lit les capacités accordées et refusées, les réglages, la trace
+    User->>MC3K: Active, accorde ou refuse les capacités, définit les réglages
+    MC3K->>Store: Écrit les réponses
+```
+
+### Étape du plan
+
+Quand le plan est fait, MediaCopy 3000 ouvre une session avec chaque extension qui a un point
+d’entrée :
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Utilisateur
+    participant MC3K as MediaCopy 3000
+    participant Plugin as Processus de l’extension
+
+    User->>MC3K: Fait le plan
+    MC3K->>MC3K: Vérifie les champs de tâche
+    MC3K->>Plugin: démarre
+    MC3K->>Plugin: initialize {settings, jobFields, grants, locale, job}
+    Plugin-->>MC3K: résultat
+    opt plan.inspect accordée
+        MC3K->>Plugin: inspect/plan {job, files}
+        Plugin-->>MC3K: constats
+        note right of MC3K: La capacité `block` émet un blocage.<br/>Sinon, c’est un avertissement.
+    end
+    opt manifest.write accordée
+        MC3K->>Plugin: contribute {job, files}
+        Plugin-->>MC3K: authors, fileMetadata, manifestMetadata
+        note right of MC3K: MediaCopy 3000 vérifie l’espace de noms, le XML et les chemins.<br/>Une réponse invalide est un blocage.
+    end
+    MC3K->>Plugin: shutdown
+    MC3K->>Plugin: ferme l’entrée standard (arrêt après 5 s)
+    MC3K->>MC3K: Joint les contributions par identifiant, enregistre les extensions actives dans le plan
+    MC3K-->>User: Plan avec les constats et « Enregistré dans le manifeste »
+```
+
+### Étape d’exécution
+
+Quand la tâche s’exécute, MediaCopy 3000 redémarre seulement les extensions avec `files.inspect`
+qui sont actives dans le plan :
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Utilisateur
+    participant MC3K as MediaCopy 3000
+    participant Plugin as Processus de l’extension
+
+    User->>MC3K: Démarre la tâche
+    MC3K->>Plugin: démarre
+    MC3K->>Plugin: initialize
+    Plugin-->>MC3K: résultat
+    loop chaque fichier vérifié
+        MC3K->>Plugin: inspect/file {file}
+        Plugin-->>MC3K: notes pour le rapport
+    end
+    alt l’extension échoue
+        MC3K->>Plugin: redémarre, renvoie le même fichier
+        note right of MC3K: Après un second échec, les fichiers restants sont « non inspectés ».
+    end
+    MC3K->>Plugin: shutdown
+    MC3K->>Plugin: ferme l’entrée standard
+    MC3K-->>User: Rapport avec les notes de chaque fichier
+```
+
+### À tout moment
+
+À tout moment pendant que l’extension tourne, dans les deux phases :
+
+```mermaid
+sequenceDiagram
+    participant MC3K as MediaCopy 3000
+    participant Plugin as Processus de l’extension
+    participant Log as Journal des événements / trace
+
+    par
+        Plugin-)MC3K: $/progress (remet à zéro la limite de silence de 30 s)
+        Plugin-)MC3K: $/log
+        Plugin-)Log: lignes de la sortie d’erreur
+        MC3K-)Log: fichier de trace, si Tracer les messages est activé
+    end
+    note over MC3K,Log: À l’annulation, MediaCopy 3000 arrête tout en 3 s au plus.
+```
 
 ### Écrire dans le manifeste
 
