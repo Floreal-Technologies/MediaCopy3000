@@ -247,6 +247,14 @@ A plug-in must obey these rules:
   `\`, holds no `:`, and has no `..` part. One bad path, for any system, makes the plug-in not
   valid on every system.
 
+MediaCopy 3000 starts the plug-in with a small environment. It passes only these variables of
+your session. Other variables, such as secrets and tokens, do not reach the plug-in.
+
+| System | Variables |
+|---|---|
+| Linux, macOS, Flatpak | `PATH`, `HOME`, `TMPDIR`, `LANG`, `LC_*`, `TZ`, `USER`, `LOGNAME` |
+| Windows | `SystemRoot`, `windir`, `SystemDrive`, `Path`, `PATHEXT`, `ComSpec`, `TEMP`, `TMP`, `USERPROFILE`, `HOMEDRIVE`, `HOMEPATH`, `APPDATA`, `LOCALAPPDATA`, `ProgramData`, `USERNAME` |
+
 MediaCopy 3000 replaces each control character and line break in a text from a plug-in, such as a
 title, a label or a log line, with a space.
 

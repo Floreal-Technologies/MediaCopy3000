@@ -31,6 +31,7 @@ import Data.Text.Encoding (decodeUtf8Lenient)
 import GHC.Clock (getMonotonicTime)
 import MediaCopy.Plugin.JsonRpc
 import MediaCopy.Plugin.Protocol (LogLine (..), Progress, methodShutdown, notifyLog, notifyProgress)
+import System.Environment (getEnvironment)
 import System.Exit (ExitCode (..))
 import System.IO (Handle, hClose, hFlush, hSetBinaryMode)
 import System.OsPath (OsPath, decodeFS)
@@ -38,7 +39,7 @@ import System.Process
 import System.Timeout (timeout)
 
 import MediaCopy.Domain.Plugin (oneLine)
-import MediaCopy.Plugin.Process.Native (Group, groupOf, killGroup, terminateGroup)
+import MediaCopy.Plugin.Process.Native (Group, childEnvironment, groupOf, killGroup, terminateGroup)
 import MediaCopy.Plugin.Trace (Direction (..), TraceTarget, Tracer (..), openTracer, silentTracer)
 
 data Launch = Launch
@@ -82,8 +83,9 @@ open :: Launch -> IO Connection
 open launch = do
   exe <- decodeFS launch.executable
   dir <- decodeFS launch.folder
+  environment <- childEnvironment <$> getEnvironment
   (input, output, errors, process) <-
-    createProcess (proc exe []) {cwd = Just dir, std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe, create_group = True, use_process_jobs = True} >>= \case
+    createProcess (proc exe []) {cwd = Just dir, env = Just environment, std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe, create_group = True, use_process_jobs = True} >>= \case
       (Just i, Just o, Just e, p) -> pure (i, o, e, p)
       (_, _, _, p) -> terminateProcess p >> ioError (userError "the plug-in started with no pipes")
   mapM_ (\h -> hSetBinaryMode h True) [input, output, errors]
