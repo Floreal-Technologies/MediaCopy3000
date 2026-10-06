@@ -7,15 +7,12 @@ module MediaCopy.Plugin.Session
   , observe
   , fileVerified
   , finishInspections
-  , exportJob
   , logFault
   ) where
 
-import Ascmhl.Hash (Hash)
-import Ascmhl.Path (RelPath)
 import Control.Concurrent.Async (Async, AsyncCancelled (..), asyncThreadId, asyncWithUnmask, cancel, forConcurrently, waitCatch, waitCatchSTM)
 import Control.Concurrent.STM
-import Control.Exception (IOException, displayException, finally, mask_, throwTo, try, uninterruptibleMask_)
+import Control.Exception (displayException, finally, mask_, throwTo, uninterruptibleMask_)
 import Control.Monad (forM_, unless, void, when)
 import Data.Aeson (FromJSON, ToJSON, Value (Null, String), toJSON)
 import Data.Aeson.Types (parseEither, parseJSON)
@@ -31,15 +28,12 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Display (display)
 import Data.Time (getCurrentTime)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Version (showVersion)
 import MediaCopy.Plugin.Manifest
 import MediaCopy.Plugin.Protocol qualified as P
-import System.Directory.OsPath (createDirectoryIfMissing, doesFileExist)
-import System.OsPath (OsPath, decodeUtf, encodeUtf, isAbsolute, makeRelative, normalise, splitDirectories, unsafeEncodeUtf, (</>))
 import System.Timeout (timeout)
 
 import MediaCopy.Domain.Job
@@ -60,7 +54,6 @@ data SessionConfig = SessionConfig
   { plugins :: Vector Ready
   , locale :: Text
   , report :: PluginReport -> IO ()
-  , artifactRoot :: OsPath
   }
 
 data Session = Session
@@ -70,7 +63,6 @@ data Session = Session
   , members :: Vector Member
   , startFaults :: Vector PluginFinding
   , state :: TVar JobState
-  , hashes :: TVar (Map RelPath (Vector Hash))
   }
 
 data Member = Member
@@ -95,7 +87,6 @@ silence = Silence 30
 withSession :: SessionConfig -> Stage -> JobPlan -> (Session -> IO a) -> IO a
 withSession outer stage plan use = do
   state <- newTVarIO (newJobState plan.spec)
-  hashes <- newTVarIO Map.empty
   let config = outer {report = \report -> foldInto state report >> outer.report report}
       approved = Set.fromList (V.toList (V.map (.id) plan.plugins.active))
       chosen ready = stage == PlanStage || Set.member (pluginRef ready.installed).id approved
@@ -109,7 +100,7 @@ withSession outer stage plan use = do
   flip finally (stopWorkers registry) $ do
     (members, startFaults) <- startAll registry config stage plan wanted
     let fieldFaults = lefts (map (fieldCheck plan.spec.pluginFields stage) unneeded)
-    result <- use Session {stage, config, plan, members, startFaults = startFaults <> V.fromList fieldFaults, state, hashes}
+    result <- use Session {stage, config, plan, members, startFaults = startFaults <> V.fromList fieldFaults, state}
     void (timeout 5_000_000 (forConcurrently members stopMember))
     pure result
 
@@ -128,7 +119,7 @@ foldInto state report = do
 neededAt :: Stage -> Ready -> Bool
 neededAt stage ready = any (`Set.member` usefulRoles ready) $ case stage of
   PlanStage -> [Inspector, Contributor]
-  RunStage -> [Inspector, Producer, Deliverer]
+  RunStage -> [Inspector]
 
 usefulRoles :: Ready -> Set Role
 usefulRoles ready =
@@ -364,8 +355,7 @@ observe session event = do
   atomically (modifyTVar' session.state (foldEvent now event))
 
 fileVerified :: Session -> VerifiedFile -> IO ()
-fileVerified session file = do
-  atomically (modifyTVar' session.hashes (Map.insert file.path file.hashes))
+fileVerified session file =
   forM_ (inspectors session) $ \member -> atomically $ do
     readTVar member.broken >>= \case
       Just _ -> modifyTVar' member.skippedFiles (+ 1)
@@ -392,72 +382,6 @@ finishInspections session = do
         when (now == shown) retry
         pure now
       if next <= 0 then session.config.report (InspectionsLeft 0) else loop next
-
-exportJob :: Session -> JobEvent -> IO ()
-exportJob session terminal = do
-  st <- readTVarIO session.state
-  hashes <- readTVarIO session.hashes
-  let snapshot = snapshotOf session.plan st hashes terminal
-      producers = V.filter (\member -> Set.member Producer member.roles) session.members
-      deliverers = V.filter (\member -> Set.member Deliverer member.roles) session.members
-  produced <- V.concat <$> forConcurrently (V.toList producers) (whileWorking (produce session snapshot))
-  unless (V.null produced) (session.config.report (Produced produced))
-  delivered <- V.concat <$> forConcurrently (V.toList deliverers) (whileWorking (deliver session snapshot produced))
-  unless (V.null delivered) (session.config.report (Delivered delivered))
-
-whileWorking :: (Member -> IO (Vector a)) -> Member -> IO (Vector a)
-whileWorking action member =
-  readTVarIO member.broken >>= \case
-    Just _ -> pure V.empty
-    Nothing -> action member
-
-produce :: Session -> P.Snapshot -> Member -> IO (Vector Artifact)
-produce session snapshot member = do
-  folderName <- encodeUtf (T.unpack member.ref.id)
-  let outputDir = session.config.artifactRoot </> folderName
-  created <- try @IOException (createDirectoryIfMissing True outputDir)
-  case created of
-    Left e -> failed session member (Unavailable ("cannot create " <> T.show outputDir <> ": " <> T.pack (displayException e))) >> pure V.empty
-    Right () -> do
-      dir <- decodeText outputDir
-      request member P.methodProduce P.ProduceParams {snapshot, outputDir = dir} >>= \case
-        Left callFault -> failed session member (faultAbout callFault) >> pure V.empty
-        Right (result :: P.ProduceResult) -> do
-          checked <- traverse (artifactIn outputDir member.ref) (V.toList result.files)
-          let (problems, artifacts) = partitionEithers checked
-          traverse_ (warn session member . BadOutput) problems
-          pure (V.fromList artifacts)
-
-artifactIn :: OsPath -> PluginRef -> P.Artifact -> IO (Either Text Artifact)
-artifactIn outputDir plugin artifact
-  | oneLine artifact.path /= artifact.path = pure (Left ("produced a file whose name holds a control character: " <> T.show artifact.path))
-  | otherwise = do
-      given <- encodeUtf (T.unpack artifact.path)
-      let path = normalise (if isAbsolute given then given else outputDir </> given)
-      present <- doesFileExist path
-      let inside = unsafeEncodeUtf ".." `notElem` splitDirectories (makeRelative outputDir path) && makeRelative outputDir path /= path
-      pure $
-        if inside && present
-          then Right Artifact {plugin, path, label = oneLine artifact.label, mediaType = oneLine artifact.mediaType}
-          else Left ("produced a file that is not in its output folder: " <> artifact.path)
-
-deliver :: Session -> P.Snapshot -> Vector Artifact -> Member -> IO (Vector Delivery)
-deliver session snapshot produced member =
-  request member P.methodDeliver P.DeliverParams {snapshot, artifacts = V.map producedFile produced} >>= \case
-    Left callFault -> failed session member (faultAbout callFault) >> pure V.empty
-    Right (result :: P.DeliverResult) ->
-      pure (V.map (\delivery -> Delivery {plugin = member.ref, target = oneLine delivery.target, delivered = delivery.delivered, detail = oneLine delivery.detail}) result.deliveries)
-
-warn :: Session -> Member -> PluginFault -> IO ()
-warn session member fault = session.config.report (Warned PluginFinding {plugin = member.ref, severity = Warning, about = Faulted fault})
-
-failed :: Session -> Member -> PluginFault -> IO ()
-failed session member fault = do
-  atomically (writeTVar member.broken (Just (display fault)))
-  warn session member fault
-
-decodeText :: OsPath -> IO Text
-decodeText path = T.pack <$> decodeUtf path
 
 logFault :: Session -> Text -> IO ()
 logFault session problem = session.config.report (Warned PluginFinding {plugin = PluginRef {id = "mediacopy3000", name = "MediaCopy 3000"}, severity = Warning, about = Faulted (Unavailable problem)})

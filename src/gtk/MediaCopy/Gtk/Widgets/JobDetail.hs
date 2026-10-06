@@ -44,7 +44,7 @@ newJobDetail dispatch = do
   progress <- newProgress
   counters <- newCounters
   history <- newHistoryView
-  plugins <- newPluginStatus dispatch
+  plugins <- newPluginStatus
   suppress <- newIORef False
   filterButtons <- newFilterButtons suppress dispatch
   files <- newFileListPane

@@ -123,7 +123,7 @@ executePlanWithPlugins hostname plan
 
 endJob :: (Emit :> es, Plugins :> es) => JobEvent -> Eff es ()
 endJob terminal = do
-  settle terminal
+  settle
   trySync (emit terminal) >>= \case
     Left e -> emit (JobFailed (T.pack (displayException e)))
     Right () -> pure ()

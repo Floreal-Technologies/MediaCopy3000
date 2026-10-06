@@ -32,25 +32,6 @@ module MediaCopy.Plugin.Protocol
   , InspectFileResult (..)
   , Annotation (..)
 
-    -- * Job snapshot
-  , Snapshot (..)
-  , FileOutcome (..)
-  , ReportedFinding (..)
-  , PluginAnnotation (..)
-
-    -- * export/produce
-  , methodProduce
-  , ProduceParams (..)
-  , ProduceResult (..)
-  , Artifact (..)
-
-    -- * export/deliver
-  , methodDeliver
-  , DeliverParams (..)
-  , DeliverResult (..)
-  , ProducedFile (..)
-  , Delivery (..)
-
     -- * shutdown
   , methodShutdown
 
@@ -68,15 +49,13 @@ import Data.Text (Text)
 import Data.Vector (Vector)
 import GHC.Generics (Generic, Rep)
 
-import MediaCopy.Plugin.Manifest (Capability, PluginId, Role)
+import MediaCopy.Plugin.Manifest (Capability, Role)
 
-methodInitialize, methodInspectPlan, methodContribute, methodInspectFile, methodProduce, methodDeliver, methodShutdown :: Text
+methodInitialize, methodInspectPlan, methodContribute, methodInspectFile, methodShutdown :: Text
 methodInitialize = "initialize"
 methodInspectPlan = "inspect/plan"
 methodContribute = "contribute"
 methodInspectFile = "inspect/file"
-methodProduce = "export/produce"
-methodDeliver = "export/deliver"
 methodShutdown = "shutdown"
 
 notifyProgress, notifyLog :: Text
@@ -230,100 +209,6 @@ data InspectFileResult = InspectFileResult
   }
   deriving stock (Eq, Show, Generic)
   deriving (FromJSON, ToJSON) via Wire InspectFileResult
-
-data FileOutcome = FileOutcome
-  { path :: Text
-  , status :: Text
-  , detail :: Maybe Text
-  , hashes :: Vector HashValue
-  }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire FileOutcome
-
-data ReportedFinding = ReportedFinding
-  { origin :: Text
-  , severity :: Severity
-  , key :: Text
-  , title :: Text
-  , detail :: Text
-  }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire ReportedFinding
-
-data PluginAnnotation = PluginAnnotation
-  { plugin :: PluginId
-  , path :: Text
-  , key :: Text
-  , label :: Text
-  , value :: Text
-  }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire PluginAnnotation
-
-data Snapshot = Snapshot
-  { job :: JobInfo
-  , result :: Text
-  , failures :: Int
-  , detail :: Maybe Text
-  , files :: Vector FileOutcome
-  , manifests :: Vector Text
-  , findings :: Vector ReportedFinding
-  , annotations :: Vector PluginAnnotation
-  , log :: Maybe Text
-  }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire Snapshot
-
-data ProduceParams = ProduceParams
-  { snapshot :: Snapshot
-  , outputDir :: Text
-  }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire ProduceParams
-
-data Artifact = Artifact
-  { path :: Text
-  , label :: Text
-  , mediaType :: Text
-  }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire Artifact
-
-newtype ProduceResult = ProduceResult
-  { files :: Vector Artifact
-  }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire ProduceResult
-
-data ProducedFile = ProducedFile
-  { plugin :: PluginId
-  , path :: Text
-  , label :: Text
-  , mediaType :: Text
-  }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire ProducedFile
-
-data DeliverParams = DeliverParams
-  { snapshot :: Snapshot
-  , artifacts :: Vector ProducedFile
-  }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire DeliverParams
-
-data Delivery = Delivery
-  { target :: Text
-  , delivered :: Bool
-  , detail :: Text
-  }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire Delivery
-
-newtype DeliverResult = DeliverResult
-  { deliveries :: Vector Delivery
-  }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire DeliverResult
 
 data Progress = Progress
   { message :: Text

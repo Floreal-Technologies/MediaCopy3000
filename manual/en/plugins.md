@@ -14,8 +14,6 @@ A plug-in has one or more roles.
 |---|---|---|
 | Inspector | When the plan is made, and after each file is verified | Adds findings to the plan. Adds notes about each file to the report. |
 | Contributor | When the plan is made | Adds authors and metadata to each manifest that the job writes. |
-| Producer | After the job | Writes files, for example a PDF report. |
-| Deliverer | After the producers | Sends files, for example to a server. |
 
 The plan sheet shows what the contributors add, in the group **Recorded in the Manifest**. What you
 approve with **Start** is what the job writes. Information that a plug-in finds after the copy goes
@@ -113,7 +111,6 @@ MediaCopy 3000 keeps the keys of `plugins.json` that it does not know when it wr
 |---|---|---|
 | `files.read` | Read the media files | Nothing. The plug-in promises it. |
 | `block` | An inspector can stop a job with a blocker | Without this grant, a blocker from the plug-in becomes a warning. |
-| `network` | A deliverer can send files over the network | Only a deliverer can ask for it. MediaCopy 3000 does not stop the program from opening a connection. |
 | `manifest.write` | A contributor can add data to the manifest | Without this grant, MediaCopy 3000 does not ask the plug-in for data. |
 
 A plug-in is a program that runs with your rights. MediaCopy 3000 cannot stop it from reading a file
@@ -150,23 +147,9 @@ the plug-in reports its progress.
 | The plan is made | Any other plug-in | A warning. The plug-in does not take part in the job. |
 | The plan is blocked | All | No plug-in starts for the job. |
 | A file is inspected | Inspector | MediaCopy 3000 starts the plug-in again and sends the same file again. After a second failure, the files that are left are `not inspected`. The job result does not change. |
-| After the job | Producer or deliverer | A warning in the report. The job result does not change. |
 
 When you cancel a job, MediaCopy 3000 stops each plug-in, and the programs that it started, in 3
-seconds or less. The producers and the deliverers do not run.
-
-## The files that plug-ins produce
-
-A producer writes into a folder next to the [event log](event-log.md) of the job:
-
-```
-~/.local/state/mediacopy3000/jobs/<job>/artifacts/<id>/
-```
-
-MediaCopy 3000 never puts these files into a destination. A file in a destination that the media
-source does not hold stops the next offload into that folder.
-
-The [report](reports.md) lists each produced file and each delivery.
+seconds or less.
 
 ## Write a plug-in
 
@@ -179,8 +162,6 @@ message is one JSON-RPC 2.0 object on one line. MediaCopy 3000 sends these reque
 | `inspect/plan` | When the plan is made, to an inspector |
 | `contribute` | When the plan is made, to a contributor |
 | `inspect/file` | After each verified file, to an inspector |
-| `export/produce` | After the job, to a producer |
-| `export/deliver` | After the producers, to a deliverer |
 | `shutdown` | Last |
 
 The plug-in can send the notifications `$/progress` and `$/log`. Lines on its error output go into
@@ -199,8 +180,6 @@ A plug-in must obey these rules:
   most 32 levels of elements and only characters that XML 1.0 allows. MediaCopy 3000 removes XML
   comments and processing instructions.
 - It writes in an author only characters that XML 1.0 allows.
-- It writes its files in `outputDir`. A path in its answer can be absolute, or relative to
-  `outputDir`. A file name that holds a control character, such as a line break, is refused.
 - Each path in `executable` is relative to the folder of the plug-in. It does not start with `/` or
   `\`, holds no `:`, and has no `..` part. One bad path, for any system, makes the plug-in not
   valid on every system.

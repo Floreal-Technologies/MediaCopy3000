@@ -33,7 +33,7 @@ import Network.HostName qualified as HostName
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.File.OsPath (writeFile')
 import System.IO (stderr)
-import System.OsPath (OsPath, decodeFS, encodeFS)
+import System.OsPath (OsPath, encodeFS)
 
 import MediaCopy.Domain.Job (JobEvent (..), JobId, JobSpec (..))
 import MediaCopy.Domain.Plan (JobPlan (..), planBlocked)
@@ -44,7 +44,7 @@ import MediaCopy.Effects.FileSystem (defaultChunkSize, runFileSystemIO)
 import MediaCopy.Effects.Hasher (runHasher)
 import MediaCopy.Effects.Plugins (runPluginsSession)
 import MediaCopy.Engine
-import MediaCopy.EventLog (artifactsFolder, withEventLog)
+import MediaCopy.EventLog (withEventLog)
 import MediaCopy.Gtk.Environment (Environment, withEnvironment)
 import MediaCopy.Gtk.Reload (loadCss, loadWording)
 import MediaCopy.Gtk.Screenshot (Startup (..), seeded)
@@ -187,7 +187,6 @@ runCommand runtime = \case
   OpenFileDialog toMessage -> openFileDialog runtime toMessage
   LoadCatalog -> catalogWorker runtime
   ApplyChange change -> changeWorker runtime change
-  LaunchFile path -> launchFile runtime path
 
 installCloseRequest :: Adw.ApplicationWindow -> (Message -> IO ()) -> IO ()
 installCloseRequest window dispatchNow =
@@ -225,13 +224,6 @@ openFileDialog runtime toMessage = do
   Gtk.fileDialogOpen dialog (Just runtime.widgets.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
     toasting runtime (sendPicked runtime toMessage (Gtk.fileDialogOpenFinish dialog result))
 
-launchFile :: Runtime -> OsPath -> IO ()
-launchFile runtime path = do
-  file <- decodeFS path >>= Gio.fileNewForPath
-  launcher <- Gtk.fileLauncherNew (Just file)
-  Gtk.fileLauncherLaunch launcher (Just runtime.widgets.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
-    toasting runtime (void (Gtk.fileLauncherLaunchFinish launcher result))
-
 catalogWorker :: Runtime -> IO ()
 catalogWorker runtime = void $ async (withMVar runtime.catalogLock (const (reloadCatalog runtime)))
 
@@ -259,7 +251,6 @@ startJob runtime plan = do
   worker <- tracked runtime $ do
     mapM_ (waitCatch . snd) previous
     setup <- loadPluginSetup
-    root <- artifactsFolder spec
     model <- readIORef runtime.modelRef
     withEventLog spec (renderPlanText spec plan) $ \logPath logLine -> do
       forM_ logPath (sink . LogOpened)
@@ -268,7 +259,7 @@ startJob runtime plan = do
             unless (logOnly report) (sink (PluginReported report))
       if planBlocked plan
         then runEff (runFileSystemIO defaultChunkSize (runHasher (runTime (runEmitIO (\ev -> logLine ev >> sink ev) (executePlan (T.pack host) plan)))))
-        else withSession (pluginConfig model.wording setup.ready root reported) RunStage plan $ \session ->
+        else withSession (pluginConfig model.wording setup.ready reported) RunStage plan $ \session ->
           runEff (runFileSystemIO defaultChunkSize (runHasher (runTime (runEmitIO (\ev -> logLine ev >> observe session ev >> sink ev) (runPluginsSession session (executePlanWithPlugins (T.pack host) plan))))))
   writeIORef runtime.engine (Just (spec.jobId, worker))
   void $ async $ do
@@ -298,21 +289,19 @@ planWorker runtime spec = do
       plan <- runEff (runFileSystemIO defaultChunkSize (planJob spec))
       setup <- loadPluginSetup
       forM_ setup.grantsProblem (postMessage runtime . ShowToast)
-      root <- artifactsFolder spec
-      planWithPlugins (pluginConfig model.wording setup.ready root (TIO.hPutStrLn stderr . display)) plan
+      planWithPlugins (pluginConfig model.wording setup.ready (TIO.hPutStrLn stderr . display)) plan
     case attempt of
       Left err -> postMessage runtime (PlanComputed spec (Left (T.pack (displayException err))))
       Right plan -> postMessage runtime (PlanComputed spec (Right plan))
   previous <- atomicModifyIORef' runtime.planner (\held -> (Just (spec.jobId, worker), held))
   forM_ previous $ \(jid, old) -> when (jid == spec.jobId) (void (async (cancel old)))
 
-pluginConfig :: Wording -> Vector Ready -> OsPath -> (PluginReport -> IO ()) -> SessionConfig
-pluginConfig wording plugins root report =
+pluginConfig :: Wording -> Vector Ready -> (PluginReport -> IO ()) -> SessionConfig
+pluginConfig wording plugins report =
   SessionConfig
     { plugins
     , locale = languageCode wording.language
     , report
-    , artifactRoot = root
     }
 
 logOnly :: PluginReport -> Bool

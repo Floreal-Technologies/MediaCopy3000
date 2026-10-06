@@ -229,16 +229,6 @@ renderPlugins st
         <> foldMap (\finding -> line (T.toUpper (display finding.severity) <> "  " <> display finding)) st.warnings
         <> foldMap (\(ref, left) -> line ("NOT INSPECTED  " <> ref.name <> "  " <> plural "file" left)) (Map.toList st.notInspected)
         <> foldMap annotationLines (Map.toList st.annotations)
-        <> foldMap (\artifact -> line ("PRODUCED  " <> artifact.plugin.name <> "  " <> artifact.label <> "  " <> pathText artifact.path)) st.artifacts
-        <> foldMap deliveryLine st.deliveries
   where
     annotationLines (path, notes) =
       foldMap (\note -> line ("NOTE  " <> display path <> "  " <> note.plugin.name <> "  " <> note.label <> ": " <> note.value)) notes
-    deliveryLine delivery =
-      line
-        ( (if delivery.delivered then "DELIVERED  " else "NOT DELIVERED  ")
-            <> delivery.plugin.name
-            <> "  "
-            <> delivery.target
-            <> (if T.null delivery.detail then "" else "  " <> delivery.detail)
-        )

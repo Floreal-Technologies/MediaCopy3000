@@ -207,10 +207,9 @@ verifyPlan spec = decideGeneration spec RequireHistory verifyFacts
 sealPlan :: JobSpec -> JobPlan
 sealPlan spec = decideGeneration spec AllowFresh sealFacts
 
-credentials, credits, delivery :: PluginRef
+credentials, credits :: PluginRef
 credentials = PluginRef {id = "tech.floreal.c2pa-reader", name = "Content Credentials"}
 credits = PluginRef {id = "tech.floreal.credits", name = "Credits"}
-delivery = PluginRef {id = "tech.floreal.s3", name = "S3 delivery"}
 
 pluginCatalog :: PluginCatalog
 pluginCatalog =
@@ -248,19 +247,6 @@ pluginCatalog =
               , active = True
               , problem = Nothing
               }
-          , PluginEntry
-              { plugin = delivery
-              , version = "0.9.0"
-              , folder = "/home/you/.local/share/mediacopy3000/plugins/tech.floreal.s3"
-              , roles = V.singleton "deliverer"
-              , enabled = False
-              , trace = False
-              , capabilities = V.fromList [CapabilityView "files.read" Granted, CapabilityView "network" Unanswered]
-              , settings = V.singleton (FieldView "bucket" "Bucket" TextShape True NoValue)
-              , jobFields = V.empty
-              , active = False
-              , problem = Nothing
-              }
           ]
     , rejected = V.singleton ("/home/you/.local/share/mediacopy3000/plugins/old-tool", "plugin.json needs plug-in API 2, and this MediaCopy 3000 speaks API 1")
     , problem = Nothing
@@ -288,7 +274,6 @@ pluginPlan spec =
 pluginReports :: List PluginReport
 pluginReports =
   [ Annotated (rel "A001C001_260912_R1AB.mov") (V.singleton Annotation {plugin = credentials, key = "signer", label = "Signer", value = "Sony"})
-  , Produced (V.singleton Artifact {plugin = credentials, path = osp "/home/you/.local/state/mediacopy3000/jobs/2026-09-12_140300-1-CARD_A001-offload/artifacts/tech.floreal.c2pa-reader/credentials.pdf", label = "Credentials report", mediaType = "application/pdf"})
   , Warned PluginFinding {plugin = credentials, severity = Warning, about = Said PluginSays {key = "c2pa-invalid", title = "1 clip has a credential that does not validate", detail = "A001C004_260912_R1AB.mov"}}
   ]
 

@@ -81,8 +81,6 @@ Plug-ins:
 WARNING  Credits: plug-in unavailable – the plug-in stopped with exit code 4
 NOT INSPECTED  Content Credentials  3 files
 NOTE  A001C001.MP4  Content Credentials  Signer: Sony
-PRODUCED  PDF report  Report  /home/you/.local/state/mediacopy3000/jobs/<job>/artifacts/tech.floreal.pdf/report.pdf
-DELIVERED  S3 upload  s3://footage/A001/report.pdf
 ```
 
 | Line | What it is |
@@ -90,8 +88,6 @@ DELIVERED  S3 upload  s3://footage/A001/report.pdf
 | `WARNING` | A plug-in failed during the job, or gave a warning about a file. |
 | `NOT INSPECTED` | The files that an inspector did not inspect, after it failed twice. |
 | `NOTE` | A note of a plug-in about one file. |
-| `PRODUCED` | A file that a producer wrote. |
-| `DELIVERED`, `NOT DELIVERED` | A file that a deliverer sent, or failed to send. |
 
 ## Why the plan is in there
 

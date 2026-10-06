@@ -8,8 +8,6 @@ module MediaCopy.Plugin.Wire
   , mergeContributions
   , inspectFileParams
   , annotationsOf
-  , snapshotOf
-  , producedFile
   ) where
 
 import Ascmhl.Hash (Hash (..))
@@ -165,58 +163,3 @@ hashValue hash = P.HashValue {algo = display hash.algo, value = hash.value}
 
 annotationsOf :: PluginRef -> P.InspectFileResult -> Vector Annotation
 annotationsOf plugin result = V.map (\note -> Annotation {plugin, key = oneLine note.key, label = oneLine note.label, value = oneLine note.value}) result.annotations
-
-snapshotOf :: JobPlan -> JobState -> Map RelPath (Vector Hash) -> JobEvent -> P.Snapshot
-snapshotOf plan st hashes terminal =
-  P.Snapshot
-    { job = jobInfo plan
-    , result = case terminal of
-        JobFinished _ -> "finished"
-        _ -> "failed"
-    , failures = case terminal of
-        JobFinished (WithFailures n) -> n
-        _ -> 0
-    , detail = case terminal of
-        JobFailed message -> Just message
-        _ -> Nothing
-    , files = V.fromList (map outcomeOf (Map.toList st.files))
-    , manifests = V.map pathText st.mhlPaths
-    , findings = V.map coreFinding plan.findings <> V.map reportedPluginFinding (plan.plugins.findings <> st.plugins.warnings)
-    , annotations = V.concat [V.map (wireAnnotation path) notes | (path, notes) <- Map.toList st.plugins.annotations]
-    , log = fmap pathText st.logPath
-    }
-  where
-    outcomeOf (path, entry) =
-      let (status, detail) = statusOf entry.status
-      in P.FileOutcome {path = display path, status, detail, hashes = V.map hashValue (Map.findWithDefault V.empty path hashes)}
-    statusOf = \case
-      Done Ok -> ("verified", Nothing)
-      Done (HashMismatch _) -> ("hash-mismatch", Nothing)
-      Done Missing -> ("missing", Nothing)
-      Done New -> ("new", Nothing)
-      Done (IoError message) -> ("io-error", Just message)
-      Done (Replaced _) -> ("replaced", Nothing)
-      _ -> ("pending", Nothing)
-    coreFinding finding =
-      P.ReportedFinding {origin = "core", severity = wireSeverity finding.severity, key = T.show finding.code, title = display finding.code, detail = finding.detail}
-    wireAnnotation path note =
-      P.PluginAnnotation {plugin = PluginId note.plugin.id, path = display path, key = note.key, label = note.label, value = note.value}
-
-reportedPluginFinding :: PluginFinding -> P.ReportedFinding
-reportedPluginFinding finding = case finding.about of
-  Said says -> P.ReportedFinding {origin = finding.plugin.id, severity = wireSeverity finding.severity, key = says.key, title = says.title, detail = says.detail}
-  Faulted fault -> P.ReportedFinding {origin = finding.plugin.id, severity = wireSeverity finding.severity, key = faultKey fault, title = display fault, detail = ""}
-  where
-    faultKey = \case
-      Unavailable _ -> "plugin-unavailable"
-      FieldMissing _ -> "plugin-field-missing"
-      BadOutput _ -> "plugin-bad-output"
-
-wireSeverity :: Severity -> P.Severity
-wireSeverity = \case
-  Blocker -> P.Blocker
-  Warning -> P.Warning
-
-producedFile :: Artifact -> P.ProducedFile
-producedFile artifact =
-  P.ProducedFile {plugin = PluginId artifact.plugin.id, path = pathText artifact.path, label = artifact.label, mediaType = artifact.mediaType}

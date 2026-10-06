@@ -14,8 +14,6 @@ Une extension a un ou plusieurs rôles.
 |---|---|---|
 | Inspecteur | Quand le plan est fait, puis après la vérification de chaque fichier | Ajoute des constats au plan. Ajoute au rapport des notes sur chaque fichier. |
 | Contributeur | Quand le plan est fait | Ajoute des auteurs et des métadonnées à chaque manifeste que la tâche écrit. |
-| Producteur | Après la tâche | Écrit des fichiers, par exemple un rapport PDF. |
-| Livreur | Après les producteurs | Envoie des fichiers, par exemple vers un serveur. |
 
 La feuille du plan montre ce que les contributeurs ajoutent, dans le groupe **Enregistré dans le
 manifeste**. Ce que vous approuvez avec **Démarrer** est ce que la tâche écrit. Ce qu’une extension
@@ -119,7 +117,6 @@ Quand MediaCopy 3000 écrit `plugins.json`, il garde les clés qu’il ne conna�
 |---|---|---|
 | `files.read` | Lire les fichiers de médias | Rien. L’extension le promet. |
 | `block` | Un inspecteur peut arrêter une tâche par un blocage | Sans cette capacité, un blocage de l’extension devient un avertissement. |
-| `network` | Un livreur peut envoyer des fichiers sur le réseau | Seul un livreur peut la demander. MediaCopy 3000 n’empêche pas le programme d’ouvrir une connexion. |
 | `manifest.write` | Un contributeur peut ajouter des données au manifeste | Sans cette capacité, MediaCopy 3000 ne demande pas de données à l’extension. |
 
 Une extension est un programme qui tourne avec vos droits. MediaCopy 3000 ne peut pas l’empêcher de
@@ -158,23 +155,9 @@ Une tâche longue n’échoue pas tant que l’extension signale son avancement.
 | Le plan est fait | Toute autre extension | Un avertissement. L’extension ne prend pas part à la tâche. |
 | Le plan est bloqué | Toutes | Aucune extension ne démarre pour la tâche. |
 | Un fichier est inspecté | Inspecteur | MediaCopy 3000 redémarre l’extension et renvoie le même fichier. Après un second échec, les fichiers restants sont `non inspectés`. Le résultat de la tâche ne change pas. |
-| Après la tâche | Producteur ou livreur | Un avertissement dans le rapport. Le résultat de la tâche ne change pas. |
 
 Quand vous annulez une tâche, MediaCopy 3000 arrête chaque extension, et les programmes qu’elle a
-lancés, en 3 secondes au plus. Les producteurs et les livreurs ne s’exécutent pas.
-
-## Les fichiers que produisent les extensions
-
-Un producteur écrit dans un dossier à côté du [journal des événements](event-log.md) de la tâche :
-
-```
-~/.local/state/mediacopy3000/jobs/<tâche>/artifacts/<id>/
-```
-
-MediaCopy 3000 ne met jamais ces fichiers dans une destination. Un fichier absent de la source dans
-une destination bloque le prochain déchargement vers ce dossier.
-
-Le [rapport](reports.md) liste chaque fichier produit et chaque livraison.
+lancés, en 3 secondes au plus.
 
 ## Écrire une extension
 
@@ -187,8 +170,6 @@ Chaque message est un objet JSON-RPC 2.0 sur une ligne. MediaCopy 3000 envoie ce
 | `inspect/plan` | Quand le plan est fait, à un inspecteur |
 | `contribute` | Quand le plan est fait, à un contributeur |
 | `inspect/file` | Après chaque fichier vérifié, à un inspecteur |
-| `export/produce` | Après la tâche, à un producteur |
-| `export/deliver` | Après les producteurs, à un livreur |
 | `shutdown` | En dernier |
 
 L’extension peut envoyer les notifications `$/progress` et `$/log`. Les lignes de sa sortie
@@ -208,9 +189,6 @@ Une extension doit respecter ces règles :
   réserve. Les métadonnées ont au plus 32 niveaux d’éléments, et seulement des caractères que
   XML 1.0 autorise. MediaCopy 3000 retire les commentaires XML et les instructions de traitement.
 - Elle n’écrit dans un auteur que des caractères que XML 1.0 autorise.
-- Elle écrit ses fichiers dans `outputDir`. Un chemin dans sa réponse peut être absolu, ou relatif à
-  `outputDir`. Un nom de fichier qui contient un caractère de contrôle, comme un saut de ligne, est
-  refusé.
 - Chaque chemin de `executable` est relatif au dossier de l’extension. Il ne commence ni par `/` ni
   par `\`, ne contient pas de `:` et n’a pas de partie `..`. Un seul mauvais chemin, pour n’importe
   quel système, rend l’extension non valide sur tous les systèmes.

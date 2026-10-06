@@ -196,7 +196,6 @@ capabilityText :: Text -> Text
 capabilityText = \case
   "files.read" -> "Read the media files"
   "block" -> "Stop a job with a blocker"
-  "network" -> "Send files over the network"
   "manifest.write" -> "Add data to the manifest"
   other -> other
 

@@ -27,7 +27,6 @@ import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan (JobPlan, planBlocked)
 import MediaCopy.Effects.FileSystem (defaultChunkSize, runFileSystemIO)
 import MediaCopy.Engine (planJob)
-import MediaCopy.EventLog (artifactsFolder)
 import MediaCopy.Gtk.Runtime qualified as Runtime
 import MediaCopy.Gtk.Screenshot (Startup (..))
 import MediaCopy.Plugin (PluginSetup (..), loadPluginSetup, planWithPlugins)
@@ -156,26 +155,24 @@ planCommand job options = do
   let spec = JobSpec {jobId = JobId 1, job, createdAt = now, pluginFields = options.fields}
   attempt <- try @SomeException $ do
     plan <- runEff (runFileSystemIO defaultChunkSize (planJob spec))
-    if options.enabled then withPlugins spec plan else pure plan
+    if options.enabled then withPlugins plan else pure plan
   case attempt of
     Left err -> T.hPutStrLn stderr (T.pack (displayException err)) >> exitWith (ExitFailure 2)
     Right plan -> do
       T.putStr (renderPlanText spec plan)
       exitWith (if planBlocked plan then ExitFailure 1 else ExitSuccess)
 
-withPlugins :: JobSpec -> JobPlan -> IO JobPlan
-withPlugins spec plan = do
+withPlugins :: JobPlan -> IO JobPlan
+withPlugins plan = do
   setup <- loadPluginSetup
   forM_ setup.grantsProblem (T.hPutStrLn stderr)
   forM_ setup.rejected (\rejected -> T.hPutStrLn stderr ("plug-in folder " <> pathText rejected.folder <> " " <> rejected.reason))
   forM_ setup.inactive (\inactive -> T.hPutStrLn stderr ("plug-in " <> inactive.installed.manifest.name <> " " <> inactive.reason))
-  root <- artifactsFolder spec
   planWithPlugins
     SessionConfig
       { plugins = setup.ready
       , locale = "en"
       , report = T.hPutStrLn stderr . display
-      , artifactRoot = root
       }
     plan
 

@@ -141,7 +141,6 @@ data UiMessage
   | ReloadPlugins
   | SetJobField Text Text Text
   | PickJobFieldPath Text Text
-  | OpenArtifact OsPath
   deriving stock (Eq, Show)
 
 data Message
@@ -173,7 +172,6 @@ data Command
   | OpenFileDialog (OsPath -> Message)
   | LoadCatalog
   | ApplyChange CatalogChange
-  | LaunchFile OsPath
 
 update :: Message -> Model -> (Model, List Command)
 update msg model = case msg of
@@ -265,7 +263,6 @@ updateUi msg model = case msg of
   ReloadPlugins -> (model, [LoadCatalog])
   SetJobField pluginId key value -> setJobField pluginId key value model
   PickJobFieldPath pluginId key -> (model, [OpenFileDialog (Ui . SetJobField pluginId key . pathText)])
-  OpenArtifact path -> (model, [LaunchFile path])
 
 reviewPlan :: Model -> (Model, List Command)
 reviewPlan model

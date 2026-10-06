@@ -81,8 +81,6 @@ Plug-ins:
 WARNING  Credits: plug-in unavailable – the plug-in stopped with exit code 4
 NOT INSPECTED  Content Credentials  3 files
 NOTE  A001C001.MP4  Content Credentials  Signer: Sony
-PRODUCED  PDF report  Report  /home/vous/.local/state/mediacopy3000/jobs/<tâche>/artifacts/tech.floreal.pdf/report.pdf
-DELIVERED  S3 upload  s3://footage/A001/report.pdf
 ```
 
 | Ligne | Signification |
@@ -90,8 +88,6 @@ DELIVERED  S3 upload  s3://footage/A001/report.pdf
 | `WARNING` | Une extension a échoué pendant la tâche, ou a donné un avertissement sur un fichier. |
 | `NOT INSPECTED` | Les fichiers qu’un inspecteur n’a pas inspectés, après deux échecs. |
 | `NOTE` | Une note d’une extension sur un fichier. |
-| `PRODUCED` | Un fichier qu’un producteur a écrit. |
-| `DELIVERED`, `NOT DELIVERED` | Un fichier qu’un livreur a envoyé, ou n’a pas pu envoyer. |
 
 ## Pourquoi le plan y figure
 

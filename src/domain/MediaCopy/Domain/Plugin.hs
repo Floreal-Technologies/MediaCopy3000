@@ -11,8 +11,6 @@ module MediaCopy.Domain.Plugin
   , pluginBlockers
   , VerifiedFile (..)
   , Annotation (..)
-  , Artifact (..)
-  , Delivery (..)
   , PluginReport (..)
   , PluginState (..)
   , noPluginState
@@ -21,7 +19,7 @@ module MediaCopy.Domain.Plugin
   ) where
 
 import Ascmhl.Hash (Hash)
-import Ascmhl.Path (RelPath, pathText)
+import Ascmhl.Path (RelPath)
 import Ascmhl.Types (Author, Fragment)
 import Data.Char (GeneralCategory (..), generalCategory, isControl)
 import Data.Int (Int64)
@@ -131,29 +129,11 @@ data Annotation = Annotation
   }
   deriving stock (Eq, Show)
 
-data Artifact = Artifact
-  { plugin :: PluginRef
-  , path :: OsPath
-  , label :: Text
-  , mediaType :: Text
-  }
-  deriving stock (Eq, Show)
-
-data Delivery = Delivery
-  { plugin :: PluginRef
-  , target :: Text
-  , delivered :: Bool
-  , detail :: Text
-  }
-  deriving stock (Eq, Show)
-
 data PluginReport
   = Annotated RelPath (Vector Annotation)
   | Warned PluginFinding
   | InspectionsLeft Int
   | NotInspected PluginRef Int
-  | Produced (Vector Artifact)
-  | Delivered (Vector Delivery)
   | Logged PluginRef Text
   deriving stock (Eq, Show)
 
@@ -171,20 +151,15 @@ instance Display PluginReport where
     Warned finding -> "plug-in warning " <> displayBuilder finding
     InspectionsLeft left -> "plug-ins: " <> displayBuilder (files left) <> " left to inspect"
     NotInspected plugin left -> "plug-in " <> displayBuilder plugin.name <> ": " <> displayBuilder (files left) <> " not inspected"
-    Produced artifacts -> "plug-ins produced " <> displayBuilder (T.intercalate ", " (V.toList (V.map (\artifact -> pathText artifact.path) artifacts)))
-    Delivered deliveries -> "plug-ins delivered " <> displayBuilder (T.intercalate ", " (V.toList (V.map deliveryText deliveries)))
     Logged plugin line -> "plug-in " <> displayBuilder plugin.name <> ": " <> displayBuilder line
     where
       files n = if n == 1 then "1 file" else T.show n <> " files"
-      deliveryText delivery = delivery.target <> (if delivery.delivered then " ok" else " failed")
 
 data PluginState = PluginState
   { annotations :: Map RelPath (Vector Annotation)
   , warnings :: Vector PluginFinding
   , inspectionsLeft :: Int
   , notInspected :: Map PluginRef Int
-  , artifacts :: Vector Artifact
-  , deliveries :: Vector Delivery
   }
   deriving stock (Eq, Show)
 
@@ -195,8 +170,6 @@ noPluginState =
     , warnings = V.empty
     , inspectionsLeft = 0
     , notInspected = Map.empty
-    , artifacts = V.empty
-    , deliveries = V.empty
     }
 
 foldPluginReport :: PluginReport -> PluginState -> PluginState
@@ -205,8 +178,6 @@ foldPluginReport report st = case report of
   Warned finding -> st {warnings = V.snoc st.warnings finding}
   InspectionsLeft left -> st {inspectionsLeft = left}
   NotInspected plugin left -> st {notInspected = Map.insert plugin left st.notInspected}
-  Produced artifacts -> st {artifacts = st.artifacts <> artifacts}
-  Delivered deliveries -> st {deliveries = st.deliveries <> deliveries}
   Logged _ _ -> st
 
 -- |

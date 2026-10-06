@@ -43,11 +43,11 @@ refused reason m = either Just (const Nothing) (validateManifest m) @?= Just rea
 
 namesEachRole :: Assertion
 namesEachRole =
-  map roleName [minBound ..] @?= ["inspector", "contributor", "producer", "deliverer"]
+  map roleName [minBound ..] @?= ["inspector", "contributor"]
 
 namesEachCapability :: Assertion
 namesEachCapability =
-  map capabilityName [minBound ..] @?= ["files.read", "block", "network", "manifest.write"]
+  map capabilityName [minBound ..] @?= ["files.read", "block", "manifest.write"]
 
 acceptsAnInspectorThatBlocks :: Assertion
 acceptsAnInspectorThatBlocks = do
@@ -60,8 +60,8 @@ refusesAManifestWithNoRole = refused "declares no role" base
 refusesACapabilityTheRolesDoNotAllow :: Assertion
 refusesACapabilityTheRolesDoNotAllow =
   refused
-    "declares network, which only a deliverer can have"
-    base {roles = V.singleton Producer, capabilities = V.singleton Network}
+    "declares block, which only an inspector can have"
+    base {roles = V.singleton Contributor, namespace = Just "urn:x", capabilities = V.fromList [Block, ManifestWrite]}
 
 refusesAContributorWithNoNamespace :: Assertion
 refusesAContributorWithNoNamespace =

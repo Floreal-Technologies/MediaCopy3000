@@ -50,7 +50,7 @@ et la ligne indique « Écriture du manifeste · 25 s ».
 
 ## Extensions
 
-![Une tâche avec un avertissement d’une extension et un fichier produit](../en/images/job-plugins.png)
+![Une tâche avec un avertissement d’une extension](../en/images/job-plugins.png)
 
 Quand des [extensions](plugins.md) prennent part à une tâche, le groupe **Extensions** (Plug-ins)
 vient après les compteurs.
@@ -60,8 +60,6 @@ vient après les compteurs.
 | `Inspecting: 3 files left` | Les inspecteurs examinent les fichiers vérifiés. |
 | Un avertissement | Un inspecteur a trouvé un problème, ou une extension a échoué. Le texte commence par le nom de l’extension. |
 | `Credits: 4 files not inspected` | L’extension a échoué deux fois. Les fichiers restants n’ont pas de notes de sa part. |
-| Un fichier produit | Un producteur a écrit ce fichier. Cliquez sur **Ouvrir** (Open) pour l’ouvrir. |
-| `delivered`, `not delivered` | Un livreur a envoyé les fichiers à la cible, ou n’a pas pu. |
 
 Le premier avertissement de chaque extension dans une tâche montre aussi une notification en bas de
 la fenêtre.

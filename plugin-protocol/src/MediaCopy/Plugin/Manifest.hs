@@ -41,15 +41,13 @@ newtype PluginId = PluginId Text
   deriving stock (Show)
   deriving newtype (Eq, Ord, FromJSON, ToJSON, FromJSONKey, ToJSONKey)
 
-data Role = Inspector | Contributor | Producer | Deliverer
+data Role = Inspector | Contributor
   deriving stock (Bounded, Enum, Eq, Ord, Show)
 
 roleName :: Role -> Text
 roleName = \case
   Inspector -> "inspector"
   Contributor -> "contributor"
-  Producer -> "producer"
-  Deliverer -> "deliverer"
 
 instance ToJSON Role where
   toJSON role = String (roleName role)
@@ -57,14 +55,13 @@ instance ToJSON Role where
 instance FromJSON Role where
   parseJSON = withText "role" (named "role" roleName)
 
-data Capability = FilesRead | Block | Network | ManifestWrite
+data Capability = FilesRead | Block | ManifestWrite
   deriving stock (Bounded, Enum, Eq, Ord, Show)
 
 capabilityName :: Capability -> Text
 capabilityName = \case
   FilesRead -> "files.read"
   Block -> "block"
-  Network -> "network"
   ManifestWrite -> "manifest.write"
 
 instance ToJSON Capability where
@@ -213,13 +210,12 @@ allowedFor :: Capability -> Maybe Role
 allowedFor = \case
   FilesRead -> Nothing
   Block -> Just Inspector
-  Network -> Just Deliverer
   ManifestWrite -> Just Contributor
 
 article :: Role -> Text
-article role = case role of
+article = \case
   Inspector -> "an inspector"
-  _ -> "a " <> roleName role
+  Contributor -> "a contributor"
 
 validId :: Text -> Bool
 validId raw =

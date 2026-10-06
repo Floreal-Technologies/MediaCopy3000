@@ -3,7 +3,6 @@
 
 module MediaCopy.EventLog
   ( withEventLog
-  , artifactsFolder
   ) where
 
 import Control.Concurrent.Async (async, waitCatch)
@@ -66,9 +65,6 @@ openLog spec = do
 
 jobsFolder :: IO OsPath
 jobsFolder = getXdgDirectory XdgState [osp|mediacopy3000|] <&> (</> [osp|jobs|])
-
-artifactsFolder :: JobSpec -> IO OsPath
-artifactsFolder spec = jobsFolder <&> \dir -> dir </> unsafeEncodeUtf (T.unpack (jobStem spec)) </> [osp|artifacts|]
 
 jobStem :: JobSpec -> Text
 jobStem spec =
