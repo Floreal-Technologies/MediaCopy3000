@@ -105,6 +105,33 @@ this file yourself, for example to install the same plug-ins on many computers.
 
 MediaCopy 3000 keeps the keys of `plugins.json` that it does not know when it writes the file.
 
+## The plug-in Credits
+
+MediaCopy 3000 comes with the plug-in Credits, `tech.floreal.credits`. It puts the names of the
+crew into each manifest that a job writes. Like each plug-in, it is off until you enable it and
+grant `manifest.write`.
+
+It has these settings:
+
+| Setting | Use |
+|---|---|
+| **Production** | The name of the production |
+| **DIT name** | Your name. Required. |
+| **DIT email** | Your email address |
+| **DIT phone** | Your phone number |
+
+It asks for these job fields on the plan sheet. Both are optional:
+
+- **Camera operator**
+- **Second camera operator**
+
+The manifest then gets:
+
+- An `author` with the role `DIT`, with the DIT name, the email and the phone.
+- An `author` with the role `camera operator` for each operator.
+- In `metadata`, an element `credits` in the namespace `https://floreal.tech/ns/credits/1`, with
+  the elements `production`, `dit` and `operator`.
+
 ## What MediaCopy 3000 enforces
 
 | Capability | What it allows | What MediaCopy 3000 enforces |
@@ -169,6 +196,10 @@ the event log of the job.
 
 The file `plugin-protocol/schema/protocol-1.schema.json` in the source code describes each message
 and `plugin.json`.
+
+The folder `plugins/credits` in the source code holds the plug-in Credits. It is a complete plug-in
+in Haskell, built with the library `plugin-protocol`, under the BSD 3-Clause License. Copy it to start
+a new plug-in.
 
 A plug-in must obey these rules:
 

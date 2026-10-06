@@ -46,6 +46,7 @@ doctest:
     @cabal repl --with-repl=doctest mediacopy3000:domain
     @cabal repl --with-repl=doctest mediacopy3000:application
     @cabal repl --with-repl=doctest mediacopy3000:interface
+    @cabal repl --with-repl=doctest mediacopy3000-credits
 
 # Install the cross-reference checker for `just xref`
 deps-xref:
