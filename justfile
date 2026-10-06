@@ -40,6 +40,12 @@ deps-conformance:
 conformance:
     cabal test conformance-test --test-show-details=direct
 
+# Write plugin-protocol/schema/protocol-1.schema.json again from the Haskell types
+schema:
+    cabal build plugin-protocol-test
+    cabal test plugin-protocol-test --test-options='-p Schema' || true
+    cp plugin-protocol/schema/actual-protocol-1.schema.json plugin-protocol/schema/protocol-1.schema.json
+
 # Run the doctests in the pure libraries' haddocks
 doctest:
     @cabal repl --with-repl=doctest ascmhl

@@ -40,16 +40,22 @@ module MediaCopy.Plugin.Protocol
   , Progress (..)
   , notifyLog
   , LogLine (..)
+
+    -- * Schemas without a type
+  , jobKindSchema
+  , hashAlgoSchema
   ) where
 
 import Data.Aeson
+import Data.Function ((&))
 import Data.Int (Int64)
 import Data.Map.Strict (Map)
 import Data.Text (Text)
 import Data.Vector (Vector)
 import GHC.Generics (Generic, Rep)
 
-import MediaCopy.Plugin.Manifest (Capability)
+import MediaCopy.Plugin.JsonSchema
+import MediaCopy.Plugin.Manifest (Capability, apiMajor)
 
 methodInitialize, methodInspectPlan, methodContribute, methodInspectFile, methodShutdown :: Text
 methodInitialize = "initialize"
@@ -115,7 +121,7 @@ data FileInfo = FileInfo
   deriving (FromJSON, ToJSON) via Wire FileInfo
 
 data Severity = Blocker | Warning
-  deriving stock (Eq, Ord, Show)
+  deriving stock (Bounded, Enum, Eq, Ord, Show)
 
 instance ToJSON Severity where
   toJSON = \case
@@ -226,3 +232,93 @@ data LogLine = LogLine
   }
   deriving stock (Eq, Show, Generic)
   deriving (FromJSON, ToJSON) via Wire LogLine
+
+jobKindSchema :: Value
+jobKindSchema = object ["enum" .= (["offload", "verify", "seal"] :: [Text])]
+
+hashAlgoSchema :: Value
+hashAlgoSchema =
+  object ["enum" .= (["xxh64", "md5", "sha1", "c4"] :: [Text])]
+    & describe "The name of a hash format, as the element name in an ASC MHL manifest."
+
+instance JsonSchema Severity where
+  defName = Just "severity"
+  schema = enumOf @Severity
+
+instance JsonSchema InitializeParams where
+  defName = Just "initializeParams"
+  schema =
+    record @InitializeParams
+      & property "job" (ref "jobKind")
+      & describeProperty "settings" "One value per setting, by key. A setting of kind authors holds an array of authorSlot."
+      & property "entitlement" (object ["type" .= String "null"] & describe "Always null in API 1.0.")
+
+instance JsonSchema InitializeResult where
+  defName = Just "initializeResult"
+  schema = record @InitializeResult & property "api" (object ["const" .= apiMajor])
+
+instance JsonSchema JobInfo where
+  defName = Just "jobInfo"
+  schema =
+    record @JobInfo
+      & property "kind" (ref "jobKind")
+      & property "hashFormat" (ref "hashAlgo")
+
+instance JsonSchema FileInfo where
+  defName = Just "fileInfo"
+  schema = record @FileInfo
+
+instance JsonSchema Finding where
+  defName = Just "finding"
+  schema = record @Finding
+
+instance JsonSchema InspectPlanParams where
+  defName = Just "inspectPlanParams"
+  schema = record @InspectPlanParams
+
+instance JsonSchema InspectPlanResult where
+  defName = Just "inspectPlanResult"
+  schema = record @InspectPlanResult
+
+instance JsonSchema Author where
+  defName = Just "author"
+  schema = record @Author & describe "Each text holds only characters that XML 1.0 allows."
+
+instance JsonSchema FileMetadata where
+  defName = Just "fileMetadata"
+  schema =
+    record @FileMetadata
+      & describeProperty "path" "The path of one of the files of the request."
+      & describeProperty "xml" "XML elements in the namespace of the plug-in, at most 32 levels deep, with only characters that XML 1.0 allows. Comments and processing instructions are removed."
+
+instance JsonSchema ContributeParams where
+  defName = Just "contributeParams"
+  schema = record @ContributeParams
+
+instance JsonSchema ContributeResult where
+  defName = Just "contributeResult"
+  schema = record @ContributeResult
+
+instance JsonSchema HashValue where
+  defName = Just "hashValue"
+  schema = record @HashValue & property "algo" (ref "hashAlgo")
+
+instance JsonSchema InspectFileParams where
+  defName = Just "inspectFileParams"
+  schema = record @InspectFileParams
+
+instance JsonSchema Annotation where
+  defName = Just "annotation"
+  schema = record @Annotation
+
+instance JsonSchema InspectFileResult where
+  defName = Just "inspectFileResult"
+  schema = record @InspectFileResult
+
+instance JsonSchema Progress where
+  defName = Just "progress"
+  schema = record @Progress & property "fraction" (object ["type" .= String "number", "minimum" .= (0 :: Int), "maximum" .= (1 :: Int)])
+
+instance JsonSchema LogLine where
+  defName = Just "logLine"
+  schema = record @LogLine & describeProperty "level" "For example debug, info, warning or error. The event log shows the level before the message."

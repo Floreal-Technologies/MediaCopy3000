@@ -13,3 +13,4 @@ bench/results.csv
 packaging/windows/staged-files.wxs
 
 .ghc.environment.*
+plugin-protocol/schema/actual-*.json
