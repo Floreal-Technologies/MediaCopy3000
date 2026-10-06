@@ -2,10 +2,11 @@ module MediaCopy.Engine
   ( runJob
   , planJob
   , executePlan
+  , executePlanWithPlugins
   , readHistory
   ) where
 
-import Ascmhl.Build (creatorInfo, fileEntry)
+import Ascmhl.Build (creatorInfo, fileEntry, withAuthors)
 import Ascmhl.Hash
 import Ascmhl.Path (RelPath, relToOsPath)
 import Ascmhl.Types
@@ -39,9 +40,11 @@ import System.OsPath (OsPath)
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.JobFormat (JobFormat, formatAlgo)
 import MediaCopy.Domain.Plan
+import MediaCopy.Domain.Plugin (Contributions (..), PluginPlan (..), VerifiedFile (..), pluginBlockers)
 import MediaCopy.Effects.Emit
 import MediaCopy.Effects.FileSystem
 import MediaCopy.Effects.Hasher
+import MediaCopy.Effects.Plugins
 import MediaCopy.Engine.Generation (requireNextGeneration, writeGeneration)
 import MediaCopy.Engine.Plan (planJob)
 import MediaCopy.Engine.Violation (PlanViolation (..), orThrow)
@@ -57,7 +60,7 @@ type Hashing es =
   , Reader JobFormat :> es
   )
 
-type Copying es = (Hashing es, Reader CreatorInfo :> es)
+type Copying es = (Hashing es, Reader CreatorInfo :> es, Reader Contributions :> es, Plugins :> es)
 
 type Pass es = (Copying es, Error PlanViolation :> es)
 
@@ -94,24 +97,36 @@ executePlan
   => Text
   -> JobPlan
   -> Eff es ()
-executePlan hostname plan
+executePlan hostname plan = runPluginsNone (executePlanWithPlugins hostname plan)
+
+executePlanWithPlugins
+  :: (FileSystem :> es, Hasher :> es, Time :> es, Emit :> es, Plugins :> es)
+  => Text
+  -> JobPlan
+  -> Eff es ()
+executePlanWithPlugins hostname plan
   | planBlocked plan =
-      plan
-        & blockers
-        & V.toList
-        & map (\finding -> display finding.code <> ": " <> finding.detail)
+      V.toList (V.map (\finding -> display finding.code <> ": " <> finding.detail) (blockers plan))
+        <> V.toList (V.map display (pluginBlockers plan.plugins))
         & T.intercalate "; "
         & JobFailed
         & emit
   | otherwise = do
       startTime <- currentTime
       result <- trySync (runErrorNoCallStack @PlanViolation (evalState (start startTime) (runPlan hostname plan)))
-      case result of
-        Left e -> emit (JobFailed (T.pack (displayException e)))
-        Right (Left violation) -> emit (JobFailed (display violation))
-        Right (Right ()) -> pure ()
+      endJob $ case result of
+        Left e -> JobFailed (T.pack (displayException e))
+        Right (Left violation) -> JobFailed (display violation)
+        Right (Right terminal) -> terminal
   where
     start t = JobProgress {readSoFar = 0, lastEmit = t}
+
+endJob :: (Emit :> es, Plugins :> es) => JobEvent -> Eff es ()
+endJob terminal = do
+  settle
+  trySync (emit terminal) >>= \case
+    Left e -> emit (JobFailed (T.pack (displayException e)))
+    Right () -> pure ()
 
 advanceProgress :: (Time :> es, Emit :> es, State JobProgress :> es) => Int64 -> Eff es ()
 advanceProgress n = do
@@ -293,16 +308,17 @@ verifyDestinations writes srcHash = go (V.toList writes)
       if actual == srcHash then go ws else pure (HashMismatch (Mismatch srcHash actual))
 
 runPlan
-  :: (FileSystem :> es, Hasher :> es, Time :> es, Emit :> es, Error PlanViolation :> es, State JobProgress :> es)
+  :: (FileSystem :> es, Hasher :> es, Time :> es, Emit :> es, Plugins :> es, Error PlanViolation :> es, State JobProgress :> es)
   => Text
   -> JobPlan
-  -> Eff es ()
+  -> Eff es JobEvent
 runPlan hostname plan = do
   fmt <- maybe (throwError PlanFormatMissing) pure plan.format
   forM_ (planRaceChecks plan) (\check -> requireGeneration (fst check) (snd check))
   emit (Planned (PlannedWork (V.map (\step -> (step.path, step.size)) plan.steps) plan.bytesToRead))
-  let creator = creatorInfo plan.spec.createdAt hostname "mediacopy3000" (T.pack (showVersion version))
-  runReader creator $ runReader fmt $ case plan.execution of
+  let contributions = plan.plugins.contributions
+      creator = withAuthors contributions.authors (creatorInfo plan.spec.createdAt hostname "mediacopy3000" (T.pack (showVersion version)))
+  runReader creator $ runReader contributions $ runReader fmt $ case plan.execution of
     CopyInto copy -> runOffloadPlan plan copy
     RecordAt record -> runGenerationPlan plan record
 
@@ -315,21 +331,24 @@ runOffloadPlan
   :: (Pass es)
   => JobPlan
   -> CopyPass
-  -> Eff es ()
+  -> Eff es JobEvent
 runOffloadPlan plan copy = do
   sealed <- case plan.sealPass of
-    Nothing -> pure (Just PassTally {entries = V.empty, failedPaths = Set.empty})
+    Nothing -> pure (Right PassTally {entries = V.empty, failedPaths = Set.empty})
     Just pass -> runSealPass plan.ignorePatterns copy.source pass
-  forM_ sealed $ \sealTally -> do
-    recorded <- originsForCopy plan copy
-    copied <- runSteps copy.source recorded plan.steps
-    forM_ copy.generations $ \planned -> do
-      emit ManifestWriting
-      makeDirectories (V.map (relToOsPath planned.folder) planned.directories)
-      when (copy.carried > 0) $
-        void (carryHistory copy.source planned.folder >>= orThrow . first (HistoryFaultAt copy.source))
-      writeGeneration planned plan.ignorePatterns copied.entries
-    emit (JobFinished (resultOf (sealTally.failedPaths <> copied.failedPaths)))
+  either pure (copyAfter plan copy) sealed
+
+copyAfter :: (Pass es) => JobPlan -> CopyPass -> PassTally -> Eff es JobEvent
+copyAfter plan copy sealTally = do
+  recorded <- originsForCopy plan copy
+  copied <- runSteps (inspectVerified copy.source) copy.source recorded plan.steps
+  forM_ copy.generations $ \planned -> do
+    emit ManifestWriting
+    makeDirectories (V.map (relToOsPath planned.folder) planned.directories)
+    when (copy.carried > 0) $
+      void (carryHistory copy.source planned.folder >>= orThrow . first (HistoryFaultAt copy.source))
+    writeGeneration planned plan.ignorePatterns copied.entries
+  pure (JobFinished (resultOf (sealTally.failedPaths <> copied.failedPaths)))
 
 originsForCopy
   :: (FileSystem :> es, Emit :> es, Error PlanViolation :> es, Reader JobFormat :> es)
@@ -356,29 +375,27 @@ runSealPass
   => Vector Text
   -> OsPath
   -> SealPass
-  -> Eff es (Maybe PassTally)
+  -> Eff es (Either JobEvent PassTally)
 runSealPass patterns source pass = do
-  tally <- runSteps source Map.empty pass.steps
+  tally <- runSteps (\_ _ -> pure ()) source Map.empty pass.steps
   emit ManifestWriting
   writeGeneration pass.generation patterns tally.entries
   case pass.onFailure of
-    CopyAnyway -> pure (Just tally)
+    CopyAnyway -> pure (Right tally)
     StopBeforeCopy
-      | Set.null tally.failedPaths -> pure (Just tally)
-      | otherwise -> do
-          emit (JobFailed (display SealStopped {failed = Set.size tally.failedPaths, total = V.length pass.steps}))
-          pure Nothing
+      | Set.null tally.failedPaths -> pure (Right tally)
+      | otherwise -> pure (Left (JobFailed (display SealStopped {failed = Set.size tally.failedPaths, total = V.length pass.steps})))
 
 runGenerationPlan
   :: (Pass es)
   => JobPlan
   -> RecordPass
-  -> Eff es ()
+  -> Eff es JobEvent
 runGenerationPlan plan record = do
-  tally <- runSteps record.folder Map.empty plan.steps
+  tally <- runSteps (inspectVerified record.folder) record.folder Map.empty plan.steps
   emit ManifestWriting
   writeGeneration record.generation plan.ignorePatterns tally.entries
-  emit (JobFinished (resultOf tally.failedPaths))
+  pure (JobFinished (resultOf tally.failedPaths))
 
 runStep
   :: (Copying es)
@@ -417,16 +434,30 @@ runStep root recorded step = case step.op of
 
 runSteps
   :: (Copying es)
-  => OsPath
+  => (PlanStep -> FileStepResult -> Eff es ())
+  -> OsPath
   -> Map RelPath Hash
   -> Vector PlanStep
   -> Eff es PassTally
-runSteps root recorded steps =
-  traverse (runStep root recorded) steps <&> \results ->
+runSteps onDone root recorded steps =
+  traverse (\step -> runStep root recorded step >>= \result -> onDone step result >> pure result) steps <&> \results ->
     PassTally
       { entries = V.mapMaybe (.manifestEntry) results
       , failedPaths = Set.fromList [step.path | (step, result) <- zip (V.toList steps) (V.toList results), outcomeFailed result.outcome]
       }
+
+inspectVerified :: (Plugins :> es) => OsPath -> PlanStep -> FileStepResult -> Eff es ()
+inspectVerified root step result = case result.manifestEntry of
+  Just entry
+    | not (outcomeFailed result.outcome) ->
+        fileVerified
+          VerifiedFile
+            { path = step.path
+            , location = maybe (relToOsPath root step.path) (\write -> write.final) (step.writes V.!? 0)
+            , hashes = V.map (\recorded -> recorded.hash) entry.hashes
+            , size = step.size
+            }
+  _ -> pure ()
 
 resultOf :: Set RelPath -> JobResult
 resultOf failed = if Set.null failed then AllOk else WithFailures (Set.size failed)

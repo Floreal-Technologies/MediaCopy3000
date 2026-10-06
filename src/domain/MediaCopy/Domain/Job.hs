@@ -58,6 +58,8 @@ import Data.Vector qualified as V
 import GHC.Generics (Generic)
 import System.OsPath (OsPath, takeFileName, (</>))
 
+import MediaCopy.Domain.Plugin (PluginReport, PluginState, foldPluginReport, noPluginState)
+
 newtype JobId = JobId Int
   deriving stock (Show)
   deriving newtype (Eq, Ord, Enum)
@@ -148,6 +150,7 @@ data JobSpec = JobSpec
   { jobId :: JobId
   , job :: Job
   , createdAt :: UTCTime
+  , pluginFields :: Map Text (Map Text Text)
   }
   deriving stock (Eq, Show)
 
@@ -205,6 +208,7 @@ data JobEvent
   | LogOpened OsPath
   | JobFinished JobResult
   | JobFailed Text
+  | PluginReported PluginReport
   deriving stock (Eq, Show)
 
 instance Display FileStatus where
@@ -239,6 +243,7 @@ instance Display JobEvent where
     JobFinished AllOk -> "finished, all ok"
     JobFinished (WithFailures n) -> "finished, " <> displayBuilder (plural "failure" n)
     JobFailed message -> "failed – " <> displayBuilder message
+    PluginReported report -> displayBuilder report
 
 data SealStopped = SealStopped
   { failed :: Int
@@ -277,6 +282,7 @@ data JobState = JobState
   , lastMovedAt :: UTCTime
   , doing :: Maybe Doing
   , throughput :: Maybe Throughput
+  , plugins :: PluginState
   }
   deriving stock (Eq, Generic, Show)
 
@@ -303,6 +309,7 @@ newJobState spec =
     , lastMovedAt = spec.createdAt
     , doing = Nothing
     , throughput = Nothing
+    , plugins = noPluginState
     }
 
 rateOf :: JobState -> Double
@@ -353,6 +360,7 @@ foldEvent at ev st = case ev of
   LogOpened p -> st {logPath = Just p}
   JobFinished r -> st {phase = Finished r, doing = Nothing}
   JobFailed msg -> st {phase = Failed msg, doing = Nothing}
+  PluginReported report -> st {plugins = foldPluginReport report st.plugins}
 
 outcomeFailed :: FileOutcome -> Bool
 outcomeFailed = \case

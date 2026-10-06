@@ -9,7 +9,7 @@ import Ascmhl.Types
 import Ascmhl.Write (formatMhlTime)
 import Data.Function ((&))
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust, isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Display (display)
@@ -21,6 +21,7 @@ import System.OsPath (takeFileName)
 
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan
+import MediaCopy.Domain.Plugin
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Wording (count, resultText)
 
@@ -29,6 +30,7 @@ renderReport wording st plan mhlHist =
   ( line "MediaCopy 3000 report"
       <> renderBody wording st plan
       <> renderFailures st
+      <> renderPlugins st.plugins
       <> foldMap renderHistory mhlHist
   )
     & TB.toLazyText
@@ -73,6 +75,7 @@ renderPlan plan =
     <> foldMap renderGeneration (plannedGenerations plan)
     <> foldMap renderTarget plan.targets
     <> foldMap renderFinding plan.findings
+    <> renderPluginPlan plan.plugins
 
 renderExistingCopy :: Job -> Builder
 renderExistingCopy = \case
@@ -192,3 +195,40 @@ renderGenerationLine gen =
         <> "  "
         <> plural "failure" gen.failures
     )
+
+renderPluginPlan :: PluginPlan -> Builder
+renderPluginPlan pluginPlan =
+  foldMap (\ref -> field "  plug-in" (ref.name <> " (" <> ref.id <> ")")) pluginPlan.active
+    <> foldMap (\finding -> line ("  " <> display finding.severity <> ": " <> display finding)) pluginPlan.findings
+    <> foldMap (field "  author" . authorText) pluginPlan.contributions.authors
+    <> metadataLine pluginPlan.contributions
+  where
+    metadataLine contributions
+      | Map.null contributions.fileMetadata && isNothing contributions.manifestMetadata = mempty
+      | otherwise =
+          field
+            "  metadata"
+            ( plural "file" (Map.size contributions.fileMetadata)
+                <> (if isJust contributions.manifestMetadata then ", manifest" else "")
+                <> " – "
+                <> T.intercalate ", " (V.toList (V.map (\ref -> ref.name) contributions.contributors))
+            )
+
+authorText :: Author -> Text
+authorText author =
+  author.name
+    <> foldMap (\role -> " (" <> role <> ")") author.role
+    <> foldMap (\email -> " <" <> email <> ">") author.email
+    <> foldMap (" " <>) author.phone
+
+renderPlugins :: PluginState -> Builder
+renderPlugins st
+  | st == noPluginState = mempty
+  | otherwise =
+      "\nPlug-ins:\n"
+        <> foldMap (\finding -> line (T.toUpper (display finding.severity) <> "  " <> display finding)) st.warnings
+        <> foldMap (\(ref, left) -> line ("NOT INSPECTED  " <> ref.name <> "  " <> plural "file" left)) (Map.toList st.notInspected)
+        <> foldMap annotationLines (Map.toList st.annotations)
+  where
+    annotationLines (path, notes) =
+      foldMap (\note -> line ("NOTE  " <> display path <> "  " <> note.plugin.name <> "  " <> note.label <> ": " <> note.value)) notes

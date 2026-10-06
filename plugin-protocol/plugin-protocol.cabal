@@ -1,0 +1,78 @@
+cabal-version: 3.4
+name: plugin-protocol
+version: 0.1.0.0
+synopsis: Plugin format between MC3K and plugins
+description:
+license: BSD-3-Clause
+license-file: LICENSE
+author: Feriel Choutri de Tarlé
+maintainer: feriel@choutri.eu
+category: Network
+build-type: Simple
+extra-source-files: schema/*.json
+tested-with: ghc ==9.14.1
+
+common options
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wpartial-fields
+    -Wredundant-constraints
+    -fhide-source-paths
+    -Wno-unused-do-bind
+    -fshow-hole-constraints
+    -Wno-unticked-promoted-constructors
+    -fwrite-ide-info
+
+  default-extensions:
+    DuplicateRecordFields
+    NoFieldSelectors
+    NoStarIsType
+    OrPatterns
+    OverloadedLabels
+    OverloadedRecordDot
+    OverloadedStrings
+    StrictData
+    TypeFamilies
+    ViewPatterns
+
+  default-language: GHC2024
+
+library
+  import: options
+  hs-source-dirs: src
+  exposed-modules:
+    MediaCopy.Plugin.JsonRpc
+    MediaCopy.Plugin.Manifest
+    MediaCopy.Plugin.Protocol
+
+  build-depends:
+    aeson,
+    base,
+    bytestring,
+    containers,
+    text,
+    vector,
+
+test-suite plugin-protocol-test
+  import: options
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Main.hs
+  other-modules:
+    MediaCopy.Plugin.JsonRpcTest
+    MediaCopy.Plugin.ManifestTest
+    MediaCopy.Plugin.ProtocolTest
+
+  build-depends:
+    aeson,
+    base,
+    containers,
+    plugin-protocol,
+    tasty,
+    tasty-hunit,
+    text,
+    vector,

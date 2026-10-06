@@ -36,6 +36,7 @@ import MediaCopy.Domain.History
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.JobFormat (FormatError (..), JobFormat, settleFormat)
 import MediaCopy.Domain.Plan
+import MediaCopy.Domain.Plugin (noPluginPlan)
 
 data HistoryRule = RequireHistory | AllowFresh
 
@@ -100,6 +101,7 @@ decideOffload spec job facts =
     , findings
     , sealPass = sealing
     , generations = highestGeneration src.chain
+    , plugins = noPluginPlan
     }
   where
     source = job.source
@@ -208,6 +210,7 @@ decideGeneration spec rule facts =
     , findings = generationFindings rule folder facts chain formatResult
     , sealPass = Nothing
     , generations = highestGeneration chain
+    , plugins = noPluginPlan
     }
   where
     folder = jobRoot spec.job

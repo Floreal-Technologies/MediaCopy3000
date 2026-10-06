@@ -57,6 +57,20 @@ disk, and the line reads `Writing the manifest · 25 s`.
 
 ![A job that finished with no failure](images/job-finished.png)
 
+## Plug-ins
+
+![A job with a warning from a plug-in](images/job-plugins.png)
+
+When [plug-ins](plugins.md) take part in a job, the group **Plug-ins** comes after the counters.
+
+| Row | What it means |
+|---|---|
+| `Inspecting: 3 files left` | The inspectors examine the verified files. |
+| A warning | An inspector found a problem, or a plug-in failed. The text starts with the name of the plug-in. |
+| `Credits: 4 files not inspected` | The plug-in failed two times. The files that were left have no notes from it. |
+
+The first warning of each plug-in in a job also shows a notification at the bottom of the window.
+
 ## The file list
 
 ![A job with three failures](images/job-failures.png)

@@ -71,7 +71,7 @@ buildWidgets app applyTheme wording lightSections darkSections dispatch = do
         renderActions current
         renderOffloadDialog offloadDialog current
         renderPlanSheet planSheet current
-        paintPreferences current.appearance
+        paintPreferences current
         renderCell closeConfirm current.closeConfirm
         renderCell toastCell current.toast
   pure Widgets {window, render}

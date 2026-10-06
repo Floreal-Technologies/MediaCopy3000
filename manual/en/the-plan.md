@@ -14,7 +14,7 @@ takes a few seconds.
 
 ## When it is ready
 
-This sheet has four groups:
+This sheet has these groups:
 
 ![A plan that is ready to run](images/plan-ready.png)
 
@@ -65,6 +65,24 @@ A finding is something the plan learned that you must know. Blockers come first,
 - A **warning** does not stop anything. Read it, then decide.
 
 The page [Findings](findings.md) lists every finding and what to do about each one.
+
+A [plug-in](plugins.md) can add findings too. The text of each one starts with the name of the
+plug-in.
+
+### Job Fields
+
+![A plan with a job field and data for the manifest](images/plan-plugins.png)
+
+This group shows the [job fields](plugins.md#job-fields) of each enabled plug-in. Each row has the
+name of the plug-in, then the name of the field. Type a value, then click the apply button. The
+sheet makes the plan again with the value. The group is not on the sheet when no plug-in asks for a
+job field.
+
+### Recorded in the Manifest
+
+This group shows what plug-ins add to each manifest that the job writes. It has one row for each
+author, and one row for the metadata with the names of the plug-ins that add it. The group is not
+on the sheet when no plug-in adds anything.
 
 ## When the plan cannot be made
 

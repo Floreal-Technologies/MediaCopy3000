@@ -8,6 +8,7 @@ module MediaCopy.Interface.Translation
   , WordingFault (..)
   , getTranslation'
   , localeFile
+  , languageCode
   , int
   , str
   ) where

@@ -1,0 +1,839 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://floreal.tech/schemas/mediacopy3000/plugin-protocol-1.schema.json",
+  "title": "MediaCopy 3000 plug-in protocol, API 1.0",
+  "description": "JSON-RPC 2.0 protocol for MC3K and plugins",
+  "x-methods": {
+    "initialize": {
+      "params": {
+        "$ref": "#/$defs/initializeParams"
+      },
+      "result": {
+        "$ref": "#/$defs/initializeResult"
+      }
+    },
+    "inspect/plan": {
+      "params": {
+        "$ref": "#/$defs/inspectPlanParams"
+      },
+      "result": {
+        "$ref": "#/$defs/inspectPlanResult"
+      }
+    },
+    "contribute": {
+      "params": {
+        "$ref": "#/$defs/contributeParams"
+      },
+      "result": {
+        "$ref": "#/$defs/contributeResult"
+      }
+    },
+    "inspect/file": {
+      "params": {
+        "$ref": "#/$defs/inspectFileParams"
+      },
+      "result": {
+        "$ref": "#/$defs/inspectFileResult"
+      }
+    },
+    "export/produce": {
+      "params": {
+        "$ref": "#/$defs/produceParams"
+      },
+      "result": {
+        "$ref": "#/$defs/produceResult"
+      }
+    },
+    "export/deliver": {
+      "params": {
+        "$ref": "#/$defs/deliverParams"
+      },
+      "result": {
+        "$ref": "#/$defs/deliverResult"
+      }
+    },
+    "shutdown": {
+      "params": {
+        "type": "object"
+      },
+      "result": {}
+    }
+  },
+  "x-notifications": {
+    "$/progress": {
+      "$ref": "#/$defs/progress"
+    },
+    "$/log": {
+      "$ref": "#/$defs/logLine"
+    }
+  },
+  "$ref": "#/$defs/manifest",
+  "$defs": {
+    "pluginId": {
+      "type": "string",
+      "pattern": "^(?!.*\\.\\.)[a-z0-9_-][a-z0-9._-]*\\.[a-z0-9._-]*[a-z0-9_-]$",
+      "description": "A reverse domain name in lowercase, for example tech.floreal.c2pa-reader. It holds at least one '.', it does not start or end with '.', and it has no '..'. It is also the name of the folder of the plug-in."
+    },
+    "role": {
+      "enum": [
+        "inspector",
+        "contributor",
+        "producer",
+        "deliverer"
+      ]
+    },
+    "capability": {
+      "enum": [
+        "files.read",
+        "block",
+        "network",
+        "manifest.write"
+      ]
+    },
+    "severity": {
+      "enum": [
+        "blocker",
+        "warning"
+      ]
+    },
+    "field": {
+      "type": "object",
+      "required": [
+        "key",
+        "label",
+        "kind"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "text",
+            "secret",
+            "bool",
+            "choice",
+            "path"
+          ]
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "default": {}
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "version",
+        "api",
+        "executable",
+        "roles"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/pluginId"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "api": {
+          "const": 1
+        },
+        "namespace": {
+          "type": "string",
+          "not": {
+            "enum": [
+              "",
+              "urn:ASC:MHL:v2.0",
+              "urn:ASC:MHL:DIRECTORY:v2.0",
+              "http://www.w3.org/XML/1998/namespace",
+              "http://www.w3.org/2000/xmlns/"
+            ]
+          },
+          "description": "The only XML namespace that a contributor can write. It cannot be empty, a namespace of ASC MHL, or a namespace that XML reserves."
+        },
+        "executable": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(?![/\\\\])(?!.*:)(?!(?:.*[/\\\\])?\\.\\.(?:[/\\\\]|$)).+$"
+          },
+          "description": "Keys: linux-x86_64, linux-aarch64, macos-aarch64, macos-x86_64, windows-x86_64. Values: paths relative to the plug-in folder. A path does not start with '/' or '\\', holds no ':', and has no '..' part. One bad path, for any platform, rejects the plug-in on every platform."
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/role"
+          },
+          "minItems": 1
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/capability"
+          }
+        },
+        "settings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field"
+          }
+        },
+        "jobFields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field"
+          }
+        }
+      }
+    },
+    "jobInfo": {
+      "type": "object",
+      "required": [
+        "kind",
+        "source",
+        "destinations"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "offload",
+            "verify",
+            "seal"
+          ]
+        },
+        "source": {
+          "type": "string"
+        },
+        "destinations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "hashFormat": {
+          "type": "string"
+        }
+      }
+    },
+    "fileInfo": {
+      "type": "object",
+      "required": [
+        "path",
+        "size"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer"
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": [
+        "key",
+        "severity",
+        "title",
+        "detail"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "title": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        }
+      }
+    },
+    "hashValue": {
+      "type": "object",
+      "required": [
+        "algo",
+        "value"
+      ],
+      "properties": {
+        "algo": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "required": [
+        "key",
+        "label",
+        "value"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "author": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "description": "Each text holds only characters that XML 1.0 allows."
+    },
+    "fileMetadata": {
+      "type": "object",
+      "required": [
+        "path",
+        "xml"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "xml": {
+          "type": "string",
+          "description": "XML elements in the namespace of the plug-in, at most 32 levels deep, with only characters that XML 1.0 allows. Comments and processing instructions are removed."
+        }
+      }
+    },
+    "fileOutcome": {
+      "type": "object",
+      "required": [
+        "path",
+        "status",
+        "hashes"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "verified",
+            "hash-mismatch",
+            "missing",
+            "new",
+            "io-error",
+            "replaced"
+          ]
+        },
+        "detail": {
+          "type": "string"
+        },
+        "hashes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/hashValue"
+          }
+        }
+      }
+    },
+    "reportedFinding": {
+      "type": "object",
+      "required": [
+        "origin",
+        "severity",
+        "key",
+        "title",
+        "detail"
+      ],
+      "properties": {
+        "origin": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "key": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        }
+      }
+    },
+    "pluginAnnotation": {
+      "type": "object",
+      "required": [
+        "plugin",
+        "path",
+        "key",
+        "label",
+        "value"
+      ],
+      "properties": {
+        "plugin": {
+          "$ref": "#/$defs/pluginId"
+        },
+        "path": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "required": [
+        "job",
+        "result",
+        "failures",
+        "files",
+        "manifests",
+        "findings",
+        "annotations"
+      ],
+      "properties": {
+        "job": {
+          "$ref": "#/$defs/jobInfo"
+        },
+        "result": {
+          "enum": [
+            "finished",
+            "failed"
+          ]
+        },
+        "failures": {
+          "type": "integer"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fileOutcome"
+          }
+        },
+        "manifests": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reportedFinding"
+          }
+        },
+        "annotations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pluginAnnotation"
+          }
+        },
+        "log": {
+          "type": "string"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "required": [
+        "path",
+        "label",
+        "mediaType"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "An absolute path inside outputDir, or a path relative to outputDir."
+        },
+        "label": {
+          "type": "string"
+        },
+        "mediaType": {
+          "type": "string"
+        }
+      }
+    },
+    "producedFile": {
+      "type": "object",
+      "required": [
+        "plugin",
+        "path",
+        "label",
+        "mediaType"
+      ],
+      "properties": {
+        "plugin": {
+          "$ref": "#/$defs/pluginId"
+        },
+        "path": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "mediaType": {
+          "type": "string"
+        }
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "required": [
+        "target",
+        "delivered",
+        "detail"
+      ],
+      "properties": {
+        "target": {
+          "type": "string"
+        },
+        "delivered": {
+          "type": "boolean"
+        },
+        "detail": {
+          "type": "string"
+        }
+      }
+    },
+    "initializeParams": {
+      "type": "object",
+      "required": [
+        "api",
+        "minor",
+        "app",
+        "locale",
+        "job",
+        "settings",
+        "jobFields",
+        "grants",
+        "entitlement"
+      ],
+      "properties": {
+        "api": {
+          "type": "integer"
+        },
+        "minor": {
+          "type": "integer"
+        },
+        "app": {
+          "type": "string"
+        },
+        "locale": {
+          "type": "string"
+        },
+        "job": {
+          "enum": [
+            "offload",
+            "verify",
+            "seal"
+          ]
+        },
+        "settings": {
+          "type": "object"
+        },
+        "jobFields": {
+          "type": "object"
+        },
+        "grants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/capability"
+          }
+        },
+        "entitlement": {
+          "description": "Always null in API 1.0."
+        }
+      }
+    },
+    "initializeResult": {
+      "type": "object",
+      "required": [
+        "api",
+        "roles"
+      ],
+      "properties": {
+        "api": {
+          "type": "integer"
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/role"
+          }
+        }
+      }
+    },
+    "inspectPlanParams": {
+      "type": "object",
+      "required": [
+        "job",
+        "files",
+        "readBudgetBytes"
+      ],
+      "properties": {
+        "job": {
+          "$ref": "#/$defs/jobInfo"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fileInfo"
+          }
+        },
+        "readBudgetBytes": {
+          "type": "integer"
+        }
+      }
+    },
+    "inspectPlanResult": {
+      "type": "object",
+      "required": [
+        "findings"
+      ],
+      "properties": {
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding"
+          }
+        }
+      }
+    },
+    "contributeParams": {
+      "type": "object",
+      "required": [
+        "job",
+        "files"
+      ],
+      "properties": {
+        "job": {
+          "$ref": "#/$defs/jobInfo"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fileInfo"
+          }
+        }
+      }
+    },
+    "contributeResult": {
+      "type": "object",
+      "required": [
+        "authors",
+        "fileMetadata"
+      ],
+      "properties": {
+        "authors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/author"
+          }
+        },
+        "fileMetadata": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fileMetadata"
+          }
+        },
+        "manifestMetadata": {
+          "type": "string"
+        }
+      }
+    },
+    "inspectFileParams": {
+      "type": "object",
+      "required": [
+        "path",
+        "location",
+        "hashes",
+        "size"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "hashes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/hashValue"
+          }
+        },
+        "size": {
+          "type": "integer"
+        }
+      }
+    },
+    "inspectFileResult": {
+      "type": "object",
+      "required": [
+        "annotations",
+        "warnings"
+      ],
+      "properties": {
+        "annotations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/annotation"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding"
+          }
+        }
+      }
+    },
+    "produceParams": {
+      "type": "object",
+      "required": [
+        "snapshot",
+        "outputDir"
+      ],
+      "properties": {
+        "snapshot": {
+          "$ref": "#/$defs/snapshot"
+        },
+        "outputDir": {
+          "type": "string"
+        }
+      }
+    },
+    "produceResult": {
+      "type": "object",
+      "required": [
+        "files"
+      ],
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifact"
+          }
+        }
+      }
+    },
+    "deliverParams": {
+      "type": "object",
+      "required": [
+        "snapshot",
+        "artifacts"
+      ],
+      "properties": {
+        "snapshot": {
+          "$ref": "#/$defs/snapshot"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/producedFile"
+          }
+        }
+      }
+    },
+    "deliverResult": {
+      "type": "object",
+      "required": [
+        "deliveries"
+      ],
+      "properties": {
+        "deliveries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/delivery"
+          }
+        }
+      }
+    },
+    "progress": {
+      "type": "object",
+      "required": [
+        "message"
+      ],
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "logLine": {
+      "type": "object",
+      "required": [
+        "level",
+        "message"
+      ],
+      "properties": {
+        "level": {
+          "enum": [
+            "debug",
+            "info",
+            "warning",
+            "error"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

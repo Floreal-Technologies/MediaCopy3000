@@ -305,7 +305,7 @@ offloadJob source dests sealFirst =
   OffloadJob {source, destinations = NE.fromList dests, sealFirst, existingCopy = Nothing}
 
 specOf :: Job -> JobSpec
-specOf job = JobSpec {jobId = JobId 1, job, createdAt = epoch}
+specOf job = JobSpec {jobId = JobId 1, job, createdAt = epoch, pluginFields = mempty}
 
 sampleSpec :: JobSpec
 sampleSpec = specOf (Offload (offloadJob [osp|/src|] [[osp|/dst|]] UseHistory))

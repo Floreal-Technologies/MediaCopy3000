@@ -91,3 +91,11 @@ toast-job-finished = { $label }: { $result }
 toast-job-failed = { $label }: failed – { $message }
 dialog-save-plan = Save Plan
 dialog-save-report = Save Report
+
+## Plug-ins
+
+plugin-finding = { $plugin }: { $title }
+plugin-unavailable = plug-in unavailable
+plugin-field-missing = the field { $field } has no valid value
+plugin-bad-output = plug-in sent a bad answer
+toast-plugin = { $label }: { $message }

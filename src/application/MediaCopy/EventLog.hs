@@ -55,16 +55,19 @@ drain h queue =
 
 openLog :: JobSpec -> IO (OsPath, Handle)
 openLog spec = do
-  dir <- getXdgDirectory XdgState [osp|mediacopy3000|] <&> (</> [osp|jobs|])
+  dir <- jobsFolder
   createDirectoryIfMissing True dir
-  let path = dir </> unsafeEncodeUtf (T.unpack (logName spec))
+  let path = dir </> unsafeEncodeUtf (T.unpack (jobStem spec <> ".log"))
   bracketOnError (FileIO.openFile path WriteMode) hClose $ \h -> do
     hSetEncoding h utf8
     hSetBuffering h LineBuffering
     pure (path, h)
 
-logName :: JobSpec -> Text
-logName spec =
+jobsFolder :: IO OsPath
+jobsFolder = getXdgDirectory XdgState [osp|mediacopy3000|] <&> (</> [osp|jobs|])
+
+jobStem :: JobSpec -> Text
+jobStem spec =
   T.pack (formatTime defaultTimeLocale "%Y-%m-%d_%H%M%S" spec.createdAt)
     <> "-"
     <> T.show n
@@ -72,7 +75,6 @@ logName spec =
     <> jobLabel spec.job
     <> "-"
     <> display (jobKind spec.job)
-    <> ".log"
   where
     JobId n = spec.jobId
 

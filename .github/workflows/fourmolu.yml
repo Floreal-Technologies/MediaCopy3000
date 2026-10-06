@@ -25,5 +25,6 @@ jobs:
             app/**/*.hs
             src/**/*.hs
             ascmhl/**/*.hs
+            plugin-protocol/**/*.hs
             tests/**/*.hs
             tests-conformance/**/*.hs

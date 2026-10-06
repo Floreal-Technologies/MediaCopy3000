@@ -22,6 +22,7 @@ module MediaCopy.Domain.Plan
   , PlanExecution (..)
   , JobPlan (..)
   , planBlocked
+  , withPluginPlan
   , blockers
   , planEquivalent
   , plannedGenerations
@@ -46,6 +47,8 @@ import System.OsPath (OsPath)
 import MediaCopy.Domain.History (HistoryError (..))
 import MediaCopy.Domain.Job (FileSize, JobSpec, OnSealFailure)
 import MediaCopy.Domain.JobFormat (FormatError (..), JobFormat)
+import MediaCopy.Domain.Plugin (PluginPlan, pluginBlockers)
+import MediaCopy.Domain.Severity (Severity (..))
 
 -- $setup
 -- >>> import System.OsPath (unsafeEncodeUtf)
@@ -136,16 +139,6 @@ data Target = Target
   , state :: TargetState
   }
   deriving stock (Eq, Show)
-
-data Severity = Blocker | Warning
-  deriving stock (Eq, Ord, Show)
-
--- | >>> map display [Blocker, Warning]
--- ["blocker","warning"]
-instance Display Severity where
-  displayBuilder = \case
-    Blocker -> "blocker"
-    Warning -> "warning"
 
 data FindingCode
   = SourceMissing
@@ -256,14 +249,18 @@ data JobPlan = JobPlan
   , findings :: Vector Finding
   , sealPass :: Maybe SealPass
   , generations :: Int
+  , plugins :: PluginPlan
   }
   deriving stock (Eq, Show)
 
 blockers :: JobPlan -> Vector Finding
 blockers plan = V.filter (\finding -> finding.severity == Blocker) plan.findings
 
+withPluginPlan :: PluginPlan -> JobPlan -> JobPlan
+withPluginPlan pluginPlan plan = plan {plugins = pluginPlan}
+
 planBlocked :: JobPlan -> Bool
-planBlocked plan = not (V.null (blockers plan))
+planBlocked plan = not (V.null (blockers plan)) || not (V.null (pluginBlockers plan.plugins))
 
 planEquivalent :: JobPlan -> JobPlan -> Bool
 planEquivalent a b = blankFree a == blankFree b

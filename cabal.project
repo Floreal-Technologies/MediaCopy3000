@@ -1,6 +1,7 @@
 packages:
   .
   ascmhl/
+  plugin-protocol/
 
 with-compiler: ghc-9.14.1
 

@@ -63,6 +63,32 @@ MISSING Sidecar/A001C001.wav
 
 A verify job or a seal job also gets a `History:` section, with one line for each generation.
 
+## Plug-ins in the report
+
+A job with [plug-ins](plugins.md) adds lines to the `Plan` block:
+
+```
+  plug-in: Content Credentials (tech.floreal.c2pa-reader)
+  warning: Content Credentials: 2 clips carry Content Credentials – A001C001.MP4, A001C002.MP4
+  author: Jane Doe (DIT)
+  metadata: 3 files, manifest – Credits
+```
+
+It also gets a `Plug-ins:` section, with one line for each event:
+
+```
+Plug-ins:
+WARNING  Credits: plug-in unavailable – the plug-in stopped with exit code 4
+NOT INSPECTED  Content Credentials  3 files
+NOTE  A001C001.MP4  Content Credentials  Signer: Sony
+```
+
+| Line | What it is |
+|---|---|
+| `WARNING` | A plug-in failed during the job, or gave a warning about a file. |
+| `NOT INSPECTED` | The files that an inspector did not inspect, after it failed twice. |
+| `NOTE` | A note of a plug-in about one file. |
+
 ## Why the plan is in there
 
 The `Plan` block is the part that makes the report an audit trail. It shows what the application

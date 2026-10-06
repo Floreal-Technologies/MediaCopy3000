@@ -44,6 +44,9 @@ scenes =
   , (still "verify-history" verifyMessages) {expand = True}
   , still "seal-finished" sealMessages
   , (still "preferences" finishedMessages) {action = Just "app.preferences"}
+  , (still "plugins" [CatalogLoaded pluginCatalog]) {action = Just "app.plugins", expand = True}
+  , (still "plan-plugins" pluginPlanMessages) {scroll = True}
+  , still "job-plugins" pluginJobMessages
   , still "close-confirm" (runningMessages <> [EngineEvent first (Progress 8_640_000_000), Ui RequestClose])
   , (still "about" []) {action = Just "app.about"}
   ]
@@ -78,6 +81,32 @@ approved jid job toPlan =
   [RequestPlan job, PlanComputed spec (Right (toPlan spec)), Ui ConfirmPlan]
   where
     spec = specFor jid job
+
+pluginPlanMessages :: List Message
+pluginPlanMessages =
+  [ CatalogLoaded pluginCatalog
+  , RequestPlan (offloadJob UseHistory)
+  , Ui (SetJobField "tech.floreal.credits" "operator" "Sam Roe")
+  , PlanComputed spec (Right (pluginPlan spec))
+  ]
+  where
+    spec = pluginSpec first (offloadJob UseHistory)
+
+pluginJobMessages :: List Message
+pluginJobMessages =
+  [ CatalogLoaded pluginCatalog
+  , RequestPlan (offloadJob UseHistory)
+  , Ui (SetJobField "tech.floreal.credits" "operator" "Sam Roe")
+  , PlanComputed spec (Right (pluginPlan spec))
+  , Ui ConfirmPlan
+  , EngineEvent first (Planned (PlannedWork mediaSourceFiles totalBytes))
+  , EngineEvent first (Progress totalBytes)
+  ]
+    <> map (\index -> statusOf index (Done Ok)) [0 .. V.length mediaSourceFiles - 1]
+    <> map (EngineEvent first . PluginReported) pluginReports
+    <> [EngineEvent first (JobFinished AllOk), Ui DismissToast]
+  where
+    spec = pluginSpec first (offloadJob UseHistory)
 
 offloadDialogMessages :: List Message
 offloadDialogMessages =

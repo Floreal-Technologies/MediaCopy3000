@@ -21,6 +21,9 @@ module MediaCopy.Interface.Wording
   , processKindText
   , targetStateText
   , findingText
+  , pluginFaultText
+  , pluginFindingTexts
+  , pluginToastText
   ) where
 
 import Ascmhl.Path (pathText)
@@ -33,6 +36,7 @@ import System.OsPath (OsPath)
 
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan
+import MediaCopy.Domain.Plugin
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Translation.English qualified as English
 import MediaCopy.Interface.Translation.French qualified as French
@@ -271,3 +275,37 @@ findingText wording code = getTranslation' wording reference []
       ManifestUnreadable -> findingManifestUnreadable
       NoSeal -> findingNoSeal
       AlreadySealed -> findingAlreadySealed
+
+-- |
+-- >>> pluginFaultText (embeddedWording English) (FieldMissing "camera")
+-- "the field camera has no valid value"
+-- >>> pluginFaultText (embeddedWording French) (Unavailable "timed out")
+-- "extension indisponible"
+pluginFaultText :: Wording -> PluginFault -> Text
+pluginFaultText wording = \case
+  Unavailable _ -> getTranslation' wording pluginUnavailable []
+  FieldMissing field -> getTranslation' wording pluginFieldMissing [("field", str field)]
+  BadOutput _ -> getTranslation' wording pluginBadOutput []
+
+-- |
+-- >>> let probe = PluginRef {id = "tech.floreal.probe", name = "Probe"}
+-- >>> pluginFindingTexts (embeddedWording French) PluginFinding {plugin = probe, severity = Blocker, about = Faulted (Unavailable "timed out after 30 s")}
+-- ("Probe : extension indisponible","timed out after 30 s")
+pluginFindingTexts :: Wording -> PluginFinding -> (Text, Text)
+pluginFindingTexts wording finding = (titled title, detail)
+  where
+    titled text = getTranslation' wording pluginFinding [("plugin", str finding.plugin.name), ("title", str text)]
+    (title, detail) = case finding.about of
+      Said says -> (says.title, says.detail)
+      Faulted fault -> (pluginFaultText wording fault, faultReason fault)
+    faultReason = \case
+      Unavailable reason -> reason
+      FieldMissing _ -> ""
+      BadOutput reason -> reason
+
+-- |
+-- >>> let probe = PluginRef {id = "tech.floreal.probe", name = "Probe"}
+-- >>> pluginToastText (embeddedWording English) "A001" PluginFinding {plugin = probe, severity = Warning, about = Faulted (Unavailable "exit code 4")}
+-- "A001: Probe: plug-in unavailable"
+pluginToastText :: Wording -> Text -> PluginFinding -> Text
+pluginToastText wording label finding = getTranslation' wording toastPlugin [("label", str label), ("message", str (fst (pluginFindingTexts wording finding)))]

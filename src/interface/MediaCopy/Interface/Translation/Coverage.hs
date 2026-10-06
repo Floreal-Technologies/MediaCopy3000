@@ -14,6 +14,8 @@ import Data.Vector qualified as V
 import System.OsPath (unsafeEncodeUtf)
 
 import MediaCopy.Domain.Job
+import MediaCopy.Domain.Plan (Severity (..))
+import MediaCopy.Domain.Plugin
 import MediaCopy.Interface.Theme
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Wording
@@ -41,6 +43,9 @@ expectedWording wording =
     <> map (processKindText wording) [minBound ..]
     <> map (targetStateText wording) [minBound ..]
     <> map (findingText wording) [minBound ..]
+    <> map (pluginFaultText wording) [Unavailable "timed out", FieldMissing "camera", BadOutput "not JSON"]
+    <> [pluginToastText wording "A001" PluginFinding {plugin = PluginRef {id = "tech.floreal.probe", name = "Probe"}, severity = Warning, about = Faulted (BadOutput "x")}]
+    <> [fst (pluginFindingTexts wording PluginFinding {plugin = PluginRef {id = "tech.floreal.probe", name = "Probe"}, severity = Warning, about = Said PluginSays {key = "k", title = "t", detail = "d"}})]
     <> map (displayBase wording) [minBound ..]
     <> map (themeRowLabel wording . SystemTheme) [minBound ..]
     <> map (.heading) (V.toList (themeSections wording minBound V.empty))

@@ -98,7 +98,7 @@ jobs:
 
       - name: Test
         run: |
-          cabal test core-test ascmhl-test
+          cabal test core-test ascmhl-test plugin-protocol-test
 
       - name: Set up just
         uses: extractions/setup-just@v4
@@ -175,7 +175,7 @@ jobs:
         run: cabal build exe:mediacopy3000
 
       - name: Test
-        run: cabal test core-test ascmhl-test
+        run: cabal test core-test ascmhl-test plugin-protocol-test
 
       - name: Report what the build resolved
         shell: pwsh

@@ -17,6 +17,7 @@ module MediaCopy.Model
   , hasFinishedJobs
   ) where
 
+import Ascmhl.Path (pathText)
 import Ascmhl.Types (MhlHistory)
 import Data.Function ((&))
 import Data.List (List)
@@ -24,7 +25,10 @@ import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust, isNothing)
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Time (UTCTime)
 import Data.Vector qualified as V
 import GHC.Generics (Generic)
@@ -33,6 +37,8 @@ import System.OsPath (OsPath)
 
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan (JobPlan (..), planBlocked, planEquivalent)
+import MediaCopy.Domain.Plugin (PluginFinding (..), PluginRef (..), PluginReport (..))
+import MediaCopy.Domain.PluginCatalog (CatalogChange (..), PluginCatalog, Setting (..), emptyCatalog)
 import MediaCopy.Interface.Theme
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Translation.Embedded (embeddedWording)
@@ -51,7 +57,7 @@ data OffloadDraft = OffloadDraft
 draftReady :: OffloadDraft -> Bool
 draftReady draft = isJust draft.mediaSource && not (null draft.destinations)
 
-data PlanPhase = Idle | Planning JobSpec | Ready JobPlan | PlanError Text
+data PlanPhase = Idle | Planning JobSpec | Refreshing JobPlan JobSpec | Ready JobPlan | PlanError Text
   deriving stock (Eq, Show)
 
 data JobEntry = JobEntry
@@ -76,6 +82,8 @@ data Model = Model
   , now :: UTCTime
   , closeConfirm :: Bool
   , wording :: Wording
+  , plugins :: PluginCatalog
+  , pluginToasts :: Set (JobId, Text)
   }
   deriving stock (Eq, Generic, Show)
 
@@ -96,6 +104,8 @@ initialModel t desktop =
     , now = t
     , closeConfirm = False
     , wording = embeddedWording English
+    , plugins = emptyCatalog
+    , pluginToasts = Set.empty
     }
 
 data UiMessage
@@ -126,6 +136,11 @@ data UiMessage
   | ConfirmClose
   | CancelClose
   | DismissToast
+  | ChangePlugin CatalogChange
+  | PickPluginPath Text Text
+  | ReloadPlugins
+  | SetJobField Text Text Text
+  | PickJobFieldPath Text Text
   deriving stock (Eq, Show)
 
 data Message
@@ -142,6 +157,7 @@ data Message
   | DesktopBase PaletteMode
   | ShowToast Text
   | WordingReloaded Wording
+  | CatalogLoaded PluginCatalog
   deriving stock (Eq, Show)
 
 data Command
@@ -153,6 +169,9 @@ data Command
   | LoadHistory JobId OsPath
   | WriteFile OsPath Text
   | CloseWindow
+  | OpenFileDialog (OsPath -> Message)
+  | LoadCatalog
+  | ApplyChange CatalogChange
 
 update :: Message -> Model -> (Model, List Command)
 update msg model = case msg of
@@ -168,7 +187,7 @@ update msg model = case msg of
   PlanTargetPicked plan p -> (model, [WriteFile p (renderPlanText plan.spec plan)])
   RequestPlan job ->
     let jid = model.nextId
-        spec = JobSpec {jobId = jid, job, createdAt = model.now}
+        spec = JobSpec {jobId = jid, job, createdAt = model.now, pluginFields = Map.empty}
     in (model {nextId = succ jid, planPhase = Planning spec}, [ComputePlan spec])
   PlanComputed spec outcome -> planComputed spec outcome model
   EngineEvent jid ev
@@ -176,7 +195,7 @@ update msg model = case msg of
     | otherwise -> case Map.lookup jid model.jobs of
         Nothing -> (model, [])
         Just entry ->
-          let model1 = model {jobs = Map.insert jid entry {state = foldEvent model.now ev entry.state} model.jobs}
+          let model1 = pluginToast jid entry.state.spec.job ev model {jobs = Map.insert jid entry {state = foldEvent model.now ev entry.state} model.jobs}
               refresh = historyRefresh jid entry.state.spec.job ev
           in if isTerminalEvent ev
                then
@@ -198,6 +217,7 @@ update msg model = case msg of
     | otherwise -> (model {desktopBase = wanted}, [])
   ShowToast message -> (model {toast = Just message}, [])
   WordingReloaded wording -> (model {wording}, [])
+  CatalogLoaded catalog -> (model & #plugins .~ catalog, [])
 
 updateUi :: UiMessage -> Model -> (Model, List Command)
 updateUi msg model = case msg of
@@ -238,6 +258,11 @@ updateUi msg model = case msg of
   ConfirmClose -> confirmClose model
   CancelClose -> (model {closeConfirm = False}, [])
   DismissToast -> (model {toast = Nothing}, [])
+  ChangePlugin change -> (model, [ApplyChange change])
+  PickPluginPath pluginId key -> (model, [OpenFileDialog (Ui . ChangePlugin . SetSetting pluginId key . SettingText . pathText)])
+  ReloadPlugins -> (model, [LoadCatalog])
+  SetJobField pluginId key value -> setJobField pluginId key value model
+  PickJobFieldPath pluginId key -> (model, [OpenFileDialog (Ui . SetJobField pluginId key . pathText)])
 
 reviewPlan :: Model -> (Model, List Command)
 reviewPlan model
@@ -267,7 +292,8 @@ clearFinished model =
       selected' = case model.selected of
         Just jid | Map.member jid kept -> Just jid
         _ -> Nothing
-  in (model {jobs = kept, selected = selected'}, [])
+      toasts = Set.filter (\(jid, _) -> Map.member jid kept) model.pluginToasts
+  in (model {jobs = kept, selected = selected', pluginToasts = toasts}, [])
 
 confirmClose :: Model -> (Model, List Command)
 confirmClose model =
@@ -338,6 +364,7 @@ planComputed spec outcome model
 awaitingPlan :: Model -> JobSpec -> Bool
 awaitingPlan model spec = case model.planPhase of
   Planning pending -> pending == spec
+  Refreshing _ pending -> pending == spec
   _ -> False
 
 replanIfChanged :: (OffloadJob -> Bool) -> (OffloadJob -> OffloadJob) -> Model -> (Model, List Command)
@@ -349,6 +376,32 @@ replanIfChanged changed apply model = case planningSpec model of
         in (model {planPhase = Planning spec'}, [ComputePlan spec'])
   _ -> (model, [])
 
+pluginToast :: JobId -> Job -> JobEvent -> Model -> Model
+pluginToast jid job ev model = case ev of
+  PluginReported (Warned finding)
+    | not (Set.member (jid, finding.plugin.id) model.pluginToasts) ->
+        model
+          { toast = Just (pluginToastText model.wording (jobLabel job) finding)
+          , pluginToasts = Set.insert (jid, finding.plugin.id) model.pluginToasts
+          }
+  _ -> model
+
+setJobField :: Text -> Text -> Text -> Model -> (Model, List Command)
+setJobField pluginId key value model = case planningSpec model of
+  Just spec
+    | fields /= spec.pluginFields ->
+        let spec' = spec {pluginFields = fields}
+            phase = case model.planPhase of
+              Ready shown -> Refreshing shown spec'
+              Refreshing shown _ -> Refreshing shown spec'
+              _ -> Planning spec'
+        in (model {planPhase = phase}, [ComputePlan spec'])
+    where
+      fields
+        | T.null value = Map.filter (not . Map.null) (Map.adjust (Map.delete key) pluginId spec.pluginFields)
+        | otherwise = Map.insertWith Map.union pluginId (Map.singleton key value) spec.pluginFields
+  _ -> (model, [])
+
 offered :: JobPlan -> PlanPhase -> PlanPhase
 offered fresh phase = case phase of
   Idle -> Ready fresh
@@ -357,6 +410,7 @@ offered fresh phase = case phase of
 planningSpec :: Model -> Maybe JobSpec
 planningSpec model = case model.planPhase of
   Planning spec -> Just spec
+  Refreshing _ spec -> Just spec
   Ready plan -> Just plan.spec
   _ -> Nothing
 

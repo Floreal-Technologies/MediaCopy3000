@@ -48,6 +48,22 @@ et la ligne indique « Écriture du manifeste · 25 s ».
 
 ![Une tâche terminée sans échec](../en/images/job-finished.png)
 
+## Extensions
+
+![Une tâche avec un avertissement d’une extension](../en/images/job-plugins.png)
+
+Quand des [extensions](plugins.md) prennent part à une tâche, le groupe **Extensions** (Plug-ins)
+vient après les compteurs.
+
+| Ligne | Ce qu’elle signifie |
+|---|---|
+| `Inspecting: 3 files left` | Les inspecteurs examinent les fichiers vérifiés. |
+| Un avertissement | Un inspecteur a trouvé un problème, ou une extension a échoué. Le texte commence par le nom de l’extension. |
+| `Credits: 4 files not inspected` | L’extension a échoué deux fois. Les fichiers restants n’ont pas de notes de sa part. |
+
+Le premier avertissement de chaque extension dans une tâche montre aussi une notification en bas de
+la fenêtre.
+
 ## La liste des fichiers
 
 ![Une tâche avec trois échecs](../en/images/job-failures.png)

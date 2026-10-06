@@ -3,7 +3,7 @@ module MediaCopy.Engine.Generation
   , requireNextGeneration
   ) where
 
-import Ascmhl.Build (appendGeneration, dirHash, directoryEntry, newManifest, orderedEntries)
+import Ascmhl.Build (appendGeneration, dirHash, directoryEntry, newManifest, orderedEntries, withFileMetadata, withManifestMetadata)
 import Ascmhl.Hash
 import Ascmhl.Layout
 import Ascmhl.Path (mkRelPath, pathText, relToOsPath)
@@ -12,6 +12,7 @@ import Ascmhl.Write (renderChain, renderManifest)
 import Data.Bifunctor (first)
 import Data.Function ((&))
 import Data.Functor ((<&>))
+import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -27,6 +28,7 @@ import MediaCopy.Domain.DirectoryHash
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.JobFormat (JobFormat, chainFormat)
 import MediaCopy.Domain.Plan (PlannedGeneration (..))
+import MediaCopy.Domain.Plugin (Contributions (..))
 import MediaCopy.Effects.Emit
 import MediaCopy.Effects.FileSystem
 import MediaCopy.Effects.Hasher
@@ -34,7 +36,7 @@ import MediaCopy.Engine.Violation (PlanViolation (..), orThrow)
 import MediaCopy.Mhl.Store
 
 writeGeneration
-  :: (FileSystem :> es, Hasher :> es, Emit :> es, Error PlanViolation :> es, Reader JobFormat :> es, Reader CreatorInfo :> es)
+  :: (FileSystem :> es, Hasher :> es, Emit :> es, Error PlanViolation :> es, Reader JobFormat :> es, Reader CreatorInfo :> es, Reader Contributions :> es)
   => PlannedGeneration
   -> Vector Text
   -> Vector HashEntry
@@ -54,15 +56,18 @@ writeGeneration planned patterns files = do
         mtime <- mtimeOf (relToOsPath planned.folder path)
         pure (directoryEntry path mtime (dirHash t pair.content pair.structure))
   dirRows <- traverse dirEntry rows
-  let entries = orderedEntries files dirRows
+  contributions <- ask @Contributions
+  let described = V.map (\e -> maybe e (\fragment -> withFileMetadata fragment e) (Map.lookup e.path contributions.fileMetadata)) files
+      entries = orderedEntries described dirRows
   orThrow (requirePlaced files entries)
   let manifest =
-        newManifest
-          creator
-          planned.process
-          (dirHash t rootPair.content rootPair.structure)
-          patterns
-          entries
+        maybe id withManifestMetadata contributions.manifestMetadata $
+          newManifest
+            creator
+            planned.process
+            (dirHash t rootPair.content rootPair.structure)
+            patterns
+            entries
       txt = renderManifest manifest
       bytes = TE.encodeUtf8 txt
   writeTextAtomically planned.manifest txt

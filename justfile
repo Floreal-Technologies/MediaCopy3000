@@ -44,6 +44,7 @@ conformance:
 doctest:
     @cabal repl --with-repl=doctest ascmhl
     @cabal repl --with-repl=doctest mediacopy3000:domain
+    @cabal repl --with-repl=doctest mediacopy3000:application
     @cabal repl --with-repl=doctest mediacopy3000:interface
 
 # Install the cross-reference checker for `just xref`
@@ -64,13 +65,14 @@ bench-render files="500":
 
 # Run the code linter (HLint) with automatic refactoring
 lint:
-    find app src ascmhl tests tests-conformance -name "*.hs" | xargs -P {{procs}} -I {} hlint --refactor-options="-i" --refactor {}
+    find app src ascmhl plugin-protocol tests tests-conformance -name "*.hs" | xargs -P {{procs}} -I {} hlint --refactor-options="-i" --refactor {}
 
 # Run the code formatters (cabal-gild, fourmolu)
 style:
     cabal-gild mediacopy3000.cabal
     cabal-gild ascmhl/ascmhl.cabal
-    fourmolu -q --mode inplace app src ascmhl tests tests-conformance
+    cabal-gild plugin-protocol/plugin-protocol.cabal
+    fourmolu -q --mode inplace app src ascmhl plugin-protocol tests tests-conformance
 
 # Start the manual's development server (VitePress)
 docs:
