@@ -42,7 +42,7 @@ Le blocage « la destination contient des fichiers absents de la source » en il
 ## Constats des extensions
 
 Une [extension](plugins.md) peut ajouter ses propres constats. Leur texte vient de l’extension,
-après son nom. Une extension ne peut donner un blocage que si vous lui accordez `block`.
+après son nom. Une extension ne peut donner un blocage que si vous lui accordez `block` et `plan.inspect`.
 
 MediaCopy 3000 donne lui-même trois constats sur les extensions :
 
@@ -52,8 +52,8 @@ MediaCopy 3000 donne lui-même trois constats sur les extensions :
 | `le champ … n’a pas de valeur valide` | Un réglage ou un champ de tâche de l’extension n’a pas de valeur, ou une valeur que l’extension n’accepte pas. | Donnez la valeur dans `plugins.json`, ou avec `--plugin-field`. |
 | `l’extension a envoyé une réponse invalide` | La réponse ne respecte pas le protocole, par exemple des métadonnées hors de l’espace de noms de l’extension. | Prévenez l’auteur de l’extension. Le détail donne la raison. |
 
-Chacun des trois est un blocage pour un contributeur, et pour un inspecteur qui a la capacité
-`block`. Pour toute autre extension, c’est un avertissement.
+Chacun des trois est un blocage pour une extension avec `manifest.write`, et pour une extension avec
+la capacité `block` et `plan.inspect`. Pour toute autre extension, c’est un avertissement.
 
 ## Constatations du rapport
 

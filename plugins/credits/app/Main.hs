@@ -5,9 +5,10 @@ import Data.Aeson qualified as Aeson
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BS8
 import Data.Text qualified as T
+import Data.Vector (Vector)
 import Data.Vector qualified as V
 import MediaCopy.Plugin.JsonRpc
-import MediaCopy.Plugin.Manifest (Role (Contributor), apiMajor)
+import MediaCopy.Plugin.Manifest (apiMajor)
 import MediaCopy.Plugin.Protocol
 import System.IO (hFlush, hSetBinaryMode, isEOF, stdin, stdout)
 
@@ -17,33 +18,33 @@ main :: IO ()
 main = do
   hSetBinaryMode stdin True
   hSetBinaryMode stdout True
-  serve (crewOf mempty mempty)
+  serve V.empty
 
-serve :: Crew -> IO ()
-serve crew =
+serve :: Vector Author -> IO ()
+serve slots =
   isEOF >>= \case
     True -> pure ()
     False ->
       BS8.hGetLine stdin >>= \line -> case decodeRequest (BS8.strip line) of
-        Left _ -> serve crew
+        Left _ -> serve slots
         Right request -> case request.method of
           "initialize" -> withParams request $ \(params :: InitializeParams) -> do
-            reply request (InitializeResult {api = apiMajor, roles = V.singleton Contributor})
-            serve (crewOf params.settings params.jobFields)
+            reply request (InitializeResult {api = apiMajor})
+            serve (slotsOf params.settings)
           "contribute" -> withParams request $ \(_ :: ContributeParams) -> do
-            reply request (contribution crew)
-            serve crew
+            reply request (contribution slots)
+            serve slots
           "shutdown" -> reply request Null
           method -> do
             mapM_ (\requestId -> send (encodeFailure requestId (methodNotFound method))) request.requestId
-            serve crew
+            serve slots
   where
     withParams :: (FromJSON p) => Request -> (p -> IO ()) -> IO ()
     withParams request use = case fromJSON request.params of
       Aeson.Success params -> use params
       Aeson.Error problem -> do
         mapM_ (\requestId -> send (encodeFailure requestId (invalidParams (T.pack problem)))) request.requestId
-        serve crew
+        serve slots
 
 reply :: (ToJSON r) => Request -> r -> IO ()
 reply request result = mapM_ (\requestId -> send (encodeReply requestId (toJSON result))) request.requestId

@@ -38,7 +38,7 @@ newPreferences app window wording lightSections darkSections dispatch = do
   Adw.preferencesGroupAdd group rows.darkRow
   Adw.preferencesPageAdd page group
   Adw.preferencesDialogAdd dialog page
-  plugins <- newPluginsPage dispatch
+  plugins <- newPluginsPage dialog dispatch
   Adw.preferencesDialogAdd dialog plugins.page
   reportChoices rows dispatch
   installPreferencesAction app window dialog "preferences" "general"

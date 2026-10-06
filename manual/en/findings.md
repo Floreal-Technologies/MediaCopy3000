@@ -48,7 +48,7 @@ of the media source. A file it does not know can be lost, so the sheet refuses t
 ## Findings from plug-ins
 
 A [plug-in](plugins.md) can add its own findings. Their text comes from the plug-in, after its name.
-A plug-in can give a blocker only when you grant it `block`.
+A plug-in can give a blocker only when you grant it `block` and `plan.inspect`.
 
 MediaCopy 3000 itself gives three findings about plug-ins:
 
@@ -58,8 +58,8 @@ MediaCopy 3000 itself gives three findings about plug-ins:
 | `the field … has no valid value` | A setting or a job field of the plug-in has no value, or a value that the plug-in does not accept. | Give the value in `plugins.json`, or with `--plugin-field`. |
 | `plug-in sent a bad answer` | The answer does not obey the protocol, for example metadata outside the namespace of the plug-in. | Tell the author of the plug-in. The detail gives the reason. |
 
-Each of the three is a blocker for a contributor, and for an inspector that has the `block` grant.
-For any other plug-in, it is a warning.
+Each of the three is a blocker for a plug-in with `manifest.write`, and for a plug-in with the
+`block` grant and `plan.inspect`. For any other plug-in, it is a warning.
 
 ## Findings in the report
 

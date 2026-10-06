@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export ADW_DISABLE_PORTAL=1
+
 out=${1:-manual/en/images}
 mkdir -p "$out"
 out=$(cd "$out" && pwd)

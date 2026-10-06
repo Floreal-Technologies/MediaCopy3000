@@ -1,46 +1,47 @@
 # Extensions
 
-Une extension ajoute du travail à une tâche. C’est un programme séparé. MediaCopy 3000 le démarre
-pour chaque tâche et lui envoie des messages.
+Une extension ajoute des fonctions à MediaCopy 3000. C’est un programme séparé. MediaCopy 3000 le
+démarre pour chaque tâche et lui envoie des messages. Vous gérez les extensions dans la page
+**Extensions** (Plug-ins) des préférences.
 
 Une extension ne modifie jamais un fichier de médias. Elle n’écrit jamais un manifeste. Elle donne
 des données à MediaCopy 3000, qui les vérifie et les écrit.
 
 ## Ce qu’une extension peut faire
 
-Une extension a un ou plusieurs rôles.
+Une extension demande des capacités. Chaque capacité est une chose que MediaCopy 3000 lui permet de
+faire. Vous accordez ou refusez chacune.
 
-| Rôle | Quand il agit | Ce qu’il fait |
+| Capacité | Quand elle agit | Ce qu’elle fait |
 |---|---|---|
-| Inspecteur | Quand le plan est fait, puis après la vérification de chaque fichier | Ajoute des constats au plan. Ajoute au rapport des notes sur chaque fichier. |
-| Contributeur | Quand le plan est fait | Ajoute des auteurs et des métadonnées à chaque manifeste que la tâche écrit. |
-
-La feuille du plan montre ce que les contributeurs ajoutent, dans le groupe **Enregistré dans le
-manifeste**. Ce que vous approuvez avec **Démarrer** est ce que la tâche écrit. Ce qu’une extension
-trouve après la copie va dans le rapport, jamais dans le manifeste.
+| `files.read` | À tout moment | Lit les fichiers de médias. MediaCopy 3000 n’impose rien. L’extension le promet. |
+| `plan.inspect` | Quand le plan est fait | Ajoute des constats au plan. |
+| `files.inspect` | Après la vérification de chaque fichier | Ajoute au rapport des notes sur chaque fichier vérifié. |
+| `block` | Avec `plan.inspect` | Arrête une tâche par un blocage. Sans elle, un blocage de l’extension devient un avertissement. |
+| `manifest.write` | Quand le plan est fait | Ajoute des auteurs et des métadonnées à chaque manifeste que la tâche écrit. |
 
 ## Installer une extension
 
 Chaque extension a son propre dossier, nommé d’après son identifiant. Le dossier contient un fichier
 `plugin.json` et le programme. L’identifiant est un nom de domaine inversé en minuscules, par
-exemple `tech.floreal.c2pa-reader` : il ne contient que `a` à `z`, des chiffres, `.`, `-` et `_`, au
+exemple `tech.floreal.credits` : il ne contient que `a` à `z`, des chiffres, `.`, `-` et `_`, au
 moins un `.` et aucun `..`, et il ne commence ni ne finit par `.`.
 
 | Système | Dossier pour votre compte | Dossier pour tous les comptes |
 |---|---|---|
-| Linux | `~/.local/share/mediacopy3000/plugins/<id>/` | `mediacopy3000/plugins/<id>/` dans chaque dossier de `XDG_DATA_DIRS`, par exemple `/usr/share` |
-| macOS | `~/Library/Application Support/MediaCopy3000/Plugins/<id>/` | Aucun. Le dossier dans l’application contient les extensions fournies avec MediaCopy 3000 : voir le tableau suivant. |
-| Windows | `%APPDATA%\MediaCopy3000\plugins\<id>\` | `%PROGRAMDATA%\MediaCopy3000\plugins\<id>\` |
-| Flatpak | `~/.var/app/tech.floreal.MediaCopy3000/data/mediacopy3000/plugins/<id>/` | L’extension Flatpak `tech.floreal.MediaCopy3000.Plugin.<id>` |
+| Linux | `~/.local/share/mediacopy3000/plugins/<identifiant>/` | `mediacopy3000/plugins/<identifiant>/` dans chaque dossier de `XDG_DATA_DIRS`, par exemple `/usr/share` |
+| macOS | `~/Library/Application Support/MediaCopy3000/Plugins/<identifiant>/` | Aucun. Le dossier dans l’application contient les extensions fournies avec MediaCopy 3000 : voir le tableau suivant. |
+| Windows | `%APPDATA%\MediaCopy3000\plugins\<identifiant>\` | `%PROGRAMDATA%\MediaCopy3000\plugins\<identifiant>\` |
+| Flatpak | `~/.var/app/tech.floreal.MediaCopy3000/data/mediacopy3000/plugins/<identifiant>/` | L’extension Flatpak `tech.floreal.MediaCopy3000.Plugin.<identifiant>` |
 
 Les extensions fournies avec MediaCopy 3000 sont dans un autre dossier :
 
 | Système | Dossier des extensions fournies avec MediaCopy 3000 |
 |---|---|
-| Linux | `lib/mediacopy3000/plugins/<id>/` à côté du dossier `bin` du programme, par exemple `/usr/lib/mediacopy3000/plugins/<id>/` |
-| macOS | `MediaCopy3000.app/Contents/PlugIns/<id>/` |
-| Windows | `%LOCALAPPDATA%\Programs\MediaCopy 3000\plugins\<id>\` |
-| Flatpak | `/app/lib/mediacopy3000/plugins/<id>/` |
+| Linux | `lib/mediacopy3000/plugins/<identifiant>/` à côté du dossier `bin` du programme, par exemple `/usr/lib/mediacopy3000/plugins/<identifiant>/` |
+| macOS | `MediaCopy3000.app/Contents/PlugIns/<identifiant>/` |
+| Windows | `%LOCALAPPDATA%\Programs\MediaCopy 3000\plugins\<identifiant>\` |
+| Flatpak | `/app/lib/mediacopy3000/plugins/<identifiant>/` |
 
 Si deux dossiers ont le même identifiant, le dossier de votre compte l’emporte, et le dossier des
 extensions fournies avec MediaCopy 3000 perd. Vous pouvez donc installer pour votre compte une
@@ -58,11 +59,12 @@ Une extension que vous installez est désactivée. Elle demande des capacités, 
 à chacune.
 
 1. Ouvrez le menu principal et choisissez **Extensions** (Plug-ins).
-2. Cliquez sur la ligne de l’extension pour la déplier.
-3. Activez **Activée** (Enabled).
-4. Pour chaque capacité, choisissez **Accordée** (Granted) ou **Refusée** (Declined).
-5. Pour chaque réglage, tapez une valeur, puis cliquez sur le bouton d’application à droite de la
-   ligne.
+2. Activez l’interrupteur dans la ligne de l’extension.
+3. Cliquez sur la ligne de l’extension. Sa page s’ouvre.
+4. Dans **Permissions**, pour chaque capacité, choisissez **Accordée** (Granted) ou **Refusée**
+   (Declined). MediaCopy 3000 n’envoie pas les requêtes d’une capacité refusée.
+5. Dans **Settings** (réglages), pour chaque réglage, tapez une valeur, puis cliquez sur le bouton
+   d’application à droite de la ligne.
 
 Pour effacer un réglage, appliquez une valeur vide, ou choisissez **Non défini** (Not set).
 L’extension reçoit alors la valeur par défaut du réglage, s’il en a une. Les lignes montrent les
@@ -95,11 +97,15 @@ ordinateurs.
    ```json
    {
      "plugins": {
-       "tech.floreal.c2pa-reader": {
+       "tech.floreal.credits": {
          "enabled": true,
-         "grants": ["files.read"],
-         "declined": ["block"],
-         "settings": {}
+         "grants": ["manifest.write"],
+         "declined": [],
+         "settings": {
+           "authors": [
+             {"role": "DIT", "name": "Jane Doe", "email": "jane@example.com", "phone": ""}
+           ]
+         }
        }
      }
    }
@@ -117,34 +123,38 @@ MediaCopy 3000 est fourni avec l’extension Credits, `tech.floreal.credits`. El
 noms de l’équipe dans chaque manifeste qu’une tâche écrit. Comme toute extension, elle est
 désactivée tant que vous ne l’activez pas et n’accordez pas `manifest.write`.
 
-Ses réglages et ses champs ont des libellés en anglais. Elle a ces réglages :
+Credits a un seul réglage, **Authors** (auteurs). C’est une liste d’emplacements d’auteur. Chaque
+emplacement a un rôle, et un nom, un e-mail et un téléphone par défaut. Le rôle est obligatoire.
+Les autres valeurs sont facultatives. Les libellés sont en anglais.
 
-| Réglage | Usage |
-|---|---|
-| **Production** | Le nom de la production |
-| **DIT name** | Votre nom. Obligatoire. |
-| **DIT email** | Votre adresse e-mail |
-| **DIT phone** | Votre numéro de téléphone |
+Pour ajouter un emplacement :
 
-Elle demande ces champs de tâche sur la feuille du plan. Les deux sont facultatifs :
+1. Ouvrez la page de **Credits**. Dans **Settings**, dans la ligne **Authors**, cliquez sur **Add**.
+   Une ligne **New author** apparaît.
+2. Dépliez la ligne. Tapez le rôle, par exemple `DIT`, puis cliquez sur le bouton d’application.
+3. Si la même personne occupe cet emplacement sur la plupart des tâches, tapez le nom, l’e-mail et
+   le téléphone.
 
-- **Camera operator** : le cadreur
-- **Second camera operator** : le second cadreur
+Pour retirer un emplacement, dépliez sa ligne et cliquez sur **Remove**.
 
-Le manifeste reçoit alors :
+Pour chaque tâche, la fiche du plan demande le nom, l’e-mail et le téléphone de chaque emplacement,
+dans le groupe **Champs de tâche**. Chaque ligne commence avec la valeur par défaut du réglage. Une
+ligne vide garde la valeur par défaut. Un emplacement sans nom n’est pas écrit.
 
-- Un `author` avec le rôle `DIT`, avec le nom, l’e-mail et le téléphone du DIT.
-- Un `author` avec le rôle `camera operator` pour chaque cadreur.
-- Dans `metadata`, un élément `credits` dans l’espace de noms `https://floreal.tech/ns/credits/1`,
-  avec les éléments `production`, `dit` et `operator`.
+Le manifeste reçoit alors un élément `author` pour chaque emplacement qui a un nom, avec son
+`role`, et avec l’`email` et le `phone` quand ils sont donnés. Credits n’écrit pas de `metadata`.
+
+Credits refuse une tâche quand aucun emplacement n’a de nom.
 
 ## Ce que MediaCopy 3000 impose
 
 | Capacité | Ce qu’elle permet | Ce que MediaCopy 3000 impose |
 |---|---|---|
 | `files.read` | Lire les fichiers de médias | Rien. L’extension le promet. |
-| `block` | Un inspecteur peut arrêter une tâche par un blocage | Sans cette capacité, un blocage de l’extension devient un avertissement. |
-| `manifest.write` | Un contributeur peut ajouter des données au manifeste | Sans cette capacité, MediaCopy 3000 ne demande pas de données à l’extension. |
+| `plan.inspect` | Recevoir `inspect/plan` quand le plan est fait | Sans cette capacité, MediaCopy 3000 n’envoie pas la requête. |
+| `files.inspect` | Recevoir `inspect/file` après chaque fichier vérifié | Sans cette capacité, MediaCopy 3000 n’envoie pas la requête. |
+| `block` | Arrêter une tâche par un blocage | Sans cette capacité, un blocage de l’extension devient un avertissement. |
+| `manifest.write` | Recevoir `contribute` et ajouter des données au manifeste | Sans cette capacité, MediaCopy 3000 ne demande pas de données à l’extension. |
 
 Une extension est un programme qui tourne avec vos droits. MediaCopy 3000 ne peut pas l’empêcher de
 lire un fichier ou d’ouvrir une connexion réseau. N’installez que des extensions d’une source de
@@ -162,13 +172,13 @@ d’application. MediaCopy 3000 établit le plan à nouveau avec la valeur. La p
 Sur la ligne de commande, donnez la valeur avec `--plugin-field` :
 
 ```
-mediacopy3000 plan offload SOURCE DEST --plugin-field tech.floreal.credits.operator="Sam Roe"
+mediacopy3000 plan offload SOURCE DEST --plugin-field tech.floreal.credits:authors.0.name="Sam Roe"
 ```
 
 Si un champ de tâche obligatoire n’a pas de valeur, le plan donne le constat
-`le champ operator n’a pas de valeur valide`. Pour un contributeur, et pour un inspecteur qui a la
-capacité `block`, ce constat est un blocage. Pour toute autre extension, c’est un avertissement, et
-l’extension ne s’exécute pas.
+`le champ authors n’a pas de valeur valide`. Pour une extension avec `manifest.write`, ou avec
+`block` et `plan.inspect`, ce constat est un blocage. Pour toute autre extension, c’est un
+avertissement, et l’extension ne s’exécute pas.
 
 ## Quand une extension échoue
 
@@ -178,10 +188,10 @@ Une tâche longue n’échoue pas tant que l’extension signale son avancement.
 
 | Quand | Extension | Résultat |
 |---|---|---|
-| Le plan est fait | Contributeur, ou inspecteur avec la capacité `block` | Un blocage. **Démarrer** reste grisé. |
+| Le plan est fait | Une extension avec `manifest.write`, ou avec `block` et `plan.inspect` | Un blocage. **Démarrer** reste grisé. |
 | Le plan est fait | Toute autre extension | Un avertissement. L’extension ne prend pas part à la tâche. |
 | Le plan est bloqué | Toutes | Aucune extension ne démarre pour la tâche. |
-| Un fichier est inspecté | Inspecteur | MediaCopy 3000 redémarre l’extension et renvoie le même fichier. Après un second échec, les fichiers restants sont `non inspectés`. Le résultat de la tâche ne change pas. |
+| Un fichier est inspecté | Une extension avec `files.inspect` | MediaCopy 3000 redémarre l’extension et renvoie le même fichier. Après un second échec, les fichiers restants sont `non inspectés`. Le résultat de la tâche ne change pas. |
 
 Quand vous annulez une tâche, MediaCopy 3000 arrête chaque extension, et les programmes qu’elle a
 lancés, en 3 secondes au plus.
@@ -194,9 +204,9 @@ Chaque message est un objet JSON-RPC 2.0 sur une ligne. MediaCopy 3000 envoie ce
 | Méthode | Quand |
 |---|---|
 | `initialize` | En premier. Elle donne les réglages, les champs de tâche et les capacités accordées. |
-| `inspect/plan` | Quand le plan est fait, à un inspecteur |
-| `contribute` | Quand le plan est fait, à un contributeur |
-| `inspect/file` | Après chaque fichier vérifié, à un inspecteur |
+| `inspect/plan` | Quand le plan est fait, à une extension avec `plan.inspect` |
+| `contribute` | Quand le plan est fait, à une extension avec `manifest.write` |
+| `inspect/file` | Après chaque fichier vérifié, à une extension avec `files.inspect` |
 | `shutdown` | En dernier |
 
 L’extension peut envoyer les notifications `$/progress` et `$/log`. Les lignes de sa sortie
@@ -204,6 +214,31 @@ d’erreur vont dans le journal des événements de la tâche.
 
 Le fichier `plugin-protocol/schema/protocol-1.schema.json` du code source décrit chaque message et
 `plugin.json`.
+
+Le fichier `plugin.json` a ces clés :
+
+| Clé | Obligatoire | Sens |
+|---|---|---|
+| `id` | Oui | L’identifiant de l’extension. Les règles d’un identifiant sont dans « Installer une extension ». |
+| `name` | Oui | Le nom que les préférences montrent. |
+| `description` | Oui | Une ou deux phrases courtes qui disent ce que fait l’extension. La page de l’extension la montre sous le nom. Elle ne peut pas être vide. |
+| `version` | Oui | La version de l’extension, en texte. |
+| `api` | Oui | La version majeure de l’API des extensions. Elle doit être `1`. |
+| `executable` | Oui | Un chemin pour chaque système : `linux-x86_64`, `linux-aarch64`, `macos-x86_64`, `macos-aarch64` et `windows-x86_64`. Les règles d’un chemin sont dans la liste qui suit. |
+| `namespace` | Avec `manifest.write` | Le seul espace de noms XML que l’extension écrit. Voir « Écrire dans le manifeste ». |
+| `capabilities` | Oui | Les capacités que l’extension demande : `files.read`, `plan.inspect`, `files.inspect`, `block` ou `manifest.write`. Au moins une parmi `plan.inspect`, `files.inspect` et `manifest.write`. `block` demande `plan.inspect`. `manifest.write` demande `namespace`. |
+| `settings` | Non | Les réglages que les préférences montrent. Chaque réglage a une `key`, un `label`, un `kind`, et peut avoir `required` et `default`. Un `choice` a aussi `options`. |
+| `jobFields` | Non | Les champs que la fiche du plan demande pour chaque tâche. Ils ont la même forme que les réglages. |
+
+Une extension qui enfreint une de ces règles n’est pas valide. Le groupe **Non valides** (Not Valid)
+montre la raison.
+
+Un réglage a un type : `text`, `secret`, `bool`, `choice`, `path` ou `authors`. Le type `authors`
+est une liste d’emplacements d’auteur que l’utilisateur modifie dans les préférences. MediaCopy 3000
+ne l’accepte que dans `settings`, une seule fois, seulement avec `manifest.write`, et sans
+`default`. La fiche du plan demande le nom, l’e-mail et le téléphone de chaque emplacement.
+`initialize` donne la liste fusionnée dans `settings`, sans les emplacements qui n’ont pas de nom.
+L’extension renvoie ces emplacements comme `authors` dans `contribute`.
 
 Le dossier `plugins/credits` du code source contient l’extension Credits. C’est une extension
 complète en Haskell, construite avec la bibliothèque `plugin-protocol`, sous licence BSD 3-Clause.
@@ -234,10 +269,48 @@ Le journal des événements d’une tâche contient au plus 1 024 lignes en atte
 qu’il est plein, les nouvelles lignes sont perdues, celles de MediaCopy 3000 aussi. Une extension
 qui écrit beaucoup de lignes à la fois peut donc faire perdre des lignes au journal.
 
+### Écrire dans le manifeste
+
+Une extension avec `manifest.write` dans `plugin.json` ajoute des données à chaque manifeste que la
+tâche écrit. MediaCopy 3000 demande ces données quand il fait le plan, avec la requête `contribute`.
+Il ne les demande que si vous avez accordé `manifest.write`.
+
+La requête donne la tâche : son type, sa source, ses destinations, son format de hachage si elle en
+a un, et le chemin et la taille de chaque fichier. Les réglages et les champs de tâche viennent
+avant, dans `initialize`.
+
+La réponse a trois parties :
+
+- `authors` : une liste d’auteurs. Chaque auteur a un `name`, et peut avoir un `email`, un `phone`
+  et un `role`.
+- `fileMetadata` : une liste d’entrées. Chaque entrée a le `path` d’un fichier de la tâche et un
+  fragment `xml` pour ce fichier.
+- `manifestMetadata` : un fragment XML pour le manifeste, ou rien.
+
+MediaCopy 3000 vérifie la réponse :
+
+- Chaque texte d’un auteur ne contient que des caractères que XML 1.0 autorise.
+- Chaque fragment est dans l’espace de noms de l’extension. Les règles sur les métadonnées de la
+  liste qui précède s’appliquent.
+- Chaque chemin de `fileMetadata` est un fichier de la tâche.
+
+Si une vérification échoue, ou si l’extension ne répond pas, le plan reçoit un blocage, et
+**Démarrer** reste grisé. Une extension avec `manifest.write` ne prend jamais part à une tâche avec
+des données partielles.
+
+MediaCopy 3000 joint ensuite les réponses de toutes les extensions avec `manifest.write`, dans
+l’ordre de leurs identifiants. Les auteurs se suivent. Les fragments pour un même fichier, ou pour
+le manifeste, se suivent.
+
+La feuille du plan montre le résultat dans le groupe **Enregistré dans le manifeste** : une ligne
+pour chaque auteur, et une ligne pour les métadonnées, avec le nom des extensions qui les ajoutent.
+`mediacopy3000 plan` écrit les mêmes données sur des lignes `author` et `metadata`. Les données du
+plan sont les données que la tâche écrit. La tâche ne redemande rien à l’extension.
+
 ### Tracer les messages
 
 Pour voir chaque message entre MediaCopy 3000 et une extension, activez **Tracer les messages**
-(Trace Messages) dans la ligne de l’extension. La clé `"trace": true` dans `plugins.json` fait la
+(Trace Messages) sur la page de l’extension. La clé `"trace": true` dans `plugins.json` fait la
 même chose.
 
 Chaque démarrage de l’extension crée alors un fichier dans ce dossier :
@@ -248,8 +321,8 @@ Chaque démarrage de l’extension crée alors un fichier dans ce dossier :
 | Windows | `%LOCALAPPDATA%\mediacopy3000\plugin-traces\` |
 | Flatpak | `~/.var/app/tech.floreal.MediaCopy3000/.local/state/mediacopy3000/plugin-traces/` |
 
-Le nom du fichier est `<id>-<date>_<heure>-<étape>-<pid>.jsonl`. L’étape est `plan` ou `run`. Une
-extension que MediaCopy 3000 redémarre reçoit un nouveau fichier.
+Le nom du fichier est `<identifiant>-<date>_<heure>-<étape>-<pid>.jsonl`. L’étape est `plan` ou
+`run`. Une extension que MediaCopy 3000 redémarre reçoit un nouveau fichier.
 
 Chaque ligne du fichier est un objet JSON :
 
@@ -269,8 +342,8 @@ chaque système qu’elle prend en charge. Le nom du dossier est l’identifiant
 
 Pour la version Flatpak de MediaCopy 3000, distribuez l’extension comme une extension Flatpak :
 
-1. Donnez à l’extension Flatpak l’identifiant `tech.floreal.MediaCopy3000.Plugin.<id>`, par exemple
-   `tech.floreal.MediaCopy3000.Plugin.tech.floreal.c2pa-reader`.
+1. Donnez à l’extension Flatpak l’identifiant `tech.floreal.MediaCopy3000.Plugin.<identifiant>`, par exemple
+   `tech.floreal.MediaCopy3000.Plugin.tech.floreal.credits`.
 2. Installez `plugin.json` et le programme à la racine de l’extension Flatpak.
 3. Compilez le programme pour l’environnement d’exécution `org.gnome.Platform`, version 49.
 
@@ -279,6 +352,6 @@ peut commencer par un chiffre. Si l’identifiant de l’extension ne respecte p
 peut pas être le nom d’une extension Flatpak. Distribuez alors le dossier, et dites à la personne de
 le mettre dans le dossier de son compte.
 
-L’extension apparaît dans le bac à sable comme le dossier `/app/share/mediacopy3000/plugins/<id>/`.
-L’environnement d’exécution contient Python 3. Un programme en Python peut donc tourner sans autre
-fichier.
+L’extension apparaît dans le bac à sable comme le dossier
+`/app/share/mediacopy3000/plugins/<identifiant>/`. L’environnement d’exécution contient Python 3. Un
+programme en Python peut donc tourner sans autre fichier.

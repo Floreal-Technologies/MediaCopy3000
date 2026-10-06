@@ -113,17 +113,16 @@ pluginOptions :: Parser PluginOptions
 pluginOptions =
   PluginOptions
     <$> (not <$> switch (long "no-plugins" <> help "Start no plug-in"))
-    <*> (foldr addField Map.empty <$> many (option fieldReader (long "plugin-field" <> metavar "ID.KEY=VALUE" <> help "Give the job field KEY of the plug-in ID")))
+    <*> (foldr addField Map.empty <$> many (option fieldReader (long "plugin-field" <> metavar "ID:KEY=VALUE" <> help "Give the job field KEY of the plug-in ID")))
   where
     addField (pluginId, key, given) = Map.insertWith Map.union pluginId (Map.singleton key given)
 
 fieldReader :: ReadM (Text, Text, Text)
 fieldReader = eitherReader $ \raw ->
-  let (name, given) = T.breakOn "=" (T.pack raw)
-      (pluginPart, key) = T.breakOnEnd "." name
-      pluginId = T.dropEnd 1 pluginPart
-  in if T.null given || T.null key || T.null pluginId
-       then Left ("not ID.KEY=VALUE: " <> raw)
+  let (pluginId, rest) = T.breakOn ":" (T.pack raw)
+      (key, given) = T.breakOn "=" (T.drop 1 rest)
+  in if T.null pluginId || T.null rest || T.null key || T.null given
+       then Left ("not ID:KEY=VALUE: " <> raw)
        else Right (pluginId, key, T.drop 1 given)
 
 offloadParser :: Parser Job

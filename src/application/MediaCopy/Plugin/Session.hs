@@ -20,7 +20,7 @@ import Data.Bifunctor (first)
 import Data.Either (lefts, partitionEithers)
 import Data.Foldable (traverse_)
 import Data.Function ((&))
-import Data.List (sortOn)
+import Data.List (partition, sortOn)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -47,6 +47,9 @@ import MediaCopy.Plugin.Trace (TraceTarget (..))
 import MediaCopy.Plugin.Wire
 import Paths_mediacopy3000 (version)
 
+-- $setup
+-- >>> import Data.Set qualified as Set
+
 data Stage = PlanStage | RunStage
   deriving stock (Eq, Show)
 
@@ -68,7 +71,6 @@ data Session = Session
 data Member = Member
   { ref :: PluginRef
   , ready :: Ready
-  , roles :: Set Role
   , mailbox :: TQueue Work
   , queued :: TVar Int
   , skippedFiles :: TVar Int
@@ -90,10 +92,11 @@ withSession outer stage plan use = do
   let config = outer {report = \report -> foldInto state report >> outer.report report}
       approved = Set.fromList (V.toList (V.map (.id) plan.plugins.active))
       chosen ready = stage == PlanStage || Set.member (pluginRef ready.installed).id approved
-      wanted = config.plugins & V.toList & sortOn (.installed.manifest.id) & filter chosen & filter (neededAt stage)
+      (needed, idle) = partition (neededAt stage . (.granted)) (V.toList config.plugins)
+      wanted = needed & sortOn (.installed.manifest.id) & filter chosen
       present = Set.fromList (map (\ready -> (pluginRef ready.installed).id) (V.toList config.plugins))
       vanished = V.filter (\ref -> not (Set.member ref.id present)) plan.plugins.active
-      unneeded = if stage == PlanStage then config.plugins & V.toList & filter (not . neededAt stage) else []
+      unneeded = if stage == PlanStage then idle else []
   when (stage == RunStage) $
     forM_ vanished (\ref -> config.report (Warned PluginFinding {plugin = ref, severity = Warning, about = Faulted (Unavailable "is no longer installed and enabled")}))
   registry <- newTVarIO []
@@ -116,15 +119,39 @@ foldInto state report = do
   now <- getCurrentTime
   atomically (modifyTVar' state (foldEvent now (PluginReported report)))
 
-neededAt :: Stage -> Ready -> Bool
-neededAt stage ready = any (`Set.member` usefulRoles ready) $ case stage of
-  PlanStage -> [Inspector, Contributor]
-  RunStage -> [Inspector]
+-- |
+-- >>> neededAt PlanStage (Set.fromList [FilesInspect])
+-- True
+-- >>> neededAt RunStage (Set.fromList [PlanInspect, ManifestWrite])
+-- False
+-- >>> neededAt PlanStage (Set.fromList [FilesRead, Block])
+-- False
+neededAt :: Stage -> Set Capability -> Bool
+neededAt stage granted = any (maybe False (`elem` hooks) . hookOf) (Set.toList granted)
+  where
+    hooks = case stage of
+      PlanStage -> [InspectPlan, InspectFile, Contribute]
+      RunStage -> [InspectFile]
 
-usefulRoles :: Ready -> Set Role
-usefulRoles ready =
-  Set.fromList (V.toList ready.installed.manifest.roles)
-    & (\roles -> if Set.member ManifestWrite ready.granted then roles else Set.delete Contributor roles)
+-- |
+-- >>> mayBlock (Set.fromList [Block])
+-- False
+-- >>> mayBlock (Set.fromList [Block, FilesInspect])
+-- False
+-- >>> mayBlock (Set.fromList [Block, PlanInspect])
+-- True
+mayBlock :: Set Capability -> Bool
+mayBlock granted = Set.member Block granted && Set.member PlanInspect granted
+
+-- |
+-- >>> mustHold (Set.fromList [ManifestWrite])
+-- True
+-- >>> mustHold (Set.fromList [PlanInspect])
+-- False
+-- >>> mustHold (Set.fromList [Block, FilesInspect])
+-- False
+mustHold :: Set Capability -> Bool
+mustHold granted = mayBlock granted || Set.member ManifestWrite granted
 
 startAll :: TVar [Async ()] -> SessionConfig -> Stage -> JobPlan -> [Ready] -> IO (Vector Member, Vector PluginFinding)
 startAll registry config stage plan wanted = do
@@ -141,9 +168,11 @@ fieldCheck given stage ready = case fields of
     fault reason = PluginFinding {plugin = pluginRef ready.installed, severity = startSeverity stage ready, about = Faulted reason}
     manifest = ready.installed.manifest
     PluginId pluginId = manifest.id
+    perJob = Map.findWithDefault Map.empty pluginId given
     fields = do
-      settings <- fieldValues manifest.settings ready.settings
-      jobFields <- fieldValues manifest.jobFields (Map.map String (Map.findWithDefault Map.empty pluginId given))
+      stored <- fieldValues manifest.settings ready.settings
+      jobFields <- fieldValues manifest.jobFields (Map.map String perJob)
+      settings <- mergeAuthorSettings manifest.settings perJob stored
       Right (settings, jobFields)
 
 startMember :: TVar [Async ()] -> SessionConfig -> Stage -> JobPlan -> Ready -> IO (Either PluginFinding Member)
@@ -187,12 +216,11 @@ startMember registry config stage plan ready = do
         pure forked
       atomically (readTMVar started) >>= \case
         Left reason -> cancel worker >> pure (Left (fault (Unavailable reason)))
-        Right confirmed ->
+        Right () ->
           pure . Right $
             Member
               { ref
               , ready
-              , roles = effectiveRoles ready confirmed
               , mailbox
               , queued
               , skippedFiles
@@ -208,14 +236,8 @@ stageName = \case
 startSeverity :: Stage -> Ready -> Severity
 startSeverity stage ready
   | stage == RunStage = Warning
-  | Set.member Contributor roles = Blocker
-  | Set.member Inspector roles && Set.member Block ready.granted = Blocker
+  | mustHold ready.granted = Blocker
   | otherwise = Warning
-  where
-    roles = usefulRoles ready
-
-effectiveRoles :: Ready -> Vector Role -> Set Role
-effectiveRoles ready confirmed = Set.intersection (Set.fromList (V.toList confirmed)) (usefulRoles ready)
 
 runWorker
   :: SessionConfig
@@ -226,7 +248,7 @@ runWorker
   -> TVar Int
   -> TVar Int
   -> TVar (Maybe Text)
-  -> TMVar (Either Text (Vector Role))
+  -> TMVar (Either Text ())
   -> IO ()
 runWorker config launch params ref mailbox queued skippedFiles broken started = attempt (1 :: Int)
   where
@@ -250,7 +272,7 @@ runWorker config launch params ref mailbox queued skippedFiles broken started = 
         Right (answer :: P.InitializeResult)
           | answer.api /= apiMajor -> pure (Left ("answered with plug-in API " <> T.show answer.api))
           | otherwise -> do
-              void (atomically (tryPutTMVar started (Right answer.roles)))
+              void (atomically (tryPutTMVar started (Right ())))
               Right <$> serve conn
     serve conn =
       atomically (readTQueue mailbox) >>= \case
@@ -324,21 +346,20 @@ memberPlan :: Session -> Member -> IO (Vector PluginFinding, Maybe Contributions
 memberPlan session member = do
   let job = jobInfo session.plan
       files = fileInfos session.plan
-      mayBlock = Set.member Block member.ready.granted
-      mustHold = mayBlock || Set.member Contributor member.roles
+      granted = member.ready.granted
       fault severity callFault = V.singleton PluginFinding {plugin = member.ref, severity, about = Faulted (faultAbout callFault)}
   inspected <-
-    if Set.member Inspector member.roles
+    if Set.member PlanInspect granted
       then do
         answer <- request member P.methodInspectPlan P.InspectPlanParams {job, files, readBudgetBytes = 1_048_576}
         pure $ case answer of
-          Left callFault -> Left (fault (if mustHold then Blocker else Warning) callFault)
-          Right (result :: P.InspectPlanResult) -> Right (V.map (pluginSaid member.ref mayBlock) result.findings)
+          Left callFault -> Left (fault (if mustHold granted then Blocker else Warning) callFault)
+          Right (result :: P.InspectPlanResult) -> Right (V.map (pluginSaid member.ref (mayBlock granted)) result.findings)
       else pure (Right V.empty)
   case inspected of
     Left findings -> pure (findings, Nothing)
     Right findings
-      | Set.member Contributor member.roles -> do
+      | Set.member ManifestWrite granted -> do
           contributed <- request member P.methodContribute P.ContributeParams {job, files}
           let namespace = fromMaybe "" member.ready.installed.manifest.namespace
               jobFiles = Set.fromList (V.toList (V.map (.path) session.plan.steps))
@@ -365,7 +386,7 @@ queuedFiles :: Session -> STM Int
 queuedFiles session = sum <$> traverse (\member -> readTVar member.queued) (V.toList (inspectors session))
 
 inspectors :: Session -> Vector Member
-inspectors session = V.filter (\member -> Set.member Inspector member.roles) session.members
+inspectors session = V.filter (\member -> Set.member FilesInspect member.ready.granted) session.members
 
 finishInspections :: Session -> IO ()
 finishInspections session = do

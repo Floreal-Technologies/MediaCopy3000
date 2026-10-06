@@ -49,7 +49,7 @@ import Data.Text (Text)
 import Data.Vector (Vector)
 import GHC.Generics (Generic, Rep)
 
-import MediaCopy.Plugin.Manifest (Capability, Role)
+import MediaCopy.Plugin.Manifest (Capability)
 
 methodInitialize, methodInspectPlan, methodContribute, methodInspectFile, methodShutdown :: Text
 methodInitialize = "initialize"
@@ -88,9 +88,12 @@ data InitializeParams = InitializeParams
   deriving stock (Eq, Show, Generic)
   deriving (FromJSON, ToJSON) via Wire InitializeParams
 
+-- |
+-- >>> import Data.Aeson (eitherDecode)
+-- >>> eitherDecode "{\"api\":1,\"roles\":[\"inspector\"]}" :: Either String InitializeResult
+-- Right (InitializeResult {api = 1})
 data InitializeResult = InitializeResult
   { api :: Int
-  , roles :: Vector Role
   }
   deriving stock (Eq, Show, Generic)
   deriving (FromJSON, ToJSON) via Wire InitializeResult

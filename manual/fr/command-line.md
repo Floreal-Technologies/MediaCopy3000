@@ -34,7 +34,7 @@ La commande de plan démarre les [extensions](plugins.md) activées, comme la fe
 | Option | Effet |
 |---|---|
 | `--no-plugins` | Fait le plan sans aucune extension. |
-| `--plugin-field ID.CLÉ=VALEUR` | Donne le champ de tâche `CLÉ` à l’extension `ID`. Répétez l’option pour chaque champ. |
+| `--plugin-field ID:CLÉ=VALEUR` | Donne le champ de tâche `CLÉ` à l’extension `ID`. Répétez l’option pour chaque champ. |
 
 Un blocage d’une extension donne aussi le code de sortie `1`. La commande écrit une ligne sur la
 sortie d’erreur pour chaque extension non valide ou non activée, et pour chaque ligne qu’une

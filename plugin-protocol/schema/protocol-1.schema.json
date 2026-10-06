@@ -74,17 +74,11 @@
       "pattern": "^(?!.*\\.\\.)[a-z0-9_-][a-z0-9._-]*\\.[a-z0-9._-]*[a-z0-9_-]$",
       "description": "A reverse domain name in lowercase, for example tech.floreal.c2pa-reader. It holds at least one '.', it does not start or end with '.', and it has no '..'. It is also the name of the folder of the plug-in."
     },
-    "role": {
-      "enum": [
-        "inspector",
-        "contributor",
-        "producer",
-        "deliverer"
-      ]
-    },
     "capability": {
       "enum": [
         "files.read",
+        "plan.inspect",
+        "files.inspect",
         "block",
         "network",
         "manifest.write"
@@ -95,6 +89,28 @@
         "blocker",
         "warning"
       ]
+    },
+    "authorSlot": {
+      "type": "object",
+      "required": [
+        "role"
+      ],
+      "properties": {
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        }
+      },
+      "description": "One author slot of a setting of kind authors. In plugins.json, name, email and phone are the defaults. In initialize.settings, they are the merged values for the job, and slots with no name are removed."
     },
     "field": {
       "type": "object",
@@ -116,7 +132,8 @@
             "secret",
             "bool",
             "choice",
-            "path"
+            "path",
+            "authors"
           ]
         },
         "options": {
@@ -129,17 +146,18 @@
           "type": "boolean"
         },
         "default": {}
-      }
+      },
+      "description": "A setting or a job field. The kind authors is a closed shape: it is allowed only in settings, only once, only with manifest.write, and without default. Its stored value and its value in initialize are arrays of authorSlot."
     },
     "manifest": {
       "type": "object",
       "required": [
         "id",
         "name",
+        "description",
         "version",
         "api",
-        "executable",
-        "roles"
+        "executable"
       ],
       "properties": {
         "id": {
@@ -147,6 +165,11 @@
         },
         "name": {
           "type": "string"
+        },
+        "description": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "One or two short sentences that tell what the plug-in does. The preferences page shows it under the name."
         },
         "version": {
           "type": "string"
@@ -165,7 +188,7 @@
               "http://www.w3.org/2000/xmlns/"
             ]
           },
-          "description": "The only XML namespace that a contributor can write. It cannot be empty, a namespace of ASC MHL, or a namespace that XML reserves."
+          "description": "The only XML namespace that a plug-in with manifest.write can write. It cannot be empty, a namespace of ASC MHL, or a namespace that XML reserves."
         },
         "executable": {
           "type": "object",
@@ -174,13 +197,6 @@
             "pattern": "^(?![/\\\\])(?!.*:)(?!(?:.*[/\\\\])?\\.\\.(?:[/\\\\]|$)).+$"
           },
           "description": "Keys: linux-x86_64, linux-aarch64, macos-aarch64, macos-x86_64, windows-x86_64. Values: paths relative to the plug-in folder. A path does not start with '/' or '\\', holds no ':', and has no '..' part. One bad path, for any platform, rejects the plug-in on every platform."
-        },
-        "roles": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/role"
-          },
-          "minItems": 1
         },
         "capabilities": {
           "type": "array",
@@ -579,7 +595,8 @@
           ]
         },
         "settings": {
-          "type": "object"
+          "type": "object",
+          "description": "One value per setting, by key. A setting of kind authors holds an array of authorSlot."
         },
         "jobFields": {
           "type": "object"
@@ -598,18 +615,11 @@
     "initializeResult": {
       "type": "object",
       "required": [
-        "api",
-        "roles"
+        "api"
       ],
       "properties": {
         "api": {
           "type": "integer"
-        },
-        "roles": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/role"
-          }
         }
       }
     },

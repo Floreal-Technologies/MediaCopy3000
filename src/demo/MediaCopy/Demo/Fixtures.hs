@@ -30,7 +30,7 @@ module MediaCopy.Demo.Fixtures
 import Ascmhl.Build (chainFromListing, creatorInfo, dirHash, directoryEntry, fileEntry, newManifest, orderedEntries)
 import Ascmhl.Hash (Hash (..), HashAlgo (..))
 import Ascmhl.Path (RelPath, mkRelPath)
-import Ascmhl.Types (Author (..), Chain (..), DirHash, Fragment (..), HashAction (..), Manifest, ManifestEntry, MhlHistory, ProcessKind (..), historyOf)
+import Ascmhl.Types (Author (..), Chain (..), DirHash, HashAction (..), Manifest, ManifestEntry, MhlHistory, ProcessKind (..), historyOf)
 import Data.Int (Int64)
 import Data.List (List, sortOn)
 import Data.List.NonEmpty (NonEmpty (..))
@@ -207,9 +207,11 @@ verifyPlan spec = decideGeneration spec RequireHistory verifyFacts
 sealPlan :: JobSpec -> JobPlan
 sealPlan spec = decideGeneration spec AllowFresh sealFacts
 
-credentials, credits :: PluginRef
-credentials = PluginRef {id = "tech.floreal.c2pa-reader", name = "Content Credentials"}
+credits :: PluginRef
 credits = PluginRef {id = "tech.floreal.credits", name = "Credits"}
+
+demoSlots :: Vector AuthorSlot
+demoSlots = V.fromList [AuthorSlot "DIT" "Jane Doe" "jane@example.com" "", AuthorSlot "Camera operator" "" "" ""]
 
 pluginCatalog :: PluginCatalog
 pluginCatalog =
@@ -217,33 +219,15 @@ pluginCatalog =
     { entries =
         V.fromList
           [ PluginEntry
-              { plugin = credentials
-              , version = "1.0.0"
-              , folder = "/home/you/.local/share/mediacopy3000/plugins/tech.floreal.c2pa-reader"
-              , roles = V.singleton "inspector"
-              , enabled = True
-              , trace = False
-              , capabilities = V.fromList [CapabilityView "files.read" Granted, CapabilityView "block" Declined]
-              , settings = V.empty
-              , jobFields = V.empty
-              , active = True
-              , problem = Nothing
-              }
-          , PluginEntry
               { plugin = credits
-              , version = "1.2.0"
+              , version = "1.0.0"
+              , description = "Puts the names of the crew into each manifest that a job writes."
               , folder = "/home/you/.local/share/mediacopy3000/plugins/tech.floreal.credits"
-              , roles = V.singleton "contributor"
               , enabled = True
               , trace = False
-              , capabilities = V.fromList [CapabilityView "files.read" Granted, CapabilityView "manifest.write" Granted]
-              , settings =
-                  V.fromList
-                    [ FieldView "dit" "DIT name" TextShape True (Value "Jane Doe")
-                    , FieldView "email" "DIT email" TextShape False (Value "jane@example.com")
-                    , FieldView "token" "Signing token" TextShape False NoValue
-                    ]
-              , jobFields = V.singleton (FieldView "operator" "Camera operator" TextShape True NoValue)
+              , capabilities = V.singleton (CapabilityView "manifest.write" Granted)
+              , settings = V.singleton (FieldView "authors" "Authors" AuthorsShape True (AuthorList demoSlots))
+              , jobFields = authorJobFields "authors" demoSlots
               , active = True
               , problem = Nothing
               }
@@ -253,18 +237,18 @@ pluginCatalog =
     }
 
 pluginSpec :: JobId -> Job -> JobSpec
-pluginSpec jid job = JobSpec {jobId = jid, job, createdAt = at, pluginFields = Map.singleton credits.id (Map.singleton "operator" "Sam Roe")}
+pluginSpec jid job = JobSpec {jobId = jid, job, createdAt = at, pluginFields = Map.singleton credits.id (Map.singleton "authors.1.name" "Sam Roe")}
 
 pluginPlan :: JobSpec -> JobPlan
 pluginPlan spec =
   withPluginPlan
     PluginPlan
-      { active = V.fromList [credentials, credits]
-      , findings = V.singleton PluginFinding {plugin = credentials, severity = Warning, about = Said PluginSays {key = "c2pa-present", title = "5 clips carry Content Credentials", detail = "A001C001_260912_R1AB.mov and 4 more"}}
+      { active = V.singleton credits
+      , findings = V.empty
       , contributions =
           Contributions
-            { authors = V.fromList [Author "Jane Doe" (Just "jane@example.com") Nothing (Just "DIT"), Author "Sam Roe" Nothing Nothing (Just "camera operator")]
-            , fileMetadata = Map.fromList [(path, Fragment V.empty) | (path, _) <- V.toList mediaSourceFiles]
+            { authors = V.fromList [Author "Jane Doe" (Just "jane@example.com") Nothing (Just "DIT"), Author "Sam Roe" Nothing Nothing (Just "Camera operator")]
+            , fileMetadata = Map.empty
             , manifestMetadata = Nothing
             , contributors = V.singleton credits
             }
@@ -273,9 +257,7 @@ pluginPlan spec =
 
 pluginReports :: List PluginReport
 pluginReports =
-  [ Annotated (rel "A001C001_260912_R1AB.mov") (V.singleton Annotation {plugin = credentials, key = "signer", label = "Signer", value = "Sony"})
-  , Warned PluginFinding {plugin = credentials, severity = Warning, about = Said PluginSays {key = "c2pa-invalid", title = "1 clip has a credential that does not validate", detail = "A001C004_260912_R1AB.mov"}}
-  ]
+  [Warned PluginFinding {plugin = credits, severity = Warning, about = Faulted (Unavailable "contribute timed out after 30 s")}]
 
 offloadOf :: Job -> OffloadJob
 offloadOf = \case

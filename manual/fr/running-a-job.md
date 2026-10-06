@@ -57,9 +57,9 @@ vient après les compteurs.
 
 | Ligne | Ce qu’elle signifie |
 |---|---|
-| `Inspecting: 3 files left` | Les inspecteurs examinent les fichiers vérifiés. |
-| Un avertissement | Un inspecteur a trouvé un problème, ou une extension a échoué. Le texte commence par le nom de l’extension. |
-| `Credits: 4 files not inspected` | L’extension a échoué deux fois. Les fichiers restants n’ont pas de notes de sa part. |
+| `Inspecting: 3 files left` | Les extensions avec `files.inspect` examinent les fichiers vérifiés. |
+| `Credits: plug-in unavailable` | Une extension a échoué, ou a trouvé un problème. Le texte commence par le nom de l’extension. |
+| `<name>: 4 files not inspected` | Une extension avec `files.inspect` a échoué deux fois. Les fichiers restants n’ont pas de notes de sa part. |
 
 Le premier avertissement de chaque extension dans une tâche montre aussi une notification en bas de
 la fenêtre.

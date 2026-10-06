@@ -138,6 +138,7 @@ data UiMessage
   | DismissToast
   | ChangePlugin CatalogChange
   | PickPluginPath Text Text
+  | OpenPluginFolder Text
   | ReloadPlugins
   | SetJobField Text Text Text
   | PickJobFieldPath Text Text
@@ -172,6 +173,7 @@ data Command
   | OpenFileDialog (OsPath -> Message)
   | LoadCatalog
   | ApplyChange CatalogChange
+  | ShowFolder Text
 
 update :: Message -> Model -> (Model, List Command)
 update msg model = case msg of
@@ -260,6 +262,7 @@ updateUi msg model = case msg of
   DismissToast -> (model {toast = Nothing}, [])
   ChangePlugin change -> (model, [ApplyChange change])
   PickPluginPath pluginId key -> (model, [OpenFileDialog (Ui . ChangePlugin . SetSetting pluginId key . SettingText . pathText)])
+  OpenPluginFolder folder -> (model, [ShowFolder folder])
   ReloadPlugins -> (model, [LoadCatalog])
   SetJobField pluginId key value -> setJobField pluginId key value model
   PickJobFieldPath pluginId key -> (model, [OpenFileDialog (Ui . SetJobField pluginId key . pathText)])
