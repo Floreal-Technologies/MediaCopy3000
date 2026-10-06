@@ -3,9 +3,11 @@ module MediaCopy.Plugin.Process.Native
   , groupOf
   , terminateGroup
   , killGroup
+  , childEnvironment
   ) where
 
 import Control.Exception (IOException, try)
+import Data.List (isPrefixOf)
 import System.Posix.Signals (Signal, sigKILL, sigTERM, signalProcessGroup)
 import System.Posix.Types (CPid)
 import System.Process (ProcessHandle, getPid)
@@ -23,3 +25,12 @@ killGroup _ group = signal sigKILL group
 
 signal :: Signal -> Group -> IO ()
 signal sig (Group leader) = mapM_ (try @IOException . signalProcessGroup sig) leader
+
+-- |
+-- >>> childEnvironment [("PATH", "/bin"), ("LC_ALL", "C"), ("AWS_SECRET_ACCESS_KEY", "x"), ("LD_PRELOAD", "evil.so")]
+-- [("PATH","/bin"),("LC_ALL","C")]
+childEnvironment :: [(String, String)] -> [(String, String)]
+childEnvironment = filter (allowed . fst)
+  where
+    allowed name = name `elem` kept || "LC_" `isPrefixOf` name
+    kept = ["PATH", "HOME", "TMPDIR", "LANG", "TZ", "USER", "LOGNAME"]

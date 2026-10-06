@@ -258,6 +258,15 @@ Une extension doit respecter ces règles :
   par `\`, ne contient pas de `:` et n’a pas de partie `..`. Un seul mauvais chemin, pour n’importe
   quel système, rend l’extension non valide sur tous les systèmes.
 
+MediaCopy 3000 démarre l’extension avec un environnement réduit. Il ne transmet que ces variables
+de votre session. Les autres variables, comme les secrets et les jetons, n’atteignent pas
+l’extension.
+
+| Système | Variables |
+|---|---|
+| Linux, macOS, Flatpak | `PATH`, `HOME`, `TMPDIR`, `LANG`, `LC_*`, `TZ`, `USER`, `LOGNAME` |
+| Windows | `SystemRoot`, `windir`, `SystemDrive`, `Path`, `PATHEXT`, `ComSpec`, `TEMP`, `TMP`, `USERPROFILE`, `HOMEDRIVE`, `HOMEPATH`, `APPDATA`, `LOCALAPPDATA`, `ProgramData`, `USERNAME` |
+
 MediaCopy 3000 remplace par une espace chaque caractère de contrôle et chaque saut de ligne d’un
 texte qui vient d’une extension, comme un titre, un libellé ou une ligne du journal.
 
