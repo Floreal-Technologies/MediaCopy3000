@@ -9,6 +9,7 @@ author: Feriel Choutri de Tarlé
 maintainer: feriel@choutri.eu
 category: Network
 build-type: Simple
+extra-source-files: schema/*.json
 tested-with: ghc ==9.14.1
 
 common options

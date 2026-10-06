@@ -167,6 +167,9 @@ message is one JSON-RPC 2.0 object on one line. MediaCopy 3000 sends these reque
 The plug-in can send the notifications `$/progress` and `$/log`. Lines on its error output go into
 the event log of the job.
 
+The file `plugin-protocol/schema/protocol-1.schema.json` in the source code describes each message
+and `plugin.json`.
+
 A plug-in must obey these rules:
 
 - It stops when its standard input closes.

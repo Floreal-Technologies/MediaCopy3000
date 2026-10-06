@@ -175,6 +175,9 @@ Chaque message est un objet JSON-RPC 2.0 sur une ligne. MediaCopy 3000 envoie ce
 L’extension peut envoyer les notifications `$/progress` et `$/log`. Les lignes de sa sortie
 d’erreur vont dans le journal des événements de la tâche.
 
+Le fichier `plugin-protocol/schema/protocol-1.schema.json` du code source décrit chaque message et
+`plugin.json`.
+
 Une extension doit respecter ces règles :
 
 - Elle s’arrête quand son entrée standard se ferme.
