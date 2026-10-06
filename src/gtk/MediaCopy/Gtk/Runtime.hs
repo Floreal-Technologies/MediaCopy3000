@@ -187,6 +187,7 @@ runCommand runtime = \case
   OpenFileDialog toMessage -> openFileDialog runtime toMessage
   LoadCatalog -> catalogWorker runtime
   ApplyChange change -> changeWorker runtime change
+  ShowFolder folder -> showFolder runtime folder
 
 installCloseRequest :: Adw.ApplicationWindow -> (Message -> IO ()) -> IO ()
 installCloseRequest window dispatchNow =
@@ -223,6 +224,13 @@ openFileDialog runtime toMessage = do
   dialog <- new Gtk.FileDialog [#title := "Choose a File"]
   Gtk.fileDialogOpen dialog (Just runtime.widgets.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
     toasting runtime (sendPicked runtime toMessage (Gtk.fileDialogOpenFinish dialog result))
+
+showFolder :: Runtime -> Text -> IO ()
+showFolder runtime folder = do
+  file <- Gio.fileNewForPath (T.unpack folder)
+  launcher <- Gtk.fileLauncherNew (Just file)
+  Gtk.fileLauncherLaunch launcher (Just runtime.widgets.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
+    toasting runtime (Gtk.fileLauncherLaunchFinish launcher result)
 
 catalogWorker :: Runtime -> IO ()
 catalogWorker runtime = void $ async (withMVar runtime.catalogLock (const (reloadCatalog runtime)))

@@ -18,6 +18,8 @@ If a release of MediaCopy 3000 also holds Credits, the folder for your account w
 
 ## Install
 
+On Linux and macOS, `just install-credits` does the steps below. On Windows, do them by hand.
+
 Do these steps from the root of the repository.
 
 1. Build the program:
@@ -58,11 +60,12 @@ than `tech.floreal.credits`, and no file at `bin/credits`.
 
 A plug-in that you install is off.
 
-1. Click the row **Credits** to expand it.
-2. Turn on **Enabled**.
-3. For the capability `manifest.write`, select **Granted**.
-4. Type a value for **DIT name**, then click the apply button. This setting is required.
+1. Turn on the switch in the row **Credits**.
+2. Click the row **Credits**. Its page opens.
+3. In **Permissions**, for the capability `manifest.write`, select **Granted**.
+4. In **Settings**, in the row **Authors**, click **Add**. Expand the row **New author**, type a role,
+   then click the apply button. Credits needs at least one author with a name for a job.
 5. If you installed the plug-in while the preferences were open, click **Look Again**.
 
-The chapter *Plug-ins* of the manual, in `manual/en/plugins.md`, describes the settings, the job
-fields, and the data that Credits puts into the manifest.
+The chapter *Plug-ins* of the manual, in `manual/en/plugins.md`, describes the setting **Authors**,
+the job fields, and the `author` elements that Credits puts into the manifest.

@@ -31,10 +31,12 @@ import MediaCopy.Domain.PluginCatalog
 import MediaCopy.Effects.FileSystem (defaultChunkSize, runFileSystemIO, writeTextAtomically)
 import MediaCopy.Plugin.Discovery
 import MediaCopy.Plugin.Grants
-import MediaCopy.Plugin.Wire (fieldValues)
+import MediaCopy.Plugin.Wire (fieldValues, slotsJson, slotsOf)
 
 -- $setup
 -- >>> import Data.Aeson (Value (..), object, (.=))
+-- >>> import Data.Text (Text)
+-- >>> import Data.Vector qualified as V
 
 loadCatalog :: IO PluginCatalog
 loadCatalog = do
@@ -53,13 +55,13 @@ entryOf grantMap installed =
   PluginEntry
     { plugin = PluginRef {id = pluginId, name = manifest.name}
     , version = manifest.version
+    , description = manifest.description
     , folder = pathText installed.folder
-    , roles = V.map roleName manifest.roles
     , enabled
     , trace = maybe False (.trace) grant
     , capabilities = V.map (\capability -> CapabilityView {name = capabilityName capability, answer = answerOf capability}) manifest.capabilities
-    , settings = V.map (settingView stored) manifest.settings
-    , jobFields = V.map (\field -> viewOf field NoValue) manifest.jobFields
+    , settings
+    , jobFields = V.map (settingView Map.empty) manifest.jobFields <> V.concatMap (\view -> authorJobFields view.key (authorSlots view.value)) settings
     , active = isRight activated
     , problem = if enabled then inactive <|> unset else Nothing
     }
@@ -74,13 +76,16 @@ entryOf grantMap installed =
         | Set.member capability g.declined -> Declined
       _ -> Unanswered
     stored = maybe Map.empty (.settings) grant
+    settings = V.map (settingView stored) manifest.settings
     activated = activate grantMap installed
     inactive = either (\entry -> Just entry.reason) (const Nothing) activated
     labelOf key = maybe key (.label) (V.find (\field -> field.key == key) manifest.settings)
     unset = either (\key -> Just ("needs a valid value for " <> labelOf key)) (const Nothing) (fieldValues manifest.settings stored)
 
 settingView :: Map.Map Text Value -> Field -> FieldView
-settingView stored field = viewOf field (maybe NoValue (Value . valueText) (Map.lookup field.key stored <|> field.defaultValue))
+settingView stored field = viewOf field $ case field.kind of
+  AuthorsField -> maybe NoValue AuthorList (Map.lookup field.key stored >>= slotsOf)
+  _ -> maybe NoValue (Value . valueText) (Map.lookup field.key stored <|> field.defaultValue)
 
 viewOf :: Field -> FieldValue -> FieldView
 viewOf field value = FieldView {key = field.key, label = field.label, shape = shapeOf field.kind, required = field.required, value}
@@ -92,6 +97,7 @@ shapeOf = \case
   BoolField -> BoolShape
   ChoiceField choices -> ChoiceShape choices
   PathField -> PathShape
+  AuthorsField -> AuthorsShape
 
 valueText :: Value -> Text
 valueText = \case
@@ -129,6 +135,8 @@ applyChange change = do
 -- Right (Object (fromList [("plugins",Object (fromList [("tech.floreal.probe",Object (fromList [("enabled",Bool True),("trace",Bool True)]))]))]))
 -- >>> editGrants (SetSetting "tech.floreal.probe" "offline" (SettingBool True)) (Array mempty)
 -- Left "is not a JSON object"
+-- >>> editGrants (SetSetting "tech.floreal.credits" "authors" (SettingAuthors (V.singleton (AuthorSlot "DIT" "Jane Doe" "" "")))) (object [])
+-- Right (Object (fromList [("plugins",Object (fromList [("tech.floreal.credits",Object (fromList [("settings",Object (fromList [("authors",Array [Object (fromList [("email",String ""),("name",String "Jane Doe"),("phone",String ""),("role",String "DIT")])])]))]))]))]))
 editGrants :: CatalogChange -> Value -> Either Text Value
 editGrants change = \case
   Object root -> do
@@ -162,6 +170,7 @@ editGrants change = \case
             json = case setting of
               SettingText text -> String text
               SettingBool flag -> Bool flag
+              SettingAuthors slots -> slotsJson slots
         in KeyMap.insert "settings" (Object (KeyMap.insert (Key.fromText key) json settings)) entry
       ClearSetting _ key ->
         let settings = fromRight KeyMap.empty (objectAt "settings" entry)

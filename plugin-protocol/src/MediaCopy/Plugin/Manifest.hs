@@ -4,11 +4,11 @@ module MediaCopy.Plugin.Manifest
   , PluginId (..)
   , validateManifest
 
-    -- * Roles and capabilities
-  , Role (..)
-  , roleName
+    -- * Capabilities
   , Capability (..)
   , capabilityName
+  , Hook (..)
+  , hookOf
 
     -- * Settings and job fields
   , Field (..)
@@ -30,7 +30,7 @@ import Data.Foldable (for_)
 import Data.List (List, nub)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe, isNothing)
+import Data.Maybe (fromMaybe, isJust, isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Vector (Vector)
@@ -41,31 +41,30 @@ newtype PluginId = PluginId Text
   deriving stock (Show)
   deriving newtype (Eq, Ord, FromJSON, ToJSON, FromJSONKey, ToJSONKey)
 
-data Role = Inspector | Contributor
-  deriving stock (Bounded, Enum, Eq, Ord, Show)
-
-roleName :: Role -> Text
-roleName = \case
-  Inspector -> "inspector"
-  Contributor -> "contributor"
-
-instance ToJSON Role where
-  toJSON role = String (roleName role)
-
-instance FromJSON Role where
-  parseJSON = withText "role" (named "role" roleName)
-
-data Capability = FilesRead | Block | ManifestWrite
+data Capability = FilesRead | PlanInspect | FilesInspect | Block | ManifestWrite
   deriving stock (Bounded, Enum, Eq, Ord, Show)
 
 capabilityName :: Capability -> Text
 capabilityName = \case
   FilesRead -> "files.read"
+  PlanInspect -> "plan.inspect"
+  FilesInspect -> "files.inspect"
   Block -> "block"
   ManifestWrite -> "manifest.write"
 
 instance ToJSON Capability where
   toJSON capability = String (capabilityName capability)
+
+data Hook = InspectPlan | InspectFile | Contribute
+  deriving stock (Eq, Show)
+
+hookOf :: Capability -> Maybe Hook
+hookOf = \case
+  PlanInspect -> Just InspectPlan
+  FilesInspect -> Just InspectFile
+  ManifestWrite -> Just Contribute
+  FilesRead -> Nothing
+  Block -> Nothing
 
 instance FromJSON Capability where
   parseJSON = withText "capability" (named "capability" capabilityName)
@@ -75,7 +74,7 @@ named what nameOf found = case lookup found [(nameOf value, value) | value <- [m
   Just value -> pure value
   Nothing -> fail ("unknown " <> what <> " " <> show found)
 
-data FieldKind = TextField | SecretField | BoolField | ChoiceField (Vector Text) | PathField
+data FieldKind = TextField | SecretField | BoolField | ChoiceField (Vector Text) | PathField | AuthorsField
   deriving stock (Eq, Show)
 
 data Field = Field
@@ -98,6 +97,7 @@ instance FromJSON Field where
       "bool" -> pure BoolField
       "choice" -> ChoiceField <$> o .: "options"
       "path" -> pure PathField
+      "authors" -> pure AuthorsField
       other -> fail ("unknown field kind " <> show other)
     required <- fromMaybe False <$> o .:? "required"
     defaultValue <- o .:? "default"
@@ -120,15 +120,16 @@ instance ToJSON Field where
         BoolField -> ("bool", [])
         ChoiceField choices -> ("choice", ["options" .= choices])
         PathField -> ("path", [])
+        AuthorsField -> ("authors", [])
 
 data PluginManifest = PluginManifest
   { id :: PluginId
   , name :: Text
+  , description :: Text
   , version :: Text
   , api :: Int
   , namespace :: Maybe Text
   , executable :: Map Text FilePath
-  , roles :: Vector Role
   , capabilities :: Vector Capability
   , settings :: Vector Field
   , jobFields :: Vector Field
@@ -139,25 +140,25 @@ instance FromJSON PluginManifest where
   parseJSON = withObject "plugin.json" $ \o -> do
     pluginId <- o .: "id"
     name <- o .: "name"
+    description <- o .: "description"
     version <- o .: "version"
     api <- o .: "api"
     namespace <- o .:? "namespace"
     executable <- o .: "executable"
-    roles <- o .: "roles"
     capabilities <- fromMaybe V.empty <$> o .:? "capabilities"
     settings <- fromMaybe V.empty <$> o .:? "settings"
     jobFields <- fromMaybe V.empty <$> o .:? "jobFields"
-    pure PluginManifest {id = pluginId, name, version, api, namespace, executable, roles, capabilities, settings, jobFields}
+    pure PluginManifest {id = pluginId, name, description, version, api, namespace, executable, capabilities, settings, jobFields}
 
 instance ToJSON PluginManifest where
   toJSON m =
     object $
       [ "id" .= m.id
       , "name" .= m.name
+      , "description" .= m.description
       , "version" .= m.version
       , "api" .= m.api
       , "executable" .= m.executable
-      , "roles" .= m.roles
       , "capabilities" .= m.capabilities
       , "settings" .= m.settings
       , "jobFields" .= m.jobFields
@@ -173,28 +174,32 @@ apiMinor = 0
 validateManifest :: PluginManifest -> Either Text PluginManifest
 validateManifest m = do
   let PluginId raw = m.id
+      declares capability = V.elem capability m.capabilities
   unless (validId raw) (Left ("has the id " <> T.show raw <> ", which is not a reverse domain name"))
+  when (T.null (T.strip m.description)) (Left "has a blank description")
   when (m.api /= apiMajor) $
     Left ("needs plug-in API " <> T.show m.api <> ", and this MediaCopy 3000 speaks API " <> T.show apiMajor)
-  when (V.null m.roles) (Left "declares no role")
+  unless (V.any (isJust . hookOf) m.capabilities) (Left "declares no capability that MediaCopy 3000 calls")
   for_ (Map.toList m.executable) $ \(platform, path) ->
     unless (insideFolder (T.pack path)) $
       Left ("names the executable " <> T.show path <> " for " <> T.show platform <> ", which is not inside the plug-in folder")
-  for_ m.capabilities $ \capability -> case allowedFor capability of
-    Just role
-      | role `notElem` m.roles ->
-          Left ("declares " <> capabilityName capability <> ", which only " <> article role <> " can have")
-    _ -> Right ()
-  when (Contributor `elem` m.roles && ManifestWrite `notElem` m.capabilities) $
-    Left "is a contributor, but does not declare manifest.write"
-  when (Contributor `elem` m.roles && isNothing m.namespace) $
-    Left "is a contributor, but declares no namespace"
+  when (declares Block && not (declares PlanInspect)) (Left "declares block, but not plan.inspect")
+  when (declares ManifestWrite && isNothing m.namespace) (Left "declares manifest.write, but no namespace")
   for_ m.namespace $ \ns ->
     when (ns `elem` reservedNamespaces) $
       Left ("declares the namespace " <> T.show ns <> ", which is reserved")
   for_ [("settings", m.settings), ("jobFields", m.jobFields)] $ \(group, fields) -> do
     let keys = V.toList (V.map (.key) fields)
     when (length (nub keys) /= length keys) (Left ("repeats a key in " <> group))
+  let authorsIn fields = V.filter (\field -> field.kind == AuthorsField) fields
+  for_ (authorsIn m.jobFields) $ \field ->
+    Left ("declares the job field " <> T.show field.key <> " of kind authors, which only a setting can be")
+  when (V.length (authorsIn m.settings) > 1) (Left "declares more than one setting of kind authors")
+  for_ (authorsIn m.settings) $ \field -> do
+    unless (declares ManifestWrite) $
+      Left ("declares the setting " <> T.show field.key <> " of kind authors, which needs manifest.write")
+    unless (isNothing field.defaultValue) $
+      Left ("declares a default for the setting " <> T.show field.key <> " of kind authors")
   Right m
 
 reservedNamespaces :: List Text
@@ -205,17 +210,6 @@ reservedNamespaces =
   , "http://www.w3.org/XML/1998/namespace"
   , "http://www.w3.org/2000/xmlns/"
   ]
-
-allowedFor :: Capability -> Maybe Role
-allowedFor = \case
-  FilesRead -> Nothing
-  Block -> Just Inspector
-  ManifestWrite -> Just Contributor
-
-article :: Role -> Text
-article = \case
-  Inspector -> "an inspector"
-  Contributor -> "a contributor"
 
 validId :: Text -> Bool
 validId raw =

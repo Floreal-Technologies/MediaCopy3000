@@ -32,7 +32,7 @@ The plan command starts the enabled [plug-ins](plugins.md), as the window does.
 | Option | What it does |
 |---|---|
 | `--no-plugins` | Makes the plan with no plug-in. |
-| `--plugin-field ID.KEY=VALUE` | Gives the job field `KEY` to the plug-in `ID`. Give the option once for each field. |
+| `--plugin-field ID:KEY=VALUE` | Gives the job field `KEY` to the plug-in `ID`. Give the option once for each field. |
 
 A blocker from a plug-in also gives the exit code `1`. The command writes a line on the error output
 for each plug-in that is not valid or not enabled, and for each line that a plug-in writes on its

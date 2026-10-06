@@ -31,7 +31,7 @@ import MediaCopy.Plugin.Discovery (Installed (..))
 -- >>> import Data.Set qualified as Set
 -- >>> import Data.Vector qualified as V
 -- >>> import System.OsPath (unsafeEncodeUtf)
--- >>> let manifest = PluginManifest {id = PluginId "tech.floreal.probe", name = "Probe", version = "1.0.0", api = 1, namespace = Nothing, executable = Map.empty, roles = V.singleton Inspector, capabilities = V.fromList [FilesRead, Block], settings = V.empty, jobFields = V.empty}
+-- >>> let manifest = PluginManifest {id = PluginId "tech.floreal.probe", name = "Probe", description = "Probes the plan.", version = "1.0.0", api = 1, namespace = Nothing, executable = Map.empty, capabilities = V.fromList [FilesRead, PlanInspect, Block], settings = V.empty, jobFields = V.empty}
 -- >>> let probe = Installed {folder = unsafeEncodeUtf "/plugins/tech.floreal.probe", manifest, executable = unsafeEncodeUtf "/plugins/tech.floreal.probe/probe"}
 -- >>> let reason = either (.reason) (const "active")
 
@@ -44,6 +44,10 @@ data Grant = Grant
   }
   deriving stock (Eq, Show)
 
+-- |
+-- >>> import Data.Aeson (eitherDecode)
+-- >>> eitherDecode "{\"enabled\":true,\"roles\":{\"inspector\":true},\"grants\":[\"plan.inspect\",\"old.thing\"]}" :: Either String Grant
+-- Right (Grant {enabled = True, trace = False, grants = fromList [PlanInspect], declined = fromList [], settings = fromList []})
 instance FromJSON Grant where
   parseJSON = withObject "grant" $ \o -> do
     enabled <- fromMaybe False <$> o .:? "enabled"
@@ -99,8 +103,8 @@ data Inactive = Inactive
 -- >>> reason (activate Map.empty probe)
 -- "is not enabled"
 -- >>> reason (activate (Map.singleton (PluginId "tech.floreal.probe") Grant {enabled = True, trace = False, grants = Set.singleton FilesRead, declined = Set.empty, settings = Map.empty}) probe)
--- "asks for block, which is neither granted nor declined"
--- >>> reason (activate (Map.singleton (PluginId "tech.floreal.probe") Grant {enabled = True, trace = False, grants = Set.singleton FilesRead, declined = Set.singleton Block, settings = Map.empty}) probe)
+-- "asks for plan.inspect, block, which is neither granted nor declined"
+-- >>> reason (activate (Map.singleton (PluginId "tech.floreal.probe") Grant {enabled = True, trace = False, grants = Set.fromList [FilesRead, PlanInspect], declined = Set.singleton Block, settings = Map.empty}) probe)
 -- "active"
 activate :: Map PluginId Grant -> Installed -> Either Inactive Ready
 activate grantMap installed = case Map.lookup installed.manifest.id grantMap of

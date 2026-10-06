@@ -43,6 +43,7 @@ conformance:
 # Run the doctests in the pure libraries' haddocks
 doctest:
     @cabal repl --with-repl=doctest ascmhl
+    @cabal repl --with-repl=doctest plugin-protocol
     @cabal repl --with-repl=doctest mediacopy3000:domain
     @cabal repl --with-repl=doctest mediacopy3000:application
     @cabal repl --with-repl=doctest mediacopy3000:interface
@@ -86,3 +87,7 @@ docs-build:
 # Build native packages with fpm (deb/rpm/pacman on Linux, osxpkg on macOS)
 package:
     ./scripts/package.sh -v head
+
+# Build and install the Credits plug-in
+install-credits:
+    ./scripts/install-credits-plugin.sh

@@ -65,9 +65,9 @@ When [plug-ins](plugins.md) take part in a job, the group **Plug-ins** comes aft
 
 | Row | What it means |
 |---|---|
-| `Inspecting: 3 files left` | The inspectors examine the verified files. |
-| A warning | An inspector found a problem, or a plug-in failed. The text starts with the name of the plug-in. |
-| `Credits: 4 files not inspected` | The plug-in failed two times. The files that were left have no notes from it. |
+| `Inspecting: 3 files left` | The plug-ins with `files.inspect` examine the verified files. |
+| `Credits: plug-in unavailable` | A plug-in failed, or found a problem. The text starts with the name of the plug-in. |
+| `<name>: 4 files not inspected` | A plug-in with `files.inspect` failed two times. The files that were left have no notes from it. |
 
 The first warning of each plug-in in a job also shows a notification at the bottom of the window.
 
