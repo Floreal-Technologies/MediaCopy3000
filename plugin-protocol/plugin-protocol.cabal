@@ -9,7 +9,7 @@ author: Feriel Choutri de Tarlé
 maintainer: feriel@choutri.eu
 category: Network
 build-type: Simple
-extra-source-files: schema/*.json
+extra-source-files: schema/protocol-1.schema.json
 tested-with: ghc ==9.14.1
 
 common options
@@ -46,14 +46,17 @@ library
   hs-source-dirs: src
   exposed-modules:
     MediaCopy.Plugin.JsonRpc
+    MediaCopy.Plugin.JsonSchema
     MediaCopy.Plugin.Manifest
     MediaCopy.Plugin.Protocol
+    MediaCopy.Plugin.Schema
 
   build-depends:
     aeson,
     base,
     bytestring,
     containers,
+    prettyprinter,
     text,
     vector,
 
@@ -66,10 +69,12 @@ test-suite plugin-protocol-test
     MediaCopy.Plugin.JsonRpcTest
     MediaCopy.Plugin.ManifestTest
     MediaCopy.Plugin.ProtocolTest
+    MediaCopy.Plugin.SchemaTest
 
   build-depends:
     aeson,
     base,
+    bytestring,
     containers,
     plugin-protocol,
     tasty,

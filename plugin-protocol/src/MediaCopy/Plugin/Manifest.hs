@@ -20,6 +20,9 @@ module MediaCopy.Plugin.Manifest
 
     -- * Platform
   , platformKey
+
+    -- * Schemas without a type
+  , authorSlotSchema
   ) where
 
 import Control.Monad (unless, when)
@@ -27,6 +30,7 @@ import Data.Aeson
 import Data.Aeson.Types (Parser)
 import Data.Char (isAsciiLower, isDigit)
 import Data.Foldable (for_)
+import Data.Function ((&))
 import Data.List (List, nub)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -36,6 +40,8 @@ import Data.Text qualified as T
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import System.Info (arch, os)
+
+import MediaCopy.Plugin.JsonSchema
 
 newtype PluginId = PluginId Text
   deriving stock (Show)
@@ -86,19 +92,33 @@ data Field = Field
   }
   deriving stock (Eq, Show)
 
+kindName :: FieldKind -> Text
+kindName = \case
+  TextField -> "text"
+  SecretField -> "secret"
+  BoolField -> "bool"
+  ChoiceField _ -> "choice"
+  PathField -> "path"
+  AuthorsField -> "authors"
+
+fieldKinds :: [(Text, Object -> Parser FieldKind)]
+fieldKinds =
+  [ (kindName TextField, \_ -> pure TextField)
+  , (kindName SecretField, \_ -> pure SecretField)
+  , (kindName BoolField, \_ -> pure BoolField)
+  , (kindName (ChoiceField V.empty), \o -> ChoiceField <$> o .: "options")
+  , (kindName PathField, \_ -> pure PathField)
+  , (kindName AuthorsField, \_ -> pure AuthorsField)
+  ]
+
 instance FromJSON Field where
   parseJSON = withObject "field" $ \o -> do
     key <- o .: "key"
     label <- o .: "label"
-    kindName <- o .: "kind"
-    kind <- case kindName :: Text of
-      "text" -> pure TextField
-      "secret" -> pure SecretField
-      "bool" -> pure BoolField
-      "choice" -> ChoiceField <$> o .: "options"
-      "path" -> pure PathField
-      "authors" -> pure AuthorsField
-      other -> fail ("unknown field kind " <> show other)
+    name <- o .: "kind"
+    kind <- case lookup name fieldKinds of
+      Just parse -> parse o
+      Nothing -> fail ("unknown field kind " <> show name)
     required <- fromMaybe False <$> o .:? "required"
     defaultValue <- o .:? "default"
     pure Field {key, label, kind, required, defaultValue}
@@ -108,19 +128,15 @@ instance ToJSON Field where
     object $
       [ "key" .= field.key
       , "label" .= field.label
-      , "kind" .= kindName
+      , "kind" .= kindName field.kind
       , "required" .= field.required
       ]
         <> options
         <> maybe [] (\value -> ["default" .= value]) field.defaultValue
     where
-      (kindName, options) = case field.kind of
-        TextField -> ("text" :: Text, [])
-        SecretField -> ("secret", [])
-        BoolField -> ("bool", [])
-        ChoiceField choices -> ("choice", ["options" .= choices])
-        PathField -> ("path", [])
-        AuthorsField -> ("authors", [])
+      options = case field.kind of
+        ChoiceField choices -> ["options" .= choices]
+        _ -> []
 
 data PluginManifest = PluginManifest
   { id :: PluginId
@@ -233,3 +249,99 @@ platformKey = T.pack (system <> "-" <> arch)
       "darwin" -> "macos"
       "mingw32" -> "windows"
       other -> other
+
+instance JsonSchema PluginId where
+  defName = Just "pluginId"
+  schema =
+    object ["type" .= String "string", "pattern" .= String "^(?!.*\\.\\.)[a-z0-9_-][a-z0-9._-]*\\.[a-z0-9._-]*[a-z0-9_-]$"]
+      & describe "A reverse domain name in lowercase, for example tech.floreal.c2pa-reader. It holds at least one '.', it does not start or end with '.', and it has no '..'. It is also the name of the folder of the plug-in."
+
+instance JsonSchema Capability where
+  defName = Just "capability"
+  schema = enumOf @Capability
+
+authorSlotSchema :: Value
+authorSlotSchema =
+  object
+    [ "type" .= String "object"
+    , "required" .= ["role" :: Text]
+    , "properties"
+        .= object
+          [ "role" .= object ["type" .= String "string", "minLength" .= (1 :: Int)]
+          , "name" .= string
+          , "email" .= string
+          , "phone" .= string
+          ]
+    ]
+    & describe "One author slot of a setting of kind authors. In plugins.json, name, email and phone are the defaults. In initialize.settings, they are the merged values for the job, and slots with no name are removed."
+
+instance JsonSchema Field where
+  defName = Just "field"
+  schema =
+    object
+      [ "type" .= String "object"
+      , "required" .= (["key", "label", "kind"] :: [Text])
+      , "properties"
+          .= object
+            [ "key" .= string
+            , "label" .= string
+            , "kind" .= object ["enum" .= map fst fieldKinds]
+            , "options" .= embed @(Vector Text)
+            , "required" .= object ["type" .= String "boolean", "default" .= False]
+            , "default" .= object []
+            ]
+      , "allOf"
+          .= [ object ["if" .= kindIs "choice", "then" .= object ["required" .= ["options" :: Text]]]
+             , object ["if" .= kindIs "authors", "then" .= object ["not" .= object ["required" .= ["default" :: Text]]]]
+             ]
+      ]
+      & describe "A setting or a job field. The kind authors is a closed shape: it is allowed only in settings, only once, only with manifest.write, and without default. Its stored value and its value in initialize are arrays of authorSlot."
+    where
+      kindIs :: Text -> Value
+      kindIs name = object ["properties" .= object ["kind" .= object ["const" .= name]]]
+
+instance JsonSchema PluginManifest where
+  defName = Just "manifest"
+  schema =
+    object
+      [ "type" .= String "object"
+      , "required" .= (["id", "name", "description", "version", "api", "executable", "capabilities"] :: [Text])
+      , "properties"
+          .= object
+            [ "id" .= embed @PluginId
+            , "name" .= string
+            , "description"
+                .= (object ["type" .= String "string", "pattern" .= String "\\S"] & describe "One or two short sentences that tell what the plug-in does. The preferences page shows it under the name.")
+            , "version" .= string
+            , "api" .= object ["const" .= apiMajor]
+            , "namespace"
+                .= ( object ["type" .= String "string", "not" .= object ["enum" .= reservedNamespaces]]
+                       & describe "The only XML namespace that a plug-in with manifest.write can write. It cannot be empty, a namespace of ASC MHL, or a namespace that XML reserves."
+                   )
+            , "executable"
+                .= ( object ["type" .= String "object", "additionalProperties" .= object ["type" .= String "string", "pattern" .= String "^(?![/\\\\])(?!.*:)(?!(?:.*[/\\\\])?\\.\\.(?:[/\\\\]|$)).+$"]]
+                       & describe "Keys: linux-x86_64, linux-aarch64, macos-aarch64, macos-x86_64, windows-x86_64. Values: paths relative to the plug-in folder. A path does not start with '/' or '\\', holds no ':', and has no '..' part. One bad path, for any platform, rejects the plug-in on every platform."
+                   )
+            , "capabilities"
+                .= ( object ["type" .= String "array", "items" .= embed @Capability, "contains" .= object ["enum" .= hooks]]
+                       & describe "At least one of plan.inspect, files.inspect and manifest.write."
+                   )
+            , "settings"
+                .= ( object ["type" .= String "array", "items" .= embed @Field, "contains" .= authors, "minContains" .= (0 :: Int), "maxContains" .= (1 :: Int)]
+                       & describe "Keys are unique. At most one setting has the kind authors."
+                   )
+            , "jobFields"
+                .= ( object ["type" .= String "array", "items" .= (embed @Field & property "kind" (object ["not" .= object ["const" .= String "authors"]]))]
+                       & describe "Keys are unique. No job field has the kind authors."
+                   )
+            ]
+      , "allOf"
+          .= [ object ["if" .= declares Block, "then" .= declares PlanInspect]
+             , object ["if" .= declares ManifestWrite, "then" .= object ["required" .= ["namespace" :: Text]]]
+             , object ["if" .= object ["properties" .= object ["settings" .= object ["contains" .= authors]], "required" .= ["settings" :: Text]], "then" .= declares ManifestWrite]
+             ]
+      ]
+    where
+      hooks = [capability | capability <- [minBound .. maxBound], isJust (hookOf capability)]
+      authors = object ["properties" .= object ["kind" .= object ["const" .= String "authors"]], "required" .= ["kind" :: Text]]
+      declares capability = object ["properties" .= object ["capabilities" .= object ["contains" .= object ["const" .= capability]]]]
