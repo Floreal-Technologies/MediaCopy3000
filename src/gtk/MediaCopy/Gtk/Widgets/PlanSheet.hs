@@ -28,7 +28,7 @@ import MediaCopy.Domain.Job
 import MediaCopy.Domain.JobFormat (formatAlgo)
 import MediaCopy.Domain.Plan
 import MediaCopy.Domain.Plugin
-import MediaCopy.Domain.PluginCatalog (FieldShape, FieldValue (..), FieldView (..), enabledJobFields)
+import MediaCopy.Domain.PluginCatalog (FieldValue (..), FieldView (..), enabledJobFields)
 import MediaCopy.Gtk.Widgets.Common
 import MediaCopy.Gtk.Widgets.FieldRows (FieldActions (..), FieldRow (..), fieldRow)
 import MediaCopy.Interface.Translation
@@ -129,7 +129,7 @@ data ReadyBody = ReadyBody
   , manifestGroup :: Adw.PreferencesGroup
   , manifestRows :: IORef (Vector Adw.ActionRow)
   , fieldGroup :: Adw.PreferencesGroup
-  , fieldRows :: IORef (Maybe (List (Text, Text, Text, FieldShape, Bool), List FieldRow))
+  , fieldRows :: IORef (Maybe (List (PluginRef, FieldView), List FieldRow))
   , scriptExpander :: Adw.ExpanderRow
   , scriptRows :: IORef (Vector Adw.ActionRow)
   , seal :: SealControls
@@ -268,18 +268,19 @@ renderPlanSheet widgets current = do
 
 renderJobFields :: ReadyBody -> (UiMessage -> IO ()) -> (Vector (PluginRef, Vector FieldView), Map.Map Text (Map.Map Text Text)) -> IO ()
 renderJobFields body dispatch (wanted, given) = do
-  let layout = [(ref.id, ref.name, field.key, field.shape, field.required) | (ref, plugin) <- V.toList wanted, field <- V.toList plugin]
-      fields = [(ref, field) | (ref, plugin) <- V.toList wanted, field <- V.toList plugin]
+  let fields = [(ref, field) | (ref, plugin) <- V.toList wanted, field <- V.toList plugin]
+      layout = [(ref, withValue field NoValue) | (ref, field) <- fields]
   readIORef body.fieldRows >>= \case
     Just (shown, rows) | shown == layout -> zipWithM_ (\row (ref, field) -> row.refresh (current ref field)) rows fields
     previous -> do
-      mapM_ (mapM_ (\row -> Adw.preferencesGroupRemove body.fieldGroup row.row) . snd) previous
+      mapM_ (mapM_ (mapM_ (Adw.preferencesGroupRemove body.fieldGroup) . (.rows)) . snd) previous
       rows <- traverse (uncurry jobFieldRow) fields
-      mapM_ (\row -> Adw.preferencesGroupAdd body.fieldGroup row.row) rows
+      mapM_ (mapM_ (Adw.preferencesGroupAdd body.fieldGroup) . (.rows)) rows
       writeIORef body.fieldRows (Just (layout, rows))
       Gtk.widgetSetVisible body.fieldGroup (not (null rows))
   where
-    current ref field = maybe NoValue Value (Map.lookup ref.id given >>= Map.lookup field.key)
+    withValue field value = FieldView {key = field.key, label = field.label, shape = field.shape, required = field.required, value}
+    current ref field = maybe field.value Value (Map.lookup ref.id given >>= Map.lookup field.key)
     jobFieldRow ref field =
       let send value = dispatch (SetJobField ref.id field.key value)
       in fieldRow
@@ -290,7 +291,7 @@ renderJobFields body dispatch (wanted, given) = do
              , pickPath = dispatch (PickJobFieldPath ref.id field.key)
              }
            (ref.name <> ": ")
-           FieldView {key = field.key, label = field.label, shape = field.shape, required = field.required, value = current ref field}
+           (withValue field (current ref field))
 
 isOpen :: PlanPhase -> Bool
 isOpen phase = case phase of

@@ -44,7 +44,7 @@ scenes =
   , (still "verify-history" verifyMessages) {expand = True}
   , still "seal-finished" sealMessages
   , (still "preferences" finishedMessages) {action = Just "app.preferences"}
-  , (still "plugins" [CatalogLoaded pluginCatalog]) {action = Just "app.plugins", expand = True}
+  , (still "plugins" [CatalogLoaded pluginCatalog]) {action = Just "app.plugins"}
   , (still "plan-plugins" pluginPlanMessages) {scroll = True}
   , still "job-plugins" pluginJobMessages
   , still "close-confirm" (runningMessages <> [EngineEvent first (Progress 8_640_000_000), Ui RequestClose])
@@ -86,7 +86,7 @@ pluginPlanMessages :: List Message
 pluginPlanMessages =
   [ CatalogLoaded pluginCatalog
   , RequestPlan (offloadJob UseHistory)
-  , Ui (SetJobField "tech.floreal.credits" "operator" "Sam Roe")
+  , Ui (SetJobField "tech.floreal.credits" "authors.1.name" "Sam Roe")
   , PlanComputed spec (Right (pluginPlan spec))
   ]
   where
@@ -96,7 +96,7 @@ pluginJobMessages :: List Message
 pluginJobMessages =
   [ CatalogLoaded pluginCatalog
   , RequestPlan (offloadJob UseHistory)
-  , Ui (SetJobField "tech.floreal.credits" "operator" "Sam Roe")
+  , Ui (SetJobField "tech.floreal.credits" "authors.1.name" "Sam Roe")
   , PlanComputed spec (Right (pluginPlan spec))
   , Ui ConfirmPlan
   , EngineEvent first (Planned (PlannedWork mediaSourceFiles totalBytes))

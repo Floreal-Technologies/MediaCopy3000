@@ -68,25 +68,22 @@ A verify job or a seal job also gets a `History:` section, with one line for eac
 A job with [plug-ins](plugins.md) adds lines to the `Plan` block:
 
 ```
-  plug-in: Content Credentials (tech.floreal.c2pa-reader)
-  warning: Content Credentials: 2 clips carry Content Credentials – A001C001.MP4, A001C002.MP4
-  author: Jane Doe (DIT)
-  metadata: 3 files, manifest – Credits
+  plug-in: Credits (tech.floreal.credits)
+  author: Jane Doe (DIT) <jane@example.com>
+  author: Sam Roe (Camera operator)
 ```
 
 It also gets a `Plug-ins:` section, with one line for each event:
 
 ```
 Plug-ins:
-WARNING  Credits: plug-in unavailable – the plug-in stopped with exit code 4
-NOT INSPECTED  Content Credentials  3 files
-NOTE  A001C001.MP4  Content Credentials  Signer: Sony
+WARNING  Credits: plug-in unavailable – contribute timed out after 30 s
 ```
 
 | Line | What it is |
 |---|---|
 | `WARNING` | A plug-in failed during the job, or gave a warning about a file. |
-| `NOT INSPECTED` | The files that an inspector did not inspect, after it failed twice. |
+| `NOT INSPECTED` | The files that a plug-in with `files.inspect` did not inspect, after it failed twice. |
 | `NOTE` | A note of a plug-in about one file. |
 
 ## Why the plan is in there
