@@ -172,7 +172,7 @@ jobs:
           restore-keys: ${{ runner.os }}-ghc-9.14.1-
 
       - name: Build
-        run: cabal build exe:mediacopy3000
+        run: cabal build exe:mediacopy3000 exe:credits
 
       - name: Test
         run: cabal test core-test ascmhl-test plugin-protocol-test
@@ -391,7 +391,7 @@ jobs:
           restore-keys: ${{ runner.os }}-ghc-9.14.1-
 
       - name: Build
-        run: cabal build exe:mediacopy3000
+        run: cabal build exe:mediacopy3000 exe:credits
 
       - name: Stage the tree and build the MSI
         shell: pwsh

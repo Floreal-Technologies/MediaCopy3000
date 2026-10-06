@@ -111,6 +111,33 @@ ordinateurs.
 
 Quand MediaCopy 3000 écrit `plugins.json`, il garde les clés qu’il ne connaît pas.
 
+## L’extension Credits
+
+MediaCopy 3000 est fourni avec l’extension Credits, `tech.floreal.credits`. Elle met les
+noms de l’équipe dans chaque manifeste qu’une tâche écrit. Comme toute extension, elle est
+désactivée tant que vous ne l’activez pas et n’accordez pas `manifest.write`.
+
+Ses réglages et ses champs ont des libellés en anglais. Elle a ces réglages :
+
+| Réglage | Usage |
+|---|---|
+| **Production** | Le nom de la production |
+| **DIT name** | Votre nom. Obligatoire. |
+| **DIT email** | Votre adresse e-mail |
+| **DIT phone** | Votre numéro de téléphone |
+
+Elle demande ces champs de tâche sur la feuille du plan. Les deux sont facultatifs :
+
+- **Camera operator** : le cadreur
+- **Second camera operator** : le second cadreur
+
+Le manifeste reçoit alors :
+
+- Un `author` avec le rôle `DIT`, avec le nom, l’e-mail et le téléphone du DIT.
+- Un `author` avec le rôle `camera operator` pour chaque cadreur.
+- Dans `metadata`, un élément `credits` dans l’espace de noms `https://floreal.tech/ns/credits/1`,
+  avec les éléments `production`, `dit` et `operator`.
+
 ## Ce que MediaCopy 3000 impose
 
 | Capacité | Ce qu’elle permet | Ce que MediaCopy 3000 impose |
@@ -177,6 +204,10 @@ d’erreur vont dans le journal des événements de la tâche.
 
 Le fichier `plugin-protocol/schema/protocol-1.schema.json` du code source décrit chaque message et
 `plugin.json`.
+
+Le dossier `plugins/credits` du code source contient l’extension Credits. C’est une extension
+complète en Haskell, construite avec la bibliothèque `plugin-protocol`, sous licence BSD 3-Clause.
+Copiez-la pour commencer une nouvelle extension.
 
 Une extension doit respecter ces règles :
 
