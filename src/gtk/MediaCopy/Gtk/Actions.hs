@@ -141,7 +141,7 @@ presentAbout window = do
     new
       Adw.AboutDialog
       [ #applicationName := "MediaCopy 3000"
-      , #applicationIcon := "tech.floreal.MediaCopy3000"
+      , #applicationIcon := "tech.floreal.MediaCopy3000-symbolic"
       , #version := T.pack (showVersion version)
       , #developerName := "Floréal Technologies"
       , #comments := "Verified media offload and ASC MHL verification"
