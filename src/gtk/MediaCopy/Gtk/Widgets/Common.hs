@@ -111,7 +111,7 @@ paddedBox orientation spacing margin =
 newLabel :: Text -> List (AttrOp Gtk.Label 'AttrConstruct) -> List Text -> IO Gtk.Label
 newLabel text attrs classes = do
   label <- new Gtk.Label ((#label := text) : attrs)
-  mapM_ (Gtk.widgetAddCssClass label) classes
+  forM_ classes (Gtk.widgetAddCssClass label)
   pure label
 
 data DialogShell = DialogShell
@@ -193,8 +193,8 @@ newRow :: Row -> IO Adw.ActionRow
 newRow row = do
   built <- new Adw.ActionRow [#useMarkup := False]
   set built [#title := row.title, #subtitle := row.subtitle]
-  mapM_ (Gtk.widgetAddCssClass built) row.cssClass
-  mapM_ (\build -> build >>= \widget -> Adw.actionRowAddSuffix built widget) row.suffix
+  forM_ row.cssClass (Gtk.widgetAddCssClass built)
+  forM_ row.suffix (\build -> build >>= \widget -> Adw.actionRowAddSuffix built widget)
   pure built
 
 onDialogClosed :: Adw.Dialog -> Cell Bool -> IO () -> IO ()

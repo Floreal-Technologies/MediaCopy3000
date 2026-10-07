@@ -24,7 +24,7 @@ killGroup :: ProcessHandle -> Group -> IO ()
 killGroup _ group = signal sigKILL group
 
 signal :: Signal -> Group -> IO ()
-signal sig (Group leader) = mapM_ (try @IOException . signalProcessGroup sig) leader
+signal sig (Group leader) = forM_ leader (try @IOException . signalProcessGroup sig)
 
 -- |
 -- >>> childEnvironment [("PATH", "/bin"), ("LC_ALL", "C"), ("AWS_SECRET_ACCESS_KEY", "x"), ("LD_PRELOAD", "evil.so")]

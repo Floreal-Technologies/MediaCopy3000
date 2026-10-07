@@ -139,7 +139,7 @@ newCounters = do
   (newBox, newFiles) <- newCounter "New"
   (algoBox, algo) <- newCounter "Hash"
   box <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #spacing := 24]
-  mapM_ (Gtk.boxAppend box) [verifiedBox, failedBox, missingBox, newBox, algoBox]
+  forM_ [verifiedBox, failedBox, missingBox, newBox, algoBox] (Gtk.boxAppend box)
   pure Counters {box, verified, failed, missing, newFiles, algo}
 
 renderCounters :: Counters -> Maybe MhlHistory -> JobState -> IO ()
@@ -237,7 +237,7 @@ renderFileList files model state = do
   let wanted = visible & V.toList & Map.fromList
   existing <- readIORef files.rows
   let gone = Map.difference existing wanted
-  mapM_ (\fileRow -> Gtk.listBoxRemove files.list fileRow.row) gone
+  forM_ gone (\fileRow -> Gtk.listBoxRemove files.list fileRow.row)
   writeIORef files.rows (Map.difference existing gone)
   V.imapM_ (syncFileRow files model.wording) visible
 
@@ -255,7 +255,7 @@ syncFileRow files wording index (path, entry) = do
 clearFileList :: FileListPane -> IO ()
 clearFileList files = do
   existing <- readIORef files.rows
-  mapM_ (\fileRow -> Gtk.listBoxRemove files.list fileRow.row) existing
+  forM_ existing (\fileRow -> Gtk.listBoxRemove files.list fileRow.row)
   writeIORef files.rows Map.empty
 
 newCounter :: Text -> IO (Gtk.Box, Gtk.Label)

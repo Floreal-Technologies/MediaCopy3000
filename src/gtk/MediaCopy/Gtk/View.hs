@@ -135,13 +135,13 @@ addNarrowBreakpoint window splitView = do
 newToastCell :: Adw.ToastOverlay -> (UiMessage -> IO ()) -> IO (Cell (Maybe Text))
 newToastCell toastOverlay dispatch =
   newCell $ \message ->
-    mapM_
+    forM_
+      message
       ( \text -> do
           toast <- new Adw.Toast [#title := text, #useMarkup := False]
           Adw.toastOverlayAddToast toastOverlay toast
           void (GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE (dispatch DismissToast >> pure False))
       )
-      message
 
 data Sidebar = Sidebar
   { list :: Gtk.ListBox
@@ -176,7 +176,7 @@ newSelectionCell list rows =
     Nothing -> Gtk.listBoxUnselectAll list
     Just jobId -> do
       current <- readIORef rows
-      mapM_ (\jobRow -> Gtk.listBoxSelectRow list (Just jobRow.row)) (Map.lookup jobId current)
+      forM_ (Map.lookup jobId current) (\jobRow -> Gtk.listBoxSelectRow list (Just jobRow.row))
 
 renderSidebar :: Sidebar -> Model -> IO ()
 renderSidebar sidebar current = suppressing sidebar.suppress $ do

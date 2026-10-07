@@ -147,7 +147,7 @@ slotRows slot = do
   email <- newEntryRow "Email" slot.email
   phone <- newEntryRow "Phone" slot.phone
   let entries = [role, name, email, phone]
-  mapM_ (Adw.expanderRowAddRow expander) entries
+  forM_ entries (Adw.expanderRowAddRow expander)
   remove <- new Gtk.Button [#label := "Remove", #valign := Gtk.AlignCenter]
   Gtk.widgetAddCssClass remove "destructive-action"
   removeRow <- new Adw.ActionRow [#useMarkup := False]

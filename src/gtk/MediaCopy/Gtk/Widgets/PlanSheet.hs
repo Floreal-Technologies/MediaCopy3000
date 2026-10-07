@@ -273,9 +273,9 @@ renderJobFields body dispatch (wanted, given) = do
   readIORef body.fieldRows >>= \case
     Just (shown, rows) | shown == layout -> zipWithM_ (\row (ref, field) -> row.refresh (current ref field)) rows fields
     previous -> do
-      mapM_ (mapM_ (mapM_ (Adw.preferencesGroupRemove body.fieldGroup) . (.rows)) . snd) previous
+      forM_ previous (mapM_ (mapM_ (Adw.preferencesGroupRemove body.fieldGroup) . (.rows)) . snd)
       rows <- traverse (uncurry jobFieldRow) fields
-      mapM_ (mapM_ (Adw.preferencesGroupAdd body.fieldGroup) . (.rows)) rows
+      forM_ rows (mapM_ (Adw.preferencesGroupAdd body.fieldGroup) . (.rows))
       writeIORef body.fieldRows (Just (layout, rows))
       Gtk.widgetSetVisible body.fieldGroup (not (null rows))
   where

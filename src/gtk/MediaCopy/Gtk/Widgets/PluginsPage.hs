@@ -98,7 +98,7 @@ renderCatalog groups dispatch catalog = do
     else do
       rebuild groups dispatch catalog
       withOpenEntry groups catalog $ \subpage entry -> do
-        mapM_ (Adw.preferencesPageRemove subpage.body) subpage.detail.groups
+        forM_ subpage.detail.groups (Adw.preferencesPageRemove subpage.body)
         fresh <- fillDetail dispatch subpage.body entry
         writeIORef groups.open (Just subpage {detail = fresh})
 
@@ -123,7 +123,7 @@ rebuild groups dispatch catalog = do
       then pure <$> plainRow "No plug-in is installed" "The manual says where to put a plug-in" []
       else pure []
   let rows = problemRows <> entryRowsShown <> emptyRows
-  mapM_ (Adw.preferencesGroupAdd groups.installed) rows
+  forM_ rows (Adw.preferencesGroupAdd groups.installed)
   writeIORef groups.installedRows rows
   writeIORef groups.shown entries
 
@@ -131,7 +131,7 @@ renderInvalid :: Groups -> Vector (Text, Text) -> IO ()
 renderInvalid groups rejected = do
   readIORef groups.invalidRows >>= mapM_ (Adw.preferencesGroupRemove groups.invalid)
   invalidRows <- traverse (\(folder, reason) -> plainRow folder reason ["warning"]) (V.toList rejected)
-  mapM_ (Adw.preferencesGroupAdd groups.invalid) invalidRows
+  forM_ invalidRows (Adw.preferencesGroupAdd groups.invalid)
   writeIORef groups.invalidRows invalidRows
   Gtk.widgetSetVisible groups.invalid (not (null invalidRows))
 
@@ -139,7 +139,7 @@ plainRow :: Text -> Text -> [Text] -> IO Adw.PreferencesRow
 plainRow title subtitle classes = do
   row <- new Adw.ActionRow [#useMarkup := False, #titleSelectable := True]
   set row [#title := title, #subtitle := subtitle]
-  mapM_ (Gtk.widgetAddCssClass row) classes
+  forM_ classes (Gtk.widgetAddCssClass row)
   Adw.toPreferencesRow row
 
 subtitleOf :: PluginEntry -> Text
@@ -187,7 +187,7 @@ openSubpage groups dispatch pluginId = do
 fillDetail :: (UiMessage -> IO ()) -> Adw.PreferencesPage -> PluginEntry -> IO DetailRows
 fillDetail dispatch body entry = do
   rows <- detailRows dispatch entry
-  mapM_ (Adw.preferencesPageAdd body) rows.groups
+  forM_ rows.groups (Adw.preferencesPageAdd body)
   pure rows
 
 detailRows :: (UiMessage -> IO ()) -> PluginEntry -> IO DetailRows
@@ -220,7 +220,7 @@ detailRows dispatch entry = do
   settings <- new Adw.PreferencesGroup [#title := "Settings", #visible := not (V.null entry.settings)]
   settingRows <- forM (V.toList entry.settings) $ \field -> do
     row <- settingRow (dispatch . ChangePlugin) dispatch pluginId field
-    mapM_ (Adw.preferencesGroupAdd settings) row.rows
+    forM_ row.rows (Adw.preferencesGroupAdd settings)
     pure row
   pure DetailRows {groups = [general, permissions, settings], traceRow, capabilityRows, settingRows, suppress}
 

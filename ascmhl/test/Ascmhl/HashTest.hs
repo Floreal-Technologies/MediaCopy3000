@@ -29,7 +29,7 @@ tests =
 
 algoFromMhlElementInvertsDisplay :: Assertion
 algoFromMhlElementInvertsDisplay = do
-  mapM_ (\a -> algoFromMhlElement (display a) @?= Just a) [minBound .. maxBound]
+  forM_ [minBound .. maxBound] (\a -> algoFromMhlElement (display a) @?= Just a)
   algoFromMhlElement "XXH64" @?= Just XXH64
   algoFromMhlElement "sha256" @?= Nothing
 

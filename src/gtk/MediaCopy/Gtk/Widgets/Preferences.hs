@@ -97,7 +97,7 @@ reportChoices rows dispatch = do
 chosen :: AppearanceRows -> (UiMessage -> IO ()) -> IO Word32 -> Vector a -> (a -> UiMessage) -> IO ()
 chosen rows dispatch selected values report = unlessSuppressed rows.suppress $ do
   index <- selected
-  mapM_ (dispatch . report) (values V.!? fromIntegral index)
+  forM_ (values V.!? fromIntegral index) (dispatch . report)
 
 paintAppearance :: AppearanceRows -> Appearance -> IO ()
 paintAppearance rows appearance = do
@@ -109,7 +109,7 @@ paintAppearance rows appearance = do
 
 select :: (Eq a) => IORef Bool -> (Word32 -> IO ()) -> Vector a -> a -> IO ()
 select suppress choose values wanted =
-  mapM_ (suppressing suppress . choose . fromIntegral) (V.elemIndex wanted values)
+  forM_ (V.elemIndex wanted values) (suppressing suppress . choose . fromIntegral)
 
 installPreferencesAction :: Adw.Application -> Adw.ApplicationWindow -> Adw.PreferencesDialog -> Command.Command -> Text -> IO ()
 installPreferencesAction app window dialog command pageName = do
@@ -133,12 +133,12 @@ themeModel :: Wording -> Vector ThemeSection -> IO Gtk.FlattenListModel
 themeModel wording sections = do
   modelType <- glibType @Gio.ListModel
   store <- Gio.listStoreNew modelType
-  mapM_
+  forM_
+    sections
     ( \section -> do
         labels <- Gtk.stringListNew (Just (V.toList (V.map (themeRowLabel wording) section.themes)))
         Gio.listStoreAppend store labels
     )
-    sections
   Gtk.flattenListModelNew (Just store)
 
 themeHeaderFactory :: Vector ThemeSection -> IO Gtk.SignalListItemFactory
@@ -173,12 +173,8 @@ paintHeading :: Gtk.Widget -> ThemeSection -> IO ()
 paintHeading box section = do
   firstChild <- Gtk.widgetGetFirstChild box
   lastChild <- Gtk.widgetGetLastChild box
-  mapM_
-    (\widget -> unsafeCastTo Gtk.Label widget >>= \label -> set label [#label := section.heading])
-    firstChild
-  mapM_
-    (\widget -> unsafeCastTo Gtk.LinkButton widget >>= \link -> paintLink link section.homepage)
-    lastChild
+  forM_ firstChild (\widget -> unsafeCastTo Gtk.Label widget >>= \label -> set label [#label := section.heading])
+  forM_ lastChild (\widget -> unsafeCastTo Gtk.LinkButton widget >>= \link -> paintLink link section.homepage)
 
 paintLink :: Gtk.LinkButton -> Maybe Text -> IO ()
 paintLink link = \case

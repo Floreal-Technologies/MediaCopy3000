@@ -40,7 +40,7 @@ seeded environment window activate showFrame startup = do
     prepare = do
       when startup.expand (expandAll window)
       when startup.scroll (scrollToEnd window)
-      mapM_ (GLib.timeoutAdd GLib.PRIORITY_DEFAULT settleMs . takeShot) startup.shot
+      forM_ startup.shot (GLib.timeoutAdd GLib.PRIORITY_DEFAULT settleMs . takeShot)
       pure False
     settleMs = 3_500
     takeShot path = do

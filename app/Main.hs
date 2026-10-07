@@ -84,7 +84,7 @@ data PluginOptions = PluginOptions
 
 run :: Command -> IO ()
 run = \case
-  ListScenes -> mapM_ T.putStrLn sceneNames
+  ListScenes -> forM_ sceneNames T.putStrLn
   PlanOnly job options -> planCommand job options
   Gui -> do
     T.putStrLn banner
