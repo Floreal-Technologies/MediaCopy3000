@@ -16,6 +16,8 @@ import GI.Gtk qualified as Gtk
 
 import MediaCopy.Gtk.Widgets.Common (flatNamed, newLabel, renderCell, suppressing, unlessSuppressed)
 import MediaCopy.Gtk.Widgets.PluginsPage (PluginsPage (..), newPluginsPage)
+import MediaCopy.Interface.Command (commandId)
+import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Theme
 import MediaCopy.Interface.Translation
 import MediaCopy.Model (Model (..), UiMessage (..))
@@ -41,8 +43,8 @@ newPreferences app window wording lightSections darkSections dispatch = do
   plugins <- newPluginsPage dialog dispatch
   Adw.preferencesDialogAdd dialog plugins.page
   reportChoices rows dispatch
-  installPreferencesAction app window dialog "preferences" "general"
-  installPreferencesAction app window dialog "plugins" "plugins"
+  installPreferencesAction app window dialog Command.Preferences "general"
+  installPreferencesAction app window dialog Command.Plugins "plugins"
   pure $ \model -> do
     paintAppearance rows model.appearance
     renderCell plugins.cell model.plugins
@@ -109,12 +111,12 @@ select :: (Eq a) => IORef Bool -> (Word32 -> IO ()) -> Vector a -> a -> IO ()
 select suppress choose values wanted =
   mapM_ (suppressing suppress . choose . fromIntegral) (V.elemIndex wanted values)
 
-installPreferencesAction :: Adw.Application -> Adw.ApplicationWindow -> Adw.PreferencesDialog -> Text -> Text -> IO ()
-installPreferencesAction app window dialog actionName pageName = do
+installPreferencesAction :: Adw.Application -> Adw.ApplicationWindow -> Adw.PreferencesDialog -> Command.Command -> Text -> IO ()
+installPreferencesAction app window dialog command pageName = do
   action <-
     new
       Gio.SimpleAction
-      [ #name := actionName
+      [ #name := commandId command
       , On #activate $ \_param -> do
           Adw.preferencesDialogSetVisiblePageName dialog pageName
           Adw.dialogPresent dialog (Just window)

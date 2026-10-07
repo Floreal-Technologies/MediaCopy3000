@@ -1,17 +1,15 @@
 module MediaCopy.Gtk.Actions
-  ( actionButton
-  , headerAction
+  ( Actions (..)
   , installActions
   ) where
 
-import Control.Monad (unless)
-import Data.Function ((&))
+import Control.Monad (unless, void, when)
 import Data.GI.Base (AttrOp (On, (:=)), new)
+import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.List (List)
-import Data.Maybe (isJust)
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Display (Display (..), display)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Version (showVersion)
@@ -19,154 +17,169 @@ import GI.Adw qualified as Adw
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 
-import MediaCopy.Model
+import MediaCopy.Gtk.Widgets.Common (newCell, renderCell)
+import MediaCopy.Interface.Command (Section (..), commandId, commandLabel, commands, mainMenuLabel, sectionLabel)
+import MediaCopy.Interface.Command qualified as Command
+import MediaCopy.Interface.Translation (Wording)
+import MediaCopy.Model (Model (..), UiMessage (..), commandEnabled)
 import Paths_mediacopy3000 (version)
 
-data Section = JobsSection | NavigationSection | GeneralSection
-  deriving stock (Eq, Show)
-
-instance Display Section where
-  displayBuilder = \case
-    JobsSection -> "Jobs"
-    NavigationSection -> "Navigation"
-    GeneralSection -> "General"
+data Scope = App | Win | Builtin Text
 
 data Effect = Send UiMessage | ShowAbout
 
 data ActionSpec = ActionSpec
-  { name :: Maybe Text
-  , label :: Text
+  { command :: Command.Command
+  , scope :: Scope
   , accels :: List Text
   , section :: Maybe Section
   , effect :: Maybe Effect
-  , enabled :: Maybe (Model -> Bool)
   }
 
-data Gated = Gated
-  { action :: Gio.SimpleAction
-  , rule :: Model -> Bool
+data Actions = Actions
+  { menu :: Gio.Menu
+  , button :: Command.Command -> List Text -> IO Gtk.Button
+  , accelLabel :: Command.Command -> Maybe Text
+  , activate :: Command.Command -> IO ()
+  , render :: Model -> IO ()
   }
+
+commandSpec :: Command.Command -> ActionSpec
+commandSpec command = ActionSpec {command, scope, accels, section, effect}
+  where
+    (scope, accels, section, effect) = case command of
+      Command.NewOffload -> (Win, ["<Control>n"], Just JobsSection, Just (Send OpenOffloadDialog))
+      Command.VerifyFolder -> (Win, ["<Control>o"], Just JobsSection, Just (Send PickVerifyFolder))
+      Command.SealMedia -> (Win, ["<Control>l"], Just JobsSection, Just (Send PickSealFolder))
+      Command.SaveReport -> (Win, ["<Control>s"], Just JobsSection, Just (Send SaveSelectedReport))
+      Command.CancelJob -> (Win, [], Nothing, Just (Send CancelSelectedJob))
+      Command.ReviewJob -> (Win, [], Nothing, Just (Send ReviewSelectedJob))
+      Command.ClearFinished -> (Win, [], Nothing, Just (Send ClearFinished))
+      Command.NextJob -> (Win, ["<Control>Page_Down"], Just NavigationSection, Just (Send SelectNextJob))
+      Command.PreviousJob -> (Win, ["<Control>Page_Up"], Just NavigationSection, Just (Send SelectPreviousJob))
+      Command.Preferences -> (App, ["<Control>comma"], Just GeneralSection, Nothing)
+      Command.Plugins -> (App, [], Nothing, Nothing)
+      Command.KeyboardShortcuts -> (Builtin "win.show-help-overlay", ["<Control>question"], Just GeneralSection, Nothing)
+      Command.About -> (App, [], Nothing, Just ShowAbout)
+      Command.CloseWindow -> (Builtin "window.close", ["<Control>w"], Just GeneralSection, Nothing)
+      Command.Quit -> (App, ["<Control>q"], Just GeneralSection, Just (Send RequestClose))
+      Command.CommandPalette -> (Win, ["<Control>k"], Just GeneralSection, Just (Send OpenPalette))
 
 actionTable :: Vector ActionSpec
-actionTable =
-  V.fromList
-    [ always "win.new-offload" "New Offload…" ["<Control>n"] (Just JobsSection) (Just (Send OpenOffloadDialog))
-    , always "win.verify" "Verify Folder…" ["<Control>o"] (Just JobsSection) (Just (Send PickVerifyFolder))
-    , always "win.seal" "Seal Media…" ["<Control>l"] (Just JobsSection) (Just (Send PickSealFolder))
-    , (always "win.save-report" "Save Report…" ["<Control>s"] (Just JobsSection) (Just (Send SaveSelectedReport))) {enabled = Just canReportSelected}
-    , (always "win.cancel-job" "Cancel Job" [] Nothing (Just (Send CancelSelectedJob))) {enabled = Just canCancelSelected}
-    , (always "win.review-job" "Review Plan…" [] Nothing (Just (Send ReviewSelectedJob))) {enabled = Just (isJust . reviewableSpec)}
-    , (always "win.clear-finished" "Clear Finished" [] Nothing (Just (Send ClearFinished))) {enabled = Just hasFinishedJobs}
-    , always "win.next-job" "Next Job" ["<Control>Page_Down"] (Just NavigationSection) (Just (Send SelectNextJob))
-    , always "win.previous-job" "Previous Job" ["<Control>Page_Up"] (Just NavigationSection) (Just (Send SelectPreviousJob))
-    , always "app.preferences" "Preferences" ["<Control>comma"] (Just GeneralSection) Nothing
-    , always "app.plugins" "Plug-ins" [] Nothing Nothing
-    , always "app.about" "About MediaCopy 3000" [] Nothing (Just ShowAbout)
-    , always "win.show-help-overlay" "Keyboard Shortcuts" ["<Control>question"] (Just GeneralSection) Nothing
-    , always "window.close" "Close Window" ["<Control>w"] (Just GeneralSection) Nothing
-    , always "app.quit" "Quit" ["<Control>q"] (Just GeneralSection) (Just (Send RequestClose))
-    , (always "" "Main Menu" ["F10"] (Just GeneralSection) Nothing) {name = Nothing}
-    ]
+actionTable = V.fromList (map commandSpec commands)
 
-always :: Text -> Text -> List Text -> Maybe Section -> Maybe Effect -> ActionSpec
-always actionName label accels section effect =
-  ActionSpec {name = Just actionName, label, accels, section, effect, enabled = Nothing}
+actionName :: Command.Command -> Text
+actionName command = case (commandSpec command).scope of
+  App -> "app." <> commandId command
+  Win -> "win." <> commandId command
+  Builtin full -> full
 
-actionLabel :: Text -> Text
-actionLabel wanted =
-  actionTable
-    & V.find (\spec -> spec.name == Just wanted)
-    & maybe wanted (.label)
-
-actionButton :: Text -> List Text -> IO Gtk.Button
-actionButton actionName classes = do
-  button <- new Gtk.Button [#label := actionLabel actionName, #actionName := actionName]
-  mapM_ (Gtk.widgetAddCssClass button) classes
-  pure button
-
-headerAction :: Adw.HeaderBar -> Text -> List Text -> IO ()
-headerAction header actionName classes = do
-  button <- actionButton actionName classes
-  Adw.headerBarPackStart header button
-
-installActions :: Adw.Application -> Adw.ApplicationWindow -> (UiMessage -> IO ()) -> IO (Gio.Menu, Model -> IO ())
+installActions :: Adw.Application -> Adw.ApplicationWindow -> (UiMessage -> IO ()) -> IO Actions
 installActions app window dispatch = do
-  gated <- V.foldM (installOne app window dispatch) [] actionTable
-  overlay <- buildShortcutsWindow
-  appWindow <- Gtk.toApplicationWindow window
-  Gtk.applicationWindowSetHelpOverlay appWindow (Just overlay)
-  menu <- buildMenu
-  pure (menu, \model -> mapM_ (\g -> Gio.simpleActionSetEnabled g.action (g.rule model)) gated)
+  gated <- V.mapMaybeM (installOne app window dispatch) actionTable
+  accels <- Map.fromList <$> traverse (\command -> (command,) <$> acceleratorLabel (commandSpec command).accels) commands
+  buttons <- newIORef []
+  menu <- Gio.menuNew
+  wordingCell <- newCell (relabel window buttons menu)
+  enabledCell <- newCell (V.zipWithM_ (\(action, _) enabled -> Gio.simpleActionSetEnabled action enabled) gated)
+  pure
+    Actions
+      { menu
+      , button = newButton buttons
+      , accelLabel = \command -> Map.findWithDefault Nothing command accels
+      , activate = \command -> void (Gtk.widgetActivateAction window (actionName command) Nothing)
+      , render = \model -> do
+          renderCell wordingCell model.wording
+          renderCell enabledCell (V.map (commandEnabled model . snd) gated)
+      }
 
 installOne
   :: Adw.Application
   -> Adw.ApplicationWindow
   -> (UiMessage -> IO ())
-  -> List Gated
   -> ActionSpec
-  -> IO (List Gated)
-installOne app window dispatch gated spec = case spec.name of
-  Nothing -> pure gated
-  Just full -> do
-    unless (null spec.accels) (Gtk.applicationSetAccelsForAction app full spec.accels)
-    case spec.effect of
-      Nothing -> pure gated
-      Just wanted -> do
-        let (prefix, dotted) = T.breakOn "." full
-        action <-
-          new
-            Gio.SimpleAction
-            [ #name := T.drop 1 dotted
-            , On #activate (\_param -> runEffect window dispatch wanted)
-            ]
-        if prefix == "app"
-          then Gio.actionMapAddAction app action
-          else Gio.actionMapAddAction window action
-        pure (maybe gated (\rule -> Gated {action, rule} : gated) spec.enabled)
+  -> IO (Maybe (Gio.SimpleAction, Command.Command))
+installOne app window dispatch candidate = do
+  unless (null candidate.accels) (Gtk.applicationSetAccelsForAction app (actionName candidate.command) candidate.accels)
+  case candidate.effect of
+    Nothing -> pure Nothing
+    Just wanted -> do
+      action <-
+        new
+          Gio.SimpleAction
+          [ #name := commandId candidate.command
+          , On #activate (\_param -> runEffect window dispatch wanted)
+          ]
+      case candidate.scope of
+        App -> Gio.actionMapAddAction app action
+        _ -> Gio.actionMapAddAction window action
+      pure (Just (action, candidate.command))
 
 runEffect :: Adw.ApplicationWindow -> (UiMessage -> IO ()) -> Effect -> IO ()
 runEffect window dispatch = \case
   Send intent -> dispatch intent
   ShowAbout -> presentAbout window
 
-buildMenu :: IO Gio.Menu
-buildMenu = do
-  menu <- Gio.menuNew
+acceleratorLabel :: List Text -> IO (Maybe Text)
+acceleratorLabel = \case
+  [] -> pure Nothing
+  accel : _ -> do
+    (parsed, key, modifiers) <- Gtk.acceleratorParse accel
+    if parsed then Just <$> Gtk.acceleratorGetLabel key modifiers else pure Nothing
+
+newButton :: IORef (List (Gtk.Button, Command.Command)) -> Command.Command -> List Text -> IO Gtk.Button
+newButton buttons command classes = do
+  button <- new Gtk.Button [#actionName := actionName command]
+  mapM_ (Gtk.widgetAddCssClass button) classes
+  modifyIORef' buttons ((button, command) :)
+  pure button
+
+relabel :: Adw.ApplicationWindow -> IORef (List (Gtk.Button, Command.Command)) -> Gio.Menu -> Wording -> IO ()
+relabel window buttons menu wording = do
+  readIORef buttons >>= mapM_ (\(button, command) -> Gtk.buttonSetLabel button (commandLabel wording command))
+  Gio.menuRemoveAll menu
+  fillMenu menu wording
+  overlay <- buildShortcutsWindow wording
+  Gtk.applicationWindowSetHelpOverlay window (Just overlay)
+
+fillMenu :: Gio.Menu -> Wording -> IO ()
+fillMenu menu wording = do
   jobs <- Gio.menuNew
-  menuRow jobs "win.clear-finished"
+  menuRow jobs wording Command.ClearFinished
   general <- Gio.menuNew
-  menuRow general "app.preferences"
-  menuRow general "app.plugins"
-  menuRow general "win.show-help-overlay"
-  menuRow general "app.about"
+  mapM_ (menuRow general wording) [Command.CommandPalette, Command.Preferences, Command.Plugins, Command.KeyboardShortcuts, Command.About]
   Gio.menuAppendSection menu Nothing jobs
   Gio.menuAppendSection menu Nothing general
-  pure menu
 
-menuRow :: Gio.Menu -> Text -> IO ()
-menuRow menu actionName = Gio.menuAppend menu (Just (actionLabel actionName)) (Just actionName)
+menuRow :: Gio.Menu -> Wording -> Command.Command -> IO ()
+menuRow menu wording command = Gio.menuAppend menu (Just (commandLabel wording command)) (Just (actionName command))
 
-buildShortcutsWindow :: IO Gtk.ShortcutsWindow
-buildShortcutsWindow = do
+buildShortcutsWindow :: Wording -> IO Gtk.ShortcutsWindow
+buildShortcutsWindow wording = do
   shortcuts <- new Gtk.ShortcutsWindow []
   section <- new Gtk.ShortcutsSection [#sectionName := "shortcuts", #maxHeight := 12]
-  mapM_ (addGroup section) [JobsSection, NavigationSection, GeneralSection]
+  mapM_ (addGroup wording section) [minBound .. maxBound]
   Gtk.shortcutsWindowAddSection shortcuts section
   pure shortcuts
 
-addGroup :: Gtk.ShortcutsSection -> Section -> IO ()
-addGroup section wanted = do
-  let rows = V.filter (\spec -> spec.section == Just wanted) actionTable
-  unless (V.null rows) $ do
-    group <- new Gtk.ShortcutsGroup [#title := display wanted]
-    V.mapM_ (addShortcut group) rows
-    Gtk.shortcutsSectionAddGroup section group
+addGroup :: Wording -> Gtk.ShortcutsSection -> Section -> IO ()
+addGroup wording section wanted = do
+  let rows = V.filter (\candidate -> candidate.section == Just wanted) actionTable
+  group <- new Gtk.ShortcutsGroup [#title := sectionLabel wording wanted]
+  V.mapM_ (addShortcut wording group) rows
+  when (wanted == GeneralSection) $ do
+    mainMenu <- new Gtk.ShortcutsShortcut [#title := mainMenuLabel wording, #accelerator := "F10"]
+    Gtk.shortcutsGroupAddShortcut group mainMenu
+  Gtk.shortcutsSectionAddGroup section group
 
-addShortcut :: Gtk.ShortcutsGroup -> ActionSpec -> IO ()
-addShortcut group spec = do
-  shortcut <- case spec.name of
-    Just full -> new Gtk.ShortcutsShortcut [#title := spec.label, #actionName := full]
-    Nothing -> new Gtk.ShortcutsShortcut [#title := spec.label, #accelerator := T.unwords spec.accels]
+addShortcut :: Wording -> Gtk.ShortcutsGroup -> ActionSpec -> IO ()
+addShortcut wording group candidate = do
+  shortcut <-
+    new
+      Gtk.ShortcutsShortcut
+      [ #title := commandLabel wording candidate.command
+      , #actionName := actionName candidate.command
+      ]
   Gtk.shortcutsGroupAddShortcut group shortcut
 
 presentAbout :: Adw.ApplicationWindow -> IO ()

@@ -12,28 +12,28 @@ import Effectful.Log (logAttention_)
 import GI.Adw qualified as Adw
 import GI.GLib qualified as GLib
 import GI.Gdk qualified as Gdk
-import GI.Gio qualified as Gio
 import GI.Gsk qualified as Gsk
 import GI.Gtk qualified as Gtk
 
 import MediaCopy.Gtk.Environment (Environment, logWith)
+import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Model (Model)
 
 data Startup = Startup
   { frame :: Model
-  , action :: Maybe Text
+  , action :: Maybe Command.Command
   , shot :: Maybe FilePath
   , expand :: Bool
   , scroll :: Bool
   }
 
-seeded :: Environment -> Adw.ApplicationWindow -> Adw.Application -> (Model -> IO ()) -> Startup -> IO ()
-seeded environment window app showFrame startup = do
+seeded :: Environment -> Adw.ApplicationWindow -> (Command.Command -> IO ()) -> (Model -> IO ()) -> Startup -> IO ()
+seeded environment window activate showFrame startup = do
   Gtk.widgetSetCanTarget window False
   Gtk.windowSetFocusVisible window False
   void $ GLib.timeoutAdd GLib.PRIORITY_DEFAULT 250 $ do
     showFrame startup.frame
-    mapM_ (activateNamed environment window app) startup.action
+    mapM_ activate startup.action
     void (GLib.timeoutAdd GLib.PRIORITY_DEFAULT 600 prepare)
     pure False
   where
@@ -48,12 +48,6 @@ seeded environment window app showFrame startup = do
       either (logWith environment . logAttention_) pure outcome
       Gtk.windowDestroy window
       pure False
-
-activateNamed :: Environment -> Adw.ApplicationWindow -> Adw.Application -> Text -> IO ()
-activateNamed environment window app full = case T.breakOn "." full of
-  ("app", rest) -> Gio.actionGroupActivateAction app (T.drop 1 rest) Nothing
-  ("win", rest) -> Gio.actionGroupActivateAction window (T.drop 1 rest) Nothing
-  _ -> logWith environment (logAttention_ ("no such action: " <> full))
 
 saveWindowPng :: Adw.ApplicationWindow -> FilePath -> IO (Either Text ())
 saveWindowPng window path = do

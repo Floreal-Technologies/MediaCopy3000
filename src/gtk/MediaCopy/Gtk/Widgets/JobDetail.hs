@@ -10,6 +10,7 @@ import Data.Function ((&))
 import Data.GI.Base (AttrOp ((:=)), new, on, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Int (Int32)
+import Data.List (List)
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -24,11 +25,11 @@ import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
 import MediaCopy.Domain.Job hiding (Progress)
-import MediaCopy.Gtk.Actions (actionButton)
 import MediaCopy.Gtk.Widgets.Common (nameAccessible, newLabel, paddedBox, renderCell, suppressing, toggleClass, unlessSuppressed)
 import MediaCopy.Gtk.Widgets.FileRow (FileRow (..), newFileRow)
 import MediaCopy.Gtk.Widgets.History (HistoryView (..), newHistoryView, renderHistory)
 import MediaCopy.Gtk.Widgets.PluginStatus (PluginStatus (..), newPluginStatus)
+import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Wording
 import MediaCopy.Model (FileFilter (..), JobEntry (..), Model (..), UiMessage (..))
@@ -38,8 +39,8 @@ data JobDetail = JobDetail
   , render :: Model -> Maybe JobEntry -> IO ()
   }
 
-newJobDetail :: (UiMessage -> IO ()) -> IO JobDetail
-newJobDetail dispatch = do
+newJobDetail :: (Command.Command -> List Text -> IO Gtk.Button) -> (UiMessage -> IO ()) -> IO JobDetail
+newJobDetail button dispatch = do
   heading <- newHeading
   progress <- newProgress
   counters <- newCounters
@@ -48,7 +49,7 @@ newJobDetail dispatch = do
   suppress <- newIORef False
   filterButtons <- newFilterButtons suppress dispatch
   files <- newFileListPane
-  actions <- newActionBar
+  actions <- newActionBar button
   root <- paddedBox Gtk.OrientationVertical 12 20
   Gtk.boxAppend root heading.title
   Gtk.boxAppend root heading.pathLine
@@ -210,11 +211,11 @@ newFileListPane = do
   lastRendered <- newIORef Nothing
   pure FileListPane {list, header, scroll, rows, lastRendered}
 
-newActionBar :: IO Gtk.Box
-newActionBar = do
-  cancelBtn <- actionButton "win.cancel-job" ["destructive-action"]
-  reviewBtn <- actionButton "win.review-job" []
-  reportBtn <- actionButton "win.save-report" []
+newActionBar :: (Command.Command -> List Text -> IO Gtk.Button) -> IO Gtk.Box
+newActionBar button = do
+  cancelBtn <- button Command.CancelJob ["destructive-action"]
+  reviewBtn <- button Command.ReviewJob []
+  reportBtn <- button Command.SaveReport []
   actions <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #spacing := 8, #halign := Gtk.AlignEnd]
   Gtk.boxAppend actions cancelBtn
   Gtk.boxAppend actions reviewBtn

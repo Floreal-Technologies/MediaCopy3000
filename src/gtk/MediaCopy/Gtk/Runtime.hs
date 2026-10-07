@@ -138,7 +138,7 @@ buildAndPresent runtimeRef environment startup app = do
   let showFrame frame = do
         writeIORef modelRef frame
         widgets.render frame
-  mapM_ (seeded environment widgets.window app showFrame) startup
+  mapM_ (seeded environment widgets.window widgets.activate showFrame) startup
 
 dispatch :: Runtime -> Message -> IO ()
 dispatch runtime msg = do
@@ -188,7 +188,7 @@ runCommand runtime = \case
   LoadCatalog -> catalogWorker runtime
   ApplyChange change -> changeWorker runtime change
   ShowFolder folder -> showFolder runtime folder
-  Activate _ -> pure ()
+  Activate command -> runtime.widgets.activate command
 
 installCloseRequest :: Adw.ApplicationWindow -> (Message -> IO ()) -> IO ()
 installCloseRequest window dispatchNow =

@@ -14,11 +14,10 @@ import Data.Text (Text)
 import Data.Vector (Vector)
 import GI.Adw qualified as Adw
 import GI.GLib qualified as GLib
-import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 
 import MediaCopy.Domain.Job (JobId)
-import MediaCopy.Gtk.Actions (headerAction, installActions)
+import MediaCopy.Gtk.Actions (Actions (..), installActions)
 import MediaCopy.Gtk.Widgets.CloseConfirm (newCloseConfirm)
 import MediaCopy.Gtk.Widgets.Common (Cell, flatNamed, newCell, renderCell, suppressing, unlessSuppressed)
 import MediaCopy.Gtk.Widgets.JobDetail (JobDetail (..), newJobDetail)
@@ -26,6 +25,8 @@ import MediaCopy.Gtk.Widgets.JobRow (JobRow (..), jobIdOfRow, newJobRow)
 import MediaCopy.Gtk.Widgets.OffloadDialog (newOffloadDialog, renderOffloadDialog)
 import MediaCopy.Gtk.Widgets.PlanSheet (newPlanSheet, renderPlanSheet)
 import MediaCopy.Gtk.Widgets.Preferences (newPreferences)
+import MediaCopy.Interface.Command (mainMenuLabel)
+import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Theme (Appearance, PaletteMode, ThemeSection)
 import MediaCopy.Interface.Translation
 import MediaCopy.Model (JobEntry (..), Model (..), UiMessage (..), selectedEntry)
@@ -33,6 +34,7 @@ import MediaCopy.Model (JobEntry (..), Model (..), UiMessage (..), selectedEntry
 data Widgets = Widgets
   { window :: Adw.ApplicationWindow
   , render :: Model -> IO ()
+  , activate :: Command.Command -> IO ()
   }
 
 buildWidgets
@@ -45,10 +47,10 @@ buildWidgets
   -> IO Widgets
 buildWidgets app applyTheme wording lightSections darkSections dispatch = do
   window <- newAppWindow app
-  (menuModel, renderActions) <- installActions app window dispatch
-  toolbar <- newHeaderToolbar menuModel
+  actions <- installActions app window dispatch
+  toolbar <- newHeaderToolbar actions wording
   toastOverlay <- new Adw.ToastOverlay []
-  detail <- newJobDetail dispatch
+  detail <- newJobDetail actions.button dispatch
   (sidebar, sidebarPage) <- newSidebar dispatch
   (contentStack, jobPage) <- newContentStack detail
   splitView <- new Adw.NavigationSplitView [#sidebar := sidebarPage, #content := jobPage]
@@ -68,13 +70,13 @@ buildWidgets app applyTheme wording lightSections darkSections dispatch = do
         let selected = selectedEntry current
         Gtk.stackSetVisibleChildName contentStack (if isJust selected then "detail" else "empty")
         detail.render current selected
-        renderActions current
+        actions.render current
         renderOffloadDialog offloadDialog current
         renderPlanSheet planSheet current
         paintPreferences current
         renderCell closeConfirm current.closeConfirm
         renderCell toastCell current.toast
-  pure Widgets {window, render}
+  pure Widgets {window, render, activate = actions.activate}
 
 newAppWindow :: Adw.Application -> IO Adw.ApplicationWindow
 newAppWindow app =
@@ -86,22 +88,22 @@ newAppWindow app =
     , #title := "MediaCopy 3000"
     ]
 
-newHeaderToolbar :: Gio.Menu -> IO Adw.ToolbarView
-newHeaderToolbar menuModel = do
+newHeaderToolbar :: Actions -> Wording -> IO Adw.ToolbarView
+newHeaderToolbar actions wording = do
   toolbar <- new Adw.ToolbarView []
   headerBar <- new Adw.HeaderBar []
-  headerAction headerBar "win.new-offload" ["suggested-action"]
-  headerAction headerBar "win.verify" []
-  headerAction headerBar "win.seal" []
+  actions.button Command.NewOffload ["suggested-action"] >>= Adw.headerBarPackStart headerBar
+  actions.button Command.VerifyFolder [] >>= Adw.headerBarPackStart headerBar
+  actions.button Command.SealMedia [] >>= Adw.headerBarPackStart headerBar
   menuButton <-
     new
       Gtk.MenuButton
       [ #iconName := "open-menu-symbolic"
-      , #tooltipText := "Main Menu"
+      , #tooltipText := mainMenuLabel wording
       , #primary := True
-      , #menuModel := menuModel
+      , #menuModel := actions.menu
       ]
-  flatNamed menuButton "Main Menu"
+  flatNamed menuButton (mainMenuLabel wording)
   Adw.headerBarPackEnd headerBar menuButton
   Adw.toolbarViewAddTopBar toolbar headerBar
   pure toolbar
