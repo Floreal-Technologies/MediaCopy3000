@@ -20,7 +20,7 @@ import GI.Gtk qualified as Gtk
 
 import MediaCopy.Domain.Job (plural)
 import MediaCopy.Domain.PluginCatalog (AuthorSlot (..), FieldShape (..), FieldValue (..), FieldView (..), authorSlots)
-import MediaCopy.Gtk.Widgets.Common (suppressing, unlessSuppressed)
+import MediaCopy.Gtk.Widgets.Common (paintEditable, suppressing, unlessSuppressed)
 
 data FieldActions = FieldActions
   { setText :: Text -> IO ()
@@ -75,7 +75,7 @@ fieldRow actions prefix field = do
         Gtk.widgetAddCssClass choose "flat"
         Adw.entryRowAddSuffix row choose
       shown <- Adw.toPreferencesRow row
-      pure FieldRow {rows = [shown], refresh = paintEntry row . textOf}
+      pure FieldRow {rows = [shown], refresh = paintEditable row . textOf}
   where
     isTrue value = value == Value "true"
     textOf = \case
@@ -125,11 +125,6 @@ newEntryRow title text = do
   set row [#title := title]
   pure row
 
-paintEntry :: Adw.EntryRow -> Text -> IO ()
-paintEntry entry text = do
-  shown <- Gtk.editableGetText entry
-  when (shown /= text) (Gtk.editableSetText entry text)
-
 data SlotRows = SlotRows
   { expander :: Adw.ExpanderRow
   , entries :: [Adw.EntryRow]
@@ -158,7 +153,7 @@ slotRows slot = do
       paint fresh = do
         Adw.preferencesRowSetTitle expander (slotTitle fresh)
         Adw.expanderRowSetSubtitle expander fresh.name
-        zipWithM_ paintEntry entries [fresh.role, fresh.name, fresh.email, fresh.phone]
+        zipWithM_ paintEditable entries [fresh.role, fresh.name, fresh.email, fresh.phone]
   pure SlotRows {expander, entries, remove, current, paint}
 
 slotTitle :: AuthorSlot -> Text

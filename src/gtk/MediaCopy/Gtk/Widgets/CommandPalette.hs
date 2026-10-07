@@ -20,7 +20,7 @@ import GI.GLib qualified as GLib
 import GI.Gdk qualified as Gdk
 import GI.Gtk qualified as Gtk
 
-import MediaCopy.Gtk.Widgets.Common (Cell, newCell, newLabel, newOpenCell, onDialogClosed, paddedBox, renderCell, suppressing, unlessSuppressed)
+import MediaCopy.Gtk.Widgets.Common (Cell, newCell, newLabel, newOpenCell, onDialogClosed, paddedBox, paintEditable, renderCell, suppressing, unlessSuppressed)
 import MediaCopy.Interface.Command (commandId, commandLabel, paletteNoMatch, palettePlaceholder)
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Palette (Match (..), PaletteRow (..), Target (..), paletteRows)
@@ -80,7 +80,7 @@ newCommandPalette window accelLabel dispatch = do
   Gtk.widgetAddController entry keys
   openCell <- newOpenCell dialog window
   onDialogClosed dialog openCell (dispatch ClosePalette)
-  queryCell <- newCell (suppressing suppress . Gtk.editableSetText entry)
+  queryCell <- newCell (suppressing suppress . paintEditable entry)
   rowsCell <- newCell (paintRows parts accelLabel)
   pure CommandPalette {openCell, queryCell, rowsCell}
 

@@ -10,6 +10,7 @@ module MediaCopy.Gtk.Widgets.Common
   , unlessSuppressed
   , paddedBox
   , newLabel
+  , paintEditable
   , DialogShell (..)
   , ShellButtons (..)
   , ShellButton (..)
@@ -45,6 +46,11 @@ toggleClass widget className wanted =
   if wanted
     then Gtk.widgetAddCssClass widget className
     else Gtk.widgetRemoveCssClass widget className
+
+paintEditable :: (Gtk.IsEditable w) => w -> Text -> IO ()
+paintEditable editable text = do
+  shown <- Gtk.editableGetText editable
+  when (shown /= text) (Gtk.editableSetText editable text)
 
 nameAccessible :: (Gtk.IsAccessible w) => w -> Text -> IO ()
 nameAccessible widget name = do
