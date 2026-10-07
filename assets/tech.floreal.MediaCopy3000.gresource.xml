@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/tech/floreal/MediaCopy3000/icons/scalable/apps">
+    <file>tech.floreal.MediaCopy3000.svg</file>
+    <file>tech.floreal.MediaCopy3000-symbolic.svg</file>
+  </gresource>
+</gresources>

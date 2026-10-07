@@ -14,6 +14,9 @@ data-files:
   assets/themes/**/*.json
 
 extra-source-files:
+  assets/tech.floreal.MediaCopy3000-symbolic.svg
+  assets/tech.floreal.MediaCopy3000.gresource.xml
+  assets/tech.floreal.MediaCopy3000.svg
   locales/*.ftl
   tests/fixtures/**/*.mhl
   tests/fixtures/**/*.xml
@@ -215,6 +218,8 @@ library
     MediaCopy.Gtk.Environment
     MediaCopy.Gtk.Interpret
     MediaCopy.Gtk.Reload
+    MediaCopy.Gtk.Resources
+    MediaCopy.Gtk.Resources.Splice
     MediaCopy.Gtk.Runtime
     MediaCopy.Gtk.Screenshot
     MediaCopy.Gtk.Theme
@@ -262,6 +267,8 @@ library
     mediacopy3000:domain,
     mediacopy3000:interface,
     monad-time-effectful,
+    process,
+    template-haskell,
     text,
     text-display,
     time,

@@ -21,6 +21,7 @@ import System.Exit (ExitCode (ExitFailure), exitWith)
 
 import MediaCopy.Gtk.Environment (Environment, withEnvironment)
 import MediaCopy.Gtk.Reload (loadCss, loadWording)
+import MediaCopy.Gtk.Resources (registerResources)
 import MediaCopy.Gtk.Screenshot (Startup (..), seeded)
 import MediaCopy.Gtk.Theme
 import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
@@ -45,6 +46,7 @@ data Loop = Loop
 
 start :: Interpret -> Maybe Startup -> IO ()
 start interpret startup = withEnvironment $ \environment -> do
+  registerResources
   loopRef <- newIORef Nothing
   app <-
     new
