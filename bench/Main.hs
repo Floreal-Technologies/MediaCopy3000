@@ -32,12 +32,9 @@ import Text.Printf (printf)
 import MediaCopy.Demo.Fixtures qualified as Fixtures
 import MediaCopy.Domain.Job
 import MediaCopy.Gtk.Environment (Environment, withEnvironment)
-import MediaCopy.Gtk.Reload (loadCss)
-import MediaCopy.Gtk.Theme (apply, loadPalettes, newThemeAdapter)
-import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
-import MediaCopy.Interface.Theme (PaletteMode (..), themeSections)
-import MediaCopy.Interface.Translation
-import MediaCopy.Interface.Translation.Embedded
+import MediaCopy.Gtk.Runtime (buildView)
+import MediaCopy.Gtk.View (Widgets (..))
+import MediaCopy.Interface.Theme (PaletteMode (..))
 import MediaCopy.Model
 
 benchJob :: JobId
@@ -78,12 +75,7 @@ readResultsPath = \case
 
 bench :: Environment -> Int -> FilePath -> Adw.Application -> IO ()
 bench environment fileCount resultsPath app = do
-  themeAdapter <- newThemeAdapter environment
-  palettes <- loadPalettes environment
-  let lightSections = themeSections (embeddedWording English) LightPalette palettes
-      darkSections = themeSections (embeddedWording English) DarkPalette palettes
-  widgets <- buildWidgets app (apply themeAdapter) (embeddedWording English) lightSections darkSections (\_intent -> pure ())
-  loadCss environment
+  (_themeAdapter, widgets) <- buildView environment app (\_intent -> pure ())
   Gtk.windowPresent widgets.window
   settle 500
   counters <- newCounters widgets.window

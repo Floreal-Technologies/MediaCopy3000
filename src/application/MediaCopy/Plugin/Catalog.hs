@@ -20,7 +20,6 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8Lenient)
 import Data.Vector qualified as V
-import Effectful (runEff)
 import MediaCopy.Plugin.Manifest
 import System.Directory.OsPath (createDirectoryIfMissing, doesFileExist)
 import System.File.OsPath qualified as FileIO
@@ -28,7 +27,8 @@ import System.OsPath (takeDirectory)
 
 import MediaCopy.Domain.Plugin (PluginRef (..))
 import MediaCopy.Domain.PluginCatalog
-import MediaCopy.Effects.FileSystem (defaultChunkSize, runFileSystemIO, writeTextAtomically)
+import MediaCopy.Effects.FileSystem (writeTextAtomically)
+import MediaCopy.Effects.Run (runApp)
 import MediaCopy.Plugin.Discovery
 import MediaCopy.Plugin.Grants
 import MediaCopy.Plugin.Wire (fieldValues, slotsJson, slotsOf)
@@ -121,7 +121,7 @@ applyChange change = do
     Right edited -> do
       written <- try @IOException $ do
         createDirectoryIfMissing True (takeDirectory path)
-        runEff (runFileSystemIO defaultChunkSize (writeTextAtomically path (decodeUtf8Lenient (LBS.toStrict (encodePretty edited)) <> "\n")))
+        runApp (writeTextAtomically path (decodeUtf8Lenient (LBS.toStrict (encodePretty edited)) <> "\n"))
       pure (either (\e -> Left ("plugins.json cannot be written: " <> T.show e)) Right written)
 
 -- |

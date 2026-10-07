@@ -14,7 +14,6 @@ import Data.Text qualified as T
 import Data.Text.Display (display)
 import Data.Text.IO qualified as T
 import Data.Time (getCurrentTime)
-import Effectful (runEff)
 import MediaCopy.Plugin.Manifest (PluginManifest (..))
 import Options.Applicative
 import System.Environment (getArgs, lookupEnv)
@@ -25,8 +24,9 @@ import System.OsPath (OsPath, encodeUtf)
 import MediaCopy.Demo (Scene (..), lookupScene, sceneNames)
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan (JobPlan, planBlocked)
-import MediaCopy.Effects.FileSystem (defaultChunkSize, runFileSystemIO)
+import MediaCopy.Effects.Run (runApp)
 import MediaCopy.Engine (planJob)
+import MediaCopy.Gtk.Interpret qualified as Interpret
 import MediaCopy.Gtk.Runtime qualified as Runtime
 import MediaCopy.Gtk.Screenshot (Startup (..))
 import MediaCopy.Plugin (PluginSetup (..), loadPluginSetup, planWithPlugins)
@@ -88,7 +88,7 @@ run = \case
   PlanOnly job options -> planCommand job options
   Gui -> do
     T.putStrLn banner
-    startup >>= Runtime.start
+    startup >>= Runtime.start Interpret.production
 
 commandInfo :: ParserInfo Command
 commandInfo =
@@ -153,7 +153,7 @@ planCommand job options = do
   now <- getCurrentTime
   let spec = JobSpec {jobId = JobId 1, job, createdAt = now, pluginFields = options.fields}
   attempt <- try @SomeException $ do
-    plan <- runEff (runFileSystemIO defaultChunkSize (planJob spec))
+    plan <- runApp (planJob spec)
     if options.enabled then withPlugins plan else pure plan
   case attempt of
     Left err -> T.hPutStrLn stderr (T.pack (displayException err)) >> exitWith (ExitFailure 2)

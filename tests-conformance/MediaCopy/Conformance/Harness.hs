@@ -19,8 +19,6 @@ import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map.Strict qualified as Map
 import Data.Time (UTCTime (..), fromGregorian)
 import Data.Vector (Vector)
-import Effectful
-import Effectful.Time (runTime)
 import System.Directory (createDirectoryIfMissing, listDirectory)
 import System.FilePath (takeDirectory, takeExtension, (</>))
 import System.IO.Temp (withSystemTempDirectory)
@@ -29,8 +27,7 @@ import System.OsPath (OsPath, encodeUtf)
 import MediaCopy.Domain.History (HistoryError)
 import MediaCopy.Domain.Job
 import MediaCopy.Effects.Emit
-import MediaCopy.Effects.FileSystem (defaultChunkSize, runFileSystemIO)
-import MediaCopy.Effects.Hasher (runHasher)
+import MediaCopy.Effects.Run (runApp)
 import MediaCopy.Engine (readHistory, runJob)
 
 withTempTree :: String -> (FilePath -> IO a) -> IO a
@@ -50,10 +47,7 @@ runEngineIO :: JobSpec -> IO (Vector JobEvent)
 runEngineIO spec =
   runJob "localhost" spec
     & runEmitCollect
-    & runTime
-    & runHasher
-    & runFileSystemIO defaultChunkSize
-    & runEff
+    & runApp
     & fmap snd
 
 offloadSpec :: FilePath -> FilePath -> IO JobSpec
@@ -95,5 +89,4 @@ readHistoryIO :: FilePath -> IO (Either HistoryError (Maybe MhlHistory))
 readHistoryIO folder = do
   f <- osPathOf folder
   readHistory f
-    & runFileSystemIO defaultChunkSize
-    & runEff
+    & runApp
