@@ -7,7 +7,7 @@ module MediaCopy.Gtk.Widgets.PlanSheet
 import Ascmhl.Path (pathText)
 import Ascmhl.Types (Author (..))
 import Ascmhl.Write (formatMhlTime)
-import Control.Monad (void, when, zipWithM_)
+import Control.Monad (forM_, void, when, zipWithM_)
 import Data.Function ((&))
 import Data.GI.Base
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)

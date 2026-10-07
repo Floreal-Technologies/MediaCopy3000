@@ -2,7 +2,7 @@ module MediaCopy.Gtk.Widgets.Preferences
   ( newPreferences
   ) where
 
-import Control.Monad (void)
+import Control.Monad (forM_, void)
 import Data.GI.Base (AttrOp (On, (:=)), new, on, set, unsafeCastTo)
 import Data.GI.Base.BasicTypes (glibType)
 import Data.IORef (IORef, newIORef)

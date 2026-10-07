@@ -3,6 +3,7 @@ module MediaCopy.Gtk.Widgets.PluginStatus
   , newPluginStatus
   ) where
 
+import Control.Monad (forM_)
 import Data.GI.Base (AttrOp ((:=)), new, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Map.Strict qualified as Map

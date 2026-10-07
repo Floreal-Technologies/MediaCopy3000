@@ -19,7 +19,7 @@ module MediaCopy.Effects.FileSystem
 import Ascmhl.Layout (ascmhlDir)
 import Ascmhl.Path (RelPath, pathText)
 import Control.Exception hiding (displayException)
-import Control.Monad (unless, when)
+import Control.Monad (forM, unless, when)
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS

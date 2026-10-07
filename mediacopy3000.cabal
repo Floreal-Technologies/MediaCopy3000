@@ -218,6 +218,7 @@ library
     MediaCopy.Gtk.Theme
     MediaCopy.Gtk.View
     MediaCopy.Gtk.Widgets.CloseConfirm
+    MediaCopy.Gtk.Widgets.CommandPalette
     MediaCopy.Gtk.Widgets.Common
     MediaCopy.Gtk.Widgets.FieldRows
     MediaCopy.Gtk.Widgets.FileRow

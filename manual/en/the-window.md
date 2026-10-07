@@ -39,6 +39,7 @@ The list at the left holds the jobs, one per row, their phase and a progress bar
 Click a row to select the job. <kbd>Ctrl</kbd>+<kbd>Page Down</kbd> and
 <kbd>Ctrl</kbd>+<kbd>Page Up</kbd> move the selection.
 The [Keyboard Shortcuts](keyboard.md) page lists every key.
+<kbd>Ctrl</kbd>+<kbd>K</kbd> opens the [command palette](keyboard.md#the-command-palette).
 
 ## The Details pane
 

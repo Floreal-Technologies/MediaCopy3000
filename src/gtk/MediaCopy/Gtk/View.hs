@@ -3,7 +3,7 @@ module MediaCopy.Gtk.View
   , buildWidgets
   ) where
 
-import Control.Monad (void)
+import Control.Monad (forM_, void)
 import Data.Foldable (traverse_)
 import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
@@ -19,6 +19,7 @@ import GI.Gtk qualified as Gtk
 import MediaCopy.Domain.Job (JobId)
 import MediaCopy.Gtk.Actions (Actions (..), installActions)
 import MediaCopy.Gtk.Widgets.CloseConfirm (newCloseConfirm)
+import MediaCopy.Gtk.Widgets.CommandPalette (newCommandPalette, renderCommandPalette)
 import MediaCopy.Gtk.Widgets.Common (Cell, flatNamed, newCell, renderCell, suppressing, unlessSuppressed)
 import MediaCopy.Gtk.Widgets.JobDetail (JobDetail (..), newJobDetail)
 import MediaCopy.Gtk.Widgets.JobRow (JobRow (..), jobIdOfRow, newJobRow)
@@ -64,6 +65,7 @@ buildWidgets app applyTheme wording lightSections darkSections dispatch = do
   planSheet <- newPlanSheet window dispatch
   paintPreferences <- newPreferences app window wording lightSections darkSections dispatch
   closeConfirm <- newCloseConfirm window dispatch
+  commandPalette <- newCommandPalette window actions.accelLabel dispatch
   let render current = do
         renderCell themeCell (current.appearance, current.desktopBase)
         renderSidebar sidebar current
@@ -75,6 +77,7 @@ buildWidgets app applyTheme wording lightSections darkSections dispatch = do
         renderPlanSheet planSheet current
         paintPreferences current
         renderCell closeConfirm current.closeConfirm
+        renderCommandPalette commandPalette current
         renderCell toastCell current.toast
   pure Widgets {window, render, activate = actions.activate}
 

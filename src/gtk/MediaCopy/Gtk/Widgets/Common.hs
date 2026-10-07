@@ -2,6 +2,7 @@ module MediaCopy.Gtk.Widgets.Common
   ( Cell
   , newCell
   , newOpenCell
+  , newOpenCellWith
   , renderCell
   , toggleClass
   , nameAccessible
@@ -10,6 +11,7 @@ module MediaCopy.Gtk.Widgets.Common
   , unlessSuppressed
   , paddedBox
   , newLabel
+  , paintEditable
   , DialogShell (..)
   , ShellButtons (..)
   , ShellButton (..)
@@ -46,6 +48,11 @@ toggleClass widget className wanted =
     then Gtk.widgetAddCssClass widget className
     else Gtk.widgetRemoveCssClass widget className
 
+paintEditable :: (Gtk.IsEditable w) => w -> Text -> IO ()
+paintEditable editable text = do
+  shown <- Gtk.editableGetText editable
+  when (shown /= text) (Gtk.editableSetText editable text)
+
 nameAccessible :: (Gtk.IsAccessible w) => w -> Text -> IO ()
 nameAccessible widget name = do
   value <- toGValue (Just name)
@@ -67,11 +74,14 @@ newCell paint = do
   pure (Cell ref paint)
 
 newOpenCell :: Adw.Dialog -> Adw.ApplicationWindow -> IO (Cell Bool)
-newOpenCell dialog window = do
+newOpenCell = newOpenCellWith (pure ())
+
+newOpenCellWith :: IO () -> Adw.Dialog -> Adw.ApplicationWindow -> IO (Cell Bool)
+newOpenCellWith presented dialog window = do
   ref <- newIORef (Just False)
   pure $ Cell ref $ \open ->
     if open
-      then Adw.dialogPresent dialog (Just window)
+      then Adw.dialogPresent dialog (Just window) >> presented
       else void (Adw.dialogClose dialog)
 
 renderCell

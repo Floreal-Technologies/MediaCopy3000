@@ -1,6 +1,6 @@
 module MediaCopy.Conformance.OursToReferenceTest (tests) where
 
-import Control.Monad (void)
+import Control.Monad (forM_, void)
 import Data.Text qualified as T
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
