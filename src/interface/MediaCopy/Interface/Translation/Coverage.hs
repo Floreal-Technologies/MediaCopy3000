@@ -16,6 +16,7 @@ import System.OsPath (unsafeEncodeUtf)
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan (Severity (..))
 import MediaCopy.Domain.Plugin
+import MediaCopy.Interface.Command
 import MediaCopy.Interface.Theme
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Wording
@@ -49,6 +50,9 @@ expectedWording wording =
     <> map (displayBase wording) [minBound ..]
     <> map (themeRowLabel wording . SystemTheme) [minBound ..]
     <> map (.heading) (V.toList (themeSections wording minBound V.empty))
+    <> map (commandLabel wording) commands
+    <> map (sectionLabel wording) [minBound ..]
+    <> [mainMenuLabel wording, palettePlaceholder wording, paletteNoMatch wording]
 
 fileStatuses :: List FileStatus
 fileStatuses =

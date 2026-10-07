@@ -188,6 +188,7 @@ runCommand runtime = \case
   LoadCatalog -> catalogWorker runtime
   ApplyChange change -> changeWorker runtime change
   ShowFolder folder -> showFolder runtime folder
+  Activate _ -> pure ()
 
 installCloseRequest :: Adw.ApplicationWindow -> (Message -> IO ()) -> IO ()
 installCloseRequest window dispatchNow =

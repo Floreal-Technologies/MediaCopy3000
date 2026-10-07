@@ -152,6 +152,8 @@ library interface
   hs-source-dirs: src/interface
   -- cabal-gild: discover src/interface
   exposed-modules:
+    MediaCopy.Interface.Command
+    MediaCopy.Interface.Palette
     MediaCopy.Interface.Theme
     MediaCopy.Interface.Translation
     MediaCopy.Interface.Translation.Coverage
@@ -179,6 +181,7 @@ library interface
     text,
     text-display,
     time,
+    unicode-transforms,
     vector,
 
 library demo
