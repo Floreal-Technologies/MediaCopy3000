@@ -17,7 +17,7 @@ import GI.GLib qualified as GLib
 import GI.Gtk qualified as Gtk
 
 import MediaCopy.Domain.Job (JobId)
-import MediaCopy.Gtk.Actions (Actions (..), installActions)
+import MediaCopy.Gtk.Actions (Actions (..), installActions, presentAbout)
 import MediaCopy.Gtk.Widgets.CloseConfirm (newCloseConfirm)
 import MediaCopy.Gtk.Widgets.CommandPalette (newCommandPalette, renderCommandPalette)
 import MediaCopy.Gtk.Widgets.Common (Cell, flatNamed, newCell, renderCell, suppressing, unlessSuppressed)
@@ -25,17 +25,17 @@ import MediaCopy.Gtk.Widgets.JobDetail (JobDetail (..), newJobDetail)
 import MediaCopy.Gtk.Widgets.JobRow (JobRow (..), jobIdOfRow, newJobRow)
 import MediaCopy.Gtk.Widgets.OffloadDialog (newOffloadDialog, renderOffloadDialog)
 import MediaCopy.Gtk.Widgets.PlanSheet (newPlanSheet, renderPlanSheet)
-import MediaCopy.Gtk.Widgets.Preferences (newPreferences)
+import MediaCopy.Gtk.Widgets.Preferences (Preferences (..), newPreferences)
 import MediaCopy.Interface.Command (mainMenuLabel)
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Theme (Appearance, PaletteMode, ThemeSection)
 import MediaCopy.Interface.Translation
-import MediaCopy.Model (JobEntry (..), Model (..), UiMessage (..), selectedEntry)
+import MediaCopy.Model (Chrome (..), JobEntry (..), Model (..), UiMessage (..), selectedEntry)
 
 data Widgets = Widgets
   { window :: Adw.ApplicationWindow
   , render :: Model -> IO ()
-  , activate :: Command.Command -> IO ()
+  , present :: Chrome -> IO ()
   }
 
 buildWidgets
@@ -63,7 +63,7 @@ buildWidgets app applyTheme wording lightSections darkSections dispatch = do
   themeCell <- newCell (\(appearance, desktop) -> applyTheme appearance desktop)
   offloadDialog <- newOffloadDialog window dispatch
   planSheet <- newPlanSheet window dispatch
-  paintPreferences <- newPreferences app window wording lightSections darkSections dispatch
+  preferences <- newPreferences window wording lightSections darkSections dispatch
   closeConfirm <- newCloseConfirm window dispatch
   commandPalette <- newCommandPalette window actions.accelLabel dispatch
   let render current = do
@@ -75,11 +75,15 @@ buildWidgets app applyTheme wording lightSections darkSections dispatch = do
         actions.render current
         renderOffloadDialog offloadDialog current
         renderPlanSheet planSheet current
-        paintPreferences current
+        preferences.render current
         renderCell closeConfirm current.closeConfirm
         renderCommandPalette commandPalette current
         renderCell toastCell current.toast
-  pure Widgets {window, render, activate = actions.activate}
+      present = \case
+        ShowPreferences page -> preferences.showPage page
+        ShowAbout -> presentAbout window
+        ShowShortcuts -> void (Gtk.widgetActivateAction window "win.show-help-overlay" Nothing)
+  pure Widgets {window, render, present}
 
 newAppWindow :: Adw.Application -> IO Adw.ApplicationWindow
 newAppWindow app =

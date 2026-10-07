@@ -1,5 +1,6 @@
 module MediaCopy.Gtk.Widgets.Preferences
-  ( newPreferences
+  ( Preferences (..)
+  , newPreferences
   ) where
 
 import Control.Monad (forM_, void)
@@ -16,21 +17,23 @@ import GI.Gtk qualified as Gtk
 
 import MediaCopy.Gtk.Widgets.Common (flatNamed, newLabel, renderCell, suppressing, unlessSuppressed)
 import MediaCopy.Gtk.Widgets.PluginsPage (PluginsPage (..), newPluginsPage)
-import MediaCopy.Interface.Command (commandId)
-import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Theme
 import MediaCopy.Interface.Translation
-import MediaCopy.Model (Model (..), UiMessage (..))
+import MediaCopy.Model (Model (..), PreferencesPage (..), UiMessage (..))
+
+data Preferences = Preferences
+  { render :: Model -> IO ()
+  , showPage :: PreferencesPage -> IO ()
+  }
 
 newPreferences
-  :: Adw.Application
-  -> Adw.ApplicationWindow
+  :: Adw.ApplicationWindow
   -> Wording
   -> Vector ThemeSection
   -> Vector ThemeSection
   -> (UiMessage -> IO ())
-  -> IO (Model -> IO ())
-newPreferences app window wording lightSections darkSections dispatch = do
+  -> IO Preferences
+newPreferences window wording lightSections darkSections dispatch = do
   dialog <- new Adw.PreferencesDialog [#title := "Preferences"]
   page <- new Adw.PreferencesPage [#name := "general", #title := "General", #iconName := "preferences-system-symbolic"]
   group <- new Adw.PreferencesGroup [#title := "Appearance", #description := "Applies to this run only"]
@@ -43,11 +46,20 @@ newPreferences app window wording lightSections darkSections dispatch = do
   plugins <- newPluginsPage dialog dispatch
   Adw.preferencesDialogAdd dialog plugins.page
   reportChoices rows dispatch
-  installPreferencesAction app window dialog Command.Preferences "general"
-  installPreferencesAction app window dialog Command.Plugins "plugins"
-  pure $ \model -> do
-    paintAppearance rows model.appearance
-    renderCell plugins.cell model.plugins
+  pure
+    Preferences
+      { render = \model -> do
+          paintAppearance rows model.appearance
+          renderCell plugins.cell model.plugins
+      , showPage = \wanted -> do
+          Adw.preferencesDialogSetVisiblePageName dialog (pageName wanted)
+          Adw.dialogPresent dialog (Just window)
+      }
+
+pageName :: PreferencesPage -> Text
+pageName = \case
+  GeneralPreferences -> "general"
+  PluginPreferences -> "plugins"
 
 data AppearanceRows = AppearanceRows
   { baseRow :: Adw.ComboRow
@@ -110,18 +122,6 @@ paintAppearance rows appearance = do
 select :: (Eq a) => IORef Bool -> (Word32 -> IO ()) -> Vector a -> a -> IO ()
 select suppress choose values wanted =
   forM_ (V.elemIndex wanted values) (suppressing suppress . choose . fromIntegral)
-
-installPreferencesAction :: Adw.Application -> Adw.ApplicationWindow -> Adw.PreferencesDialog -> Command.Command -> Text -> IO ()
-installPreferencesAction app window dialog command pageName = do
-  action <-
-    new
-      Gio.SimpleAction
-      [ #name := commandId command
-      , On #activate $ \_param -> do
-          Adw.preferencesDialogSetVisiblePageName dialog pageName
-          Adw.dialogPresent dialog (Just window)
-      ]
-  Gio.actionMapAddAction app action
 
 baseValues :: Vector Base
 baseValues = V.fromList [minBound .. maxBound]

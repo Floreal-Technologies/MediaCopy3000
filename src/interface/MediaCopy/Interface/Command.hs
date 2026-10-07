@@ -31,13 +31,13 @@ data Command
   | ClearFinished
   | NextJob
   | PreviousJob
+  | CommandPalette
   | Preferences
   | Plugins
   | KeyboardShortcuts
   | About
   | CloseWindow
   | Quit
-  | CommandPalette
   deriving stock (Eq, Ord, Show, Enum, Bounded)
 
 commands :: List Command

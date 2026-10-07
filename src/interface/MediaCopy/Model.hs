@@ -164,7 +164,50 @@ data Command
   | LoadCatalog
   | ApplyChange CatalogChange
   | ShowFolder Text
-  | Activate Command.Command
+  | ShowChrome Chrome
+
+data Scope = App | Win | Builtin Text
+  deriving stock (Eq, Show)
+
+data PreferencesPage = GeneralPreferences | PluginPreferences
+  deriving stock (Eq, Show)
+
+data Chrome = ShowPreferences PreferencesPage | ShowAbout | ShowShortcuts
+  deriving stock (Eq, Show)
+
+data CommandEffect = Apply UiMessage | Present Chrome
+  deriving stock (Eq, Show)
+
+data CommandSpec = CommandSpec
+  { scope :: Scope
+  , accels :: List Text
+  , section :: Maybe Command.Section
+  , menu :: Maybe Command.Section
+  , enabled :: Model -> Bool
+  , effect :: CommandEffect
+  }
+
+commandSpec :: Command.Command -> CommandSpec
+commandSpec = \case
+  Command.NewOffload -> CommandSpec Win ["<Control>n"] (Just Command.JobsSection) Nothing (const True) (Apply OpenOffloadDialog)
+  Command.VerifyFolder -> CommandSpec Win ["<Control>o"] (Just Command.JobsSection) Nothing (const True) (Apply PickVerifyFolder)
+  Command.SealMedia -> CommandSpec Win ["<Control>l"] (Just Command.JobsSection) Nothing (const True) (Apply PickSealFolder)
+  Command.SaveReport -> CommandSpec Win ["<Control>s"] (Just Command.JobsSection) Nothing canReportSelected (Apply SaveSelectedReport)
+  Command.CancelJob -> CommandSpec Win [] Nothing Nothing canCancelSelected (Apply CancelSelectedJob)
+  Command.ReviewJob -> CommandSpec Win [] Nothing Nothing (isJust . reviewableSpec) (Apply ReviewSelectedJob)
+  Command.ClearFinished -> CommandSpec Win [] Nothing (Just Command.JobsSection) hasFinishedJobs (Apply ClearFinished)
+  Command.NextJob -> CommandSpec Win ["<Control>Page_Down"] (Just Command.NavigationSection) Nothing (const True) (Apply SelectNextJob)
+  Command.PreviousJob -> CommandSpec Win ["<Control>Page_Up"] (Just Command.NavigationSection) Nothing (const True) (Apply SelectPreviousJob)
+  Command.CommandPalette -> CommandSpec Win ["<Control>k"] (Just Command.GeneralSection) (Just Command.GeneralSection) (const True) (Apply OpenPalette)
+  Command.Preferences -> CommandSpec App ["<Control>comma"] (Just Command.GeneralSection) (Just Command.GeneralSection) (const True) (Present (ShowPreferences GeneralPreferences))
+  Command.Plugins -> CommandSpec App [] Nothing (Just Command.GeneralSection) (const True) (Present (ShowPreferences PluginPreferences))
+  Command.KeyboardShortcuts -> CommandSpec (Builtin "win.show-help-overlay") ["<Control>question"] (Just Command.GeneralSection) (Just Command.GeneralSection) (const True) (Present ShowShortcuts)
+  Command.About -> CommandSpec App [] Nothing (Just Command.GeneralSection) (const True) (Present ShowAbout)
+  Command.CloseWindow -> CommandSpec Win ["<Control>w"] (Just Command.GeneralSection) Nothing (const True) (Apply RequestClose)
+  Command.Quit -> CommandSpec App ["<Control>q"] (Just Command.GeneralSection) Nothing (const True) (Apply RequestClose)
+
+commandEnabled :: Model -> Command.Command -> Bool
+commandEnabled model command = (commandSpec command).enabled model
 
 update :: Message -> Model -> (Model, List Command)
 update msg model = case msg of
@@ -261,7 +304,9 @@ updateUi msg model = case msg of
   ClosePalette -> (model {palette = Nothing}, [])
   SetPaletteQuery query -> (model {palette = query <$ model.palette}, [])
   RunCommand command
-    | commandEnabled model command -> (model {palette = Nothing}, [Activate command])
+    | commandEnabled model command -> case (commandSpec command).effect of
+        Apply intent -> updateUi intent model {palette = Nothing}
+        Present chrome -> (model {palette = Nothing}, [ShowChrome chrome])
     | otherwise -> (model, [])
 
 reviewPlan :: Model -> (Model, List Command)
@@ -494,11 +539,3 @@ canReportSelected model = case selectedEntry model of
 
 hasFinishedJobs :: Model -> Bool
 hasFinishedJobs model = Map.elems model.jobs & any (\entry -> isTerminal entry.state.phase)
-
-commandEnabled :: Model -> Command.Command -> Bool
-commandEnabled model = \case
-  Command.SaveReport -> canReportSelected model
-  Command.CancelJob -> canCancelSelected model
-  Command.ReviewJob -> isJust (reviewableSpec model)
-  Command.ClearFinished -> hasFinishedJobs model
-  _ -> True
