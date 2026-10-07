@@ -28,7 +28,7 @@ import Control.Monad (forM_, unless, void, when)
 import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
 import Data.GI.Base.Attributes (AttrOpTag (AttrConstruct))
 import Data.GI.Base.GValue (toGValue)
-import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Data.IORef (IORef, modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Int (Int32)
 import Data.List (List)
 import Data.Text (Text)
@@ -98,13 +98,13 @@ renderCell (Cell ref paint) wanted = do
 cellValue :: Cell a -> IO (Maybe a)
 cellValue (Cell ref _) = readIORef ref
 
-suppressing :: IORef Bool -> IO a -> IO a
-suppressing flag act = bracket_ (writeIORef flag True) (writeIORef flag False) act
+suppressing :: IORef Int -> IO a -> IO a
+suppressing flag act = bracket_ (modifyIORef' flag (\val -> val + 1)) (modifyIORef' flag (\val -> val - 1)) act
 
-unlessSuppressed :: IORef Bool -> IO () -> IO ()
+unlessSuppressed :: IORef Int -> IO () -> IO ()
 unlessSuppressed suppress act = do
   quiet <- readIORef suppress
-  unless quiet act
+  unless (quiet == 0) act
 
 paddedBox :: Gtk.Orientation -> Int32 -> Int32 -> IO Gtk.Box
 paddedBox orientation spacing margin =

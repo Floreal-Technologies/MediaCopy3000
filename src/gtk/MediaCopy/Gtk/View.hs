@@ -153,13 +153,13 @@ newToastCell toastOverlay dispatch =
 data Sidebar = Sidebar
   { list :: Gtk.ListBox
   , rows :: IORef (Map JobId JobRow)
-  , suppress :: IORef Bool
+  , suppress :: IORef Int
   , selection :: Cell (Maybe JobId)
   }
 
 newSidebar :: (UiMessage -> IO ()) -> IO (Sidebar, Adw.NavigationPage)
 newSidebar dispatch = do
-  suppress <- newIORef False
+  suppress <- newIORef 0
   list <-
     new
       Gtk.ListBox

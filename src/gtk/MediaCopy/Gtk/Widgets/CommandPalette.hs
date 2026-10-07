@@ -39,7 +39,7 @@ data Parts = Parts
   , placeholder :: Gtk.Label
   , scroll :: Gtk.ScrolledWindow
   , shown :: IORef (Vector (Adw.ActionRow, Command.Command))
-  , suppress :: IORef Bool
+  , suppress :: IORef Int
   }
 
 newCommandPalette
@@ -48,7 +48,7 @@ newCommandPalette
   -> (UiMessage -> IO ())
   -> IO CommandPalette
 newCommandPalette window accelLabel dispatch = do
-  suppress <- newIORef False
+  suppress <- newIORef 0
   shown <- newIORef V.empty
   entry <- new Gtk.SearchEntry [#hexpand := True]
   placeholder <- newLabel "" [#marginTop := 24, #marginBottom := 24] ["dim-label"]

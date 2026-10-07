@@ -41,7 +41,7 @@ type Layout = (Maybe Text, [(Text, [Text], [(Text, Text, FieldShape, Bool, Int)]
 data EntryRows = EntryRows
   { row :: Adw.ActionRow
   , enabledSwitch :: Gtk.Switch
-  , suppress :: IORef Bool
+  , suppress :: IORef Int
   }
 
 data Subpage = Subpage
@@ -55,7 +55,7 @@ data DetailRows = DetailRows
   , traceRow :: Adw.SwitchRow
   , capabilityRows :: [Adw.ComboRow]
   , settingRows :: [FieldRow]
-  , suppress :: IORef Bool
+  , suppress :: IORef Int
   }
 
 newPluginsPage :: Adw.PreferencesDialog -> (UiMessage -> IO ()) -> IO PluginsPage
@@ -148,7 +148,7 @@ subtitleOf entry = T.intercalate " · " (entry.version : T.intercalate ", " (V.t
 entryRows :: Groups -> (UiMessage -> IO ()) -> PluginEntry -> IO EntryRows
 entryRows groups dispatch entry = do
   let pluginId = entry.plugin.id
-  suppress <- newIORef False
+  suppress <- newIORef 0
   row <- new Adw.ActionRow [#useMarkup := False, #activatable := True]
   set row [#title := entry.plugin.name, #subtitle := subtitleOf entry]
   enabledSwitch <- new Gtk.Switch [#valign := Gtk.AlignCenter, #active := entry.enabled]
@@ -194,7 +194,7 @@ detailRows :: (UiMessage -> IO ()) -> PluginEntry -> IO DetailRows
 detailRows dispatch entry = do
   let pluginId = entry.plugin.id
       change = later . dispatch . ChangePlugin
-  suppress <- newIORef False
+  suppress <- newIORef 0
   general <- new Adw.PreferencesGroup [#description := entry.description]
   folderRow <- new Adw.ActionRow [#useMarkup := False, #subtitleSelectable := True]
   set folderRow [#title := "Folder", #subtitle := entry.folder]
@@ -237,7 +237,7 @@ refreshDetail rows entry = do
       (V.toList entry.capabilities)
   zipWithM_ (\row field -> row.refresh field.value) rows.settingRows (V.toList entry.settings)
 
-capabilityRow :: IORef Bool -> (CatalogChange -> IO ()) -> Text -> CapabilityView -> IO Adw.ComboRow
+capabilityRow :: IORef Int -> (CatalogChange -> IO ()) -> Text -> CapabilityView -> IO Adw.ComboRow
 capabilityRow suppress change pluginId capability = do
   choices <- Gtk.stringListNew (Just ["Not answered", "Granted", "Declined"])
   row <-

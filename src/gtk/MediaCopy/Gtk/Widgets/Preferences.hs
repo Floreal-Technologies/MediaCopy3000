@@ -69,12 +69,12 @@ data AppearanceRows = AppearanceRows
   , darkRow :: Adw.ActionRow
   , darkDrop :: Gtk.DropDown
   , darkThemes :: Vector Theme
-  , suppress :: IORef Bool
+  , suppress :: IORef Int
   }
 
 newAppearanceRows :: Wording -> Vector ThemeSection -> Vector ThemeSection -> IO AppearanceRows
 newAppearanceRows wording lightSections darkSections = do
-  suppress <- newIORef False
+  suppress <- newIORef 0
   baseNames <- Gtk.stringListNew (Just (V.toList (V.map (displayBase wording) baseValues)))
   baseRow <- new Adw.ComboRow [#title := "Base", #model := baseNames]
   (lightRow, lightDrop) <- newPaletteRow wording "Light palette" lightSections
@@ -119,7 +119,7 @@ paintAppearance rows appearance = do
   select rows.suppress (Gtk.dropDownSetSelected rows.lightDrop) rows.lightThemes appearance.light
   select rows.suppress (Gtk.dropDownSetSelected rows.darkDrop) rows.darkThemes appearance.dark
 
-select :: (Eq a) => IORef Bool -> (Word32 -> IO ()) -> Vector a -> a -> IO ()
+select :: (Eq a) => IORef Int -> (Word32 -> IO ()) -> Vector a -> a -> IO ()
 select suppress choose values wanted =
   forM_ (V.elemIndex wanted values) (suppressing suppress . choose . fromIntegral)
 

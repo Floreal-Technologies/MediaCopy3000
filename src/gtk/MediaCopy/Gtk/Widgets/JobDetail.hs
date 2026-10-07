@@ -46,7 +46,7 @@ newJobDetail button dispatch = do
   counters <- newCounters
   history <- newHistoryView
   plugins <- newPluginStatus
-  suppress <- newIORef False
+  suppress <- newIORef 0
   filterButtons <- newFilterButtons suppress dispatch
   files <- newFileListPane
   actions <- newActionBar button
@@ -167,7 +167,7 @@ data FilterButtons = FilterButtons
   , failedButton :: Gtk.ToggleButton
   }
 
-newFilterButtons :: IORef Bool -> (UiMessage -> IO ()) -> IO FilterButtons
+newFilterButtons :: IORef Int -> (UiMessage -> IO ()) -> IO FilterButtons
 newFilterButtons suppress dispatch = do
   box <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #halign := Gtk.AlignStart]
   Gtk.widgetAddCssClass box "linked"
@@ -182,7 +182,7 @@ newFilterButtons suppress dispatch = do
   suppressing suppress (selectFilter buttons AllFiles)
   pure buttons
 
-reportFilter :: IORef Bool -> (UiMessage -> IO ()) -> Gtk.ToggleButton -> FileFilter -> IO ()
+reportFilter :: IORef Int -> (UiMessage -> IO ()) -> Gtk.ToggleButton -> FileFilter -> IO ()
 reportFilter suppress dispatch button wanted =
   void $
     on button #toggled $

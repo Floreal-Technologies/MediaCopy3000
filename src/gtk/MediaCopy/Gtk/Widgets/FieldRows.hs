@@ -39,7 +39,7 @@ later act = void (GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE (act >> pure False))
 
 fieldRow :: FieldActions -> Text -> FieldView -> IO FieldRow
 fieldRow actions prefix field = do
-  suppress <- newIORef False
+  suppress <- newIORef 0
   let handle chosen = unlessSuppressed suppress (chosen >>= later)
       quietly = suppressing suppress
       title = fieldTitle prefix field
@@ -84,7 +84,7 @@ fieldRow actions prefix field = do
 
 authorsRow :: (Vector AuthorSlot -> IO ()) -> Text -> FieldView -> IO FieldRow
 authorsRow setAuthors prefix field = do
-  suppress <- newIORef False
+  suppress <- newIORef 0
   let slots = authorSlots field.value
   header <- authorsHeader (fieldTitle prefix field) slots
   add <- new Gtk.Button [#label := "Add", #valign := Gtk.AlignCenter]
