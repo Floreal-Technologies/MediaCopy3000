@@ -16,6 +16,8 @@ import GI.Gtk qualified as Gtk
 
 import MediaCopy.Gtk.Widgets.Common (flatNamed, newLabel, renderCell, suppressing, unlessSuppressed)
 import MediaCopy.Gtk.Widgets.PluginsPage (PluginsPage (..), newPluginsPage)
+import MediaCopy.Interface.Command (commandId)
+import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Theme
 import MediaCopy.Interface.Translation
 import MediaCopy.Model (Model (..), UiMessage (..))
@@ -41,8 +43,8 @@ newPreferences app window wording lightSections darkSections dispatch = do
   plugins <- newPluginsPage dialog dispatch
   Adw.preferencesDialogAdd dialog plugins.page
   reportChoices rows dispatch
-  installPreferencesAction app window dialog "preferences" "general"
-  installPreferencesAction app window dialog "plugins" "plugins"
+  installPreferencesAction app window dialog Command.Preferences "general"
+  installPreferencesAction app window dialog Command.Plugins "plugins"
   pure $ \model -> do
     paintAppearance rows model.appearance
     renderCell plugins.cell model.plugins
@@ -95,7 +97,7 @@ reportChoices rows dispatch = do
 chosen :: AppearanceRows -> (UiMessage -> IO ()) -> IO Word32 -> Vector a -> (a -> UiMessage) -> IO ()
 chosen rows dispatch selected values report = unlessSuppressed rows.suppress $ do
   index <- selected
-  mapM_ (dispatch . report) (values V.!? fromIntegral index)
+  forM_ (values V.!? fromIntegral index) (dispatch . report)
 
 paintAppearance :: AppearanceRows -> Appearance -> IO ()
 paintAppearance rows appearance = do
@@ -107,14 +109,14 @@ paintAppearance rows appearance = do
 
 select :: (Eq a) => IORef Bool -> (Word32 -> IO ()) -> Vector a -> a -> IO ()
 select suppress choose values wanted =
-  mapM_ (suppressing suppress . choose . fromIntegral) (V.elemIndex wanted values)
+  forM_ (V.elemIndex wanted values) (suppressing suppress . choose . fromIntegral)
 
-installPreferencesAction :: Adw.Application -> Adw.ApplicationWindow -> Adw.PreferencesDialog -> Text -> Text -> IO ()
-installPreferencesAction app window dialog actionName pageName = do
+installPreferencesAction :: Adw.Application -> Adw.ApplicationWindow -> Adw.PreferencesDialog -> Command.Command -> Text -> IO ()
+installPreferencesAction app window dialog command pageName = do
   action <-
     new
       Gio.SimpleAction
-      [ #name := actionName
+      [ #name := commandId command
       , On #activate $ \_param -> do
           Adw.preferencesDialogSetVisiblePageName dialog pageName
           Adw.dialogPresent dialog (Just window)
@@ -131,12 +133,12 @@ themeModel :: Wording -> Vector ThemeSection -> IO Gtk.FlattenListModel
 themeModel wording sections = do
   modelType <- glibType @Gio.ListModel
   store <- Gio.listStoreNew modelType
-  mapM_
+  forM_
+    sections
     ( \section -> do
         labels <- Gtk.stringListNew (Just (V.toList (V.map (themeRowLabel wording) section.themes)))
         Gio.listStoreAppend store labels
     )
-    sections
   Gtk.flattenListModelNew (Just store)
 
 themeHeaderFactory :: Vector ThemeSection -> IO Gtk.SignalListItemFactory
@@ -171,12 +173,8 @@ paintHeading :: Gtk.Widget -> ThemeSection -> IO ()
 paintHeading box section = do
   firstChild <- Gtk.widgetGetFirstChild box
   lastChild <- Gtk.widgetGetLastChild box
-  mapM_
-    (\widget -> unsafeCastTo Gtk.Label widget >>= \label -> set label [#label := section.heading])
-    firstChild
-  mapM_
-    (\widget -> unsafeCastTo Gtk.LinkButton widget >>= \link -> paintLink link section.homepage)
-    lastChild
+  forM_ firstChild (\widget -> unsafeCastTo Gtk.Label widget >>= \label -> set label [#label := section.heading])
+  forM_ lastChild (\widget -> unsafeCastTo Gtk.LinkButton widget >>= \link -> paintLink link section.homepage)
 
 paintLink :: Gtk.LinkButton -> Maybe Text -> IO ()
 paintLink link = \case

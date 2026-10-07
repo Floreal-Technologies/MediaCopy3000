@@ -39,7 +39,7 @@ renderStatus group rowsRef (wording, st) = do
   warnings <- traverse (\finding -> let (title, detail) = pluginFindingTexts wording finding in row title detail ["warning"]) (V.toList st.warnings)
   skipped <- traverse (\(ref, left) -> row (ref.name <> ": " <> plural "file" left <> " not inspected") "" ["warning"]) (Map.toList st.notInspected)
   let rows = inspecting <> warnings <> skipped
-  mapM_ (Adw.preferencesGroupAdd group) rows
+  forM_ rows (Adw.preferencesGroupAdd group)
   writeIORef rowsRef rows
   Gtk.widgetSetVisible group (not (null rows))
   where
@@ -47,5 +47,5 @@ renderStatus group rowsRef (wording, st) = do
     row title subtitle classes = do
       built <- new Adw.ActionRow [#useMarkup := False]
       set built [#title := title, #subtitle := subtitle]
-      mapM_ (Gtk.widgetAddCssClass built) classes
+      forM_ classes (Gtk.widgetAddCssClass built)
       pure built

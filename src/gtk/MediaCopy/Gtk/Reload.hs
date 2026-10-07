@@ -74,7 +74,7 @@ reloadWording environment language publish warn revision streak = do
   where
     fault :: FilePath -> List Text -> IO ()
     fault wordingPath faults = do
-      mapM_ (\message -> logWith environment (logAttention_ (T.pack wordingPath <> ": " <> message))) faults
+      forM_ faults (\message -> logWith environment (logAttention_ (T.pack wordingPath <> ": " <> message)))
       shown <- readIORef streak
       unless shown (warn (summary wordingPath faults))
       writeIORef streak True
@@ -100,7 +100,7 @@ watchFile environment label path action =
 scheduleReload :: IO () -> IORef (Maybe Word32) -> IO ()
 scheduleReload action pendingReload = do
   pending <- readIORef pendingReload
-  mapM_ GLib.sourceRemove pending
+  forM_ pending GLib.sourceRemove
   sourceId <- GLib.timeoutAdd GLib.PRIORITY_DEFAULT 200 $ do
     writeIORef pendingReload Nothing
     action

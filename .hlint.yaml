@@ -12,3 +12,6 @@
 - ignore: {name: "Replace case with maybe"}
 - ignore: {name: "Functor law"}
 - ignore: {name: "Use >=>"}
+
+- warn: {lhs: mapM_ f x, rhs: forM_ x f, name: Use forM_}
+- warn: {lhs: mapM f x, rhs: forM x f, name: Use forM}

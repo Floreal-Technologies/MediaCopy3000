@@ -137,7 +137,7 @@ walkIO root = do
       here <- Dir.doesDirectoryExist dir
       if not here
         then pure ([], [])
-        else Dir.listDirectory dir >>= \names -> fmap mconcat (mapM (step dir) names)
+        else Dir.listDirectory dir >>= \names -> fmap mconcat (forM names (step dir))
 
     step dir name =
       classifyChild dir name >>= \case

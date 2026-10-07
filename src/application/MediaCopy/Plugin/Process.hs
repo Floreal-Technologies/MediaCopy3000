@@ -88,7 +88,7 @@ open launch = do
     createProcess (proc exe []) {cwd = Just dir, env = Just environment, std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe, create_group = True, use_process_jobs = True} >>= \case
       (Just i, Just o, Just e, p) -> pure (i, o, e, p)
       (_, _, _, p) -> terminateProcess p >> ioError (userError "the plug-in started with no pipes")
-  mapM_ (\h -> hSetBinaryMode h True) [input, output, errors]
+  forM_ [input, output, errors] (\h -> hSetBinaryMode h True)
   now <- getMonotonicTime
   group <- groupOf process
   pid <- maybe "unknown" (T.show . toInteger) <$> getPid process

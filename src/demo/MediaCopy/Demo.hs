@@ -15,13 +15,14 @@ import Data.Vector qualified as V
 import MediaCopy.Demo.Fixtures
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan (JobPlan)
+import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Theme (Base (..), Palette (..), PaletteMode (..), Theme (..), modeDirectory, palettesFrom)
 import MediaCopy.Model (FileFilter (..), Message (..), Model (..), UiMessage (..), initialModel, update)
 
 data Scene = Scene
   { name :: Text
   , frame :: Model
-  , action :: Maybe Text
+  , action :: Maybe Command.Command
   , expand :: Bool
   , scroll :: Bool
   }
@@ -43,12 +44,12 @@ scenes =
   , still "job-failed-only" (failuresMessages <> [Ui (SetFileFilter FailedOnly)])
   , (still "verify-history" verifyMessages) {expand = True}
   , still "seal-finished" sealMessages
-  , (still "preferences" finishedMessages) {action = Just "app.preferences"}
-  , (still "plugins" [CatalogLoaded pluginCatalog]) {action = Just "app.plugins"}
+  , (still "preferences" finishedMessages) {action = Just Command.Preferences}
+  , (still "plugins" [CatalogLoaded pluginCatalog]) {action = Just Command.Plugins}
   , (still "plan-plugins" pluginPlanMessages) {scroll = True}
   , still "job-plugins" pluginJobMessages
   , still "close-confirm" (runningMessages <> [EngineEvent first (Progress 8_640_000_000), Ui RequestClose])
-  , (still "about" []) {action = Just "app.about"}
+  , (still "about" []) {action = Just Command.About}
   ]
     <> [ still
            ("themes/queue-" <> palette.family <> "-" <> modeDirectory palette.mode <> "-" <> palette.variant)

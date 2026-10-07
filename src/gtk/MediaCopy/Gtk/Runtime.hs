@@ -138,7 +138,7 @@ buildAndPresent runtimeRef environment startup app = do
   let showFrame frame = do
         writeIORef modelRef frame
         widgets.render frame
-  mapM_ (seeded environment widgets.window app showFrame) startup
+  forM_ startup (seeded environment widgets.window widgets.activate showFrame)
 
 dispatch :: Runtime -> Message -> IO ()
 dispatch runtime msg = do
@@ -146,7 +146,7 @@ dispatch runtime msg = do
   let (current, cmds) = update msg old
   writeIORef runtime.modelRef current
   runtime.widgets.render current
-  mapM_ (toasting runtime . runCommand runtime) cmds
+  forM_ cmds (toasting runtime . runCommand runtime)
 
 postMessage :: Runtime -> Message -> IO ()
 postMessage runtime msg =
@@ -188,7 +188,7 @@ runCommand runtime = \case
   LoadCatalog -> catalogWorker runtime
   ApplyChange change -> changeWorker runtime change
   ShowFolder folder -> showFolder runtime folder
-  Activate _ -> pure ()
+  Activate command -> runtime.widgets.activate command
 
 installCloseRequest :: Adw.ApplicationWindow -> (Message -> IO ()) -> IO ()
 installCloseRequest window dispatchNow =
@@ -258,7 +258,7 @@ startJob runtime plan = do
   let sink event = postMessage runtime (EngineEvent spec.jobId event)
   previous <- readIORef runtime.engine
   worker <- tracked runtime $ do
-    mapM_ (waitCatch . snd) previous
+    forM_ previous (waitCatch . snd)
     setup <- loadPluginSetup
     model <- readIORef runtime.modelRef
     withEventLog spec (renderPlanText spec plan) $ \logPath logLine -> do
@@ -340,7 +340,7 @@ instance PickedFile (Maybe Gio.File) where
 sendPicked :: (PickedFile file) => Runtime -> (OsPath -> Message) -> IO file -> IO ()
 sendPicked runtime toMessage finish =
   catchGErrorJustDomain
-    (finish >>= \picked -> mapM_ (sendPath runtime toMessage) (pickedFile picked))
+    (finish >>= \picked -> forM_ (pickedFile picked) (sendPath runtime toMessage))
     (reportDialogError runtime)
 
 reportDialogError :: Runtime -> Gtk.DialogError -> Text -> IO ()
