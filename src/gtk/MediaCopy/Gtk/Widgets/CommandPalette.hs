@@ -20,7 +20,7 @@ import GI.GLib qualified as GLib
 import GI.Gdk qualified as Gdk
 import GI.Gtk qualified as Gtk
 
-import MediaCopy.Gtk.Widgets.Common (Cell, newCell, newLabel, newOpenCell, onDialogClosed, paddedBox, paintEditable, renderCell, suppressing, unlessSuppressed)
+import MediaCopy.Gtk.Widgets.Common
 import MediaCopy.Interface.Command (commandId, commandLabel, paletteNoMatch, palettePlaceholder)
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Palette (Match (..), PaletteRow (..), Target (..), paletteRows)
@@ -66,7 +66,7 @@ newCommandPalette window accelLabel dispatch = do
   box <- paddedBox Gtk.OrientationVertical 12 12
   Gtk.boxAppend box entry
   Gtk.boxAppend box scroll
-  dialog <- new Adw.Dialog [#contentWidth := 520, #child := box, #focusWidget := entry]
+  dialog <- new Adw.Dialog [#contentWidth := 520, #child := box]
   let parts = Parts {entry, list, placeholder, scroll, shown, suppress}
   void $ on entry #changed $ unlessSuppressed suppress $ do
     text <- Gtk.editableGetText entry
@@ -78,7 +78,7 @@ newCommandPalette window accelLabel dispatch = do
   keys <- new Gtk.EventControllerKey []
   void $ on keys #keyPressed $ \keyval _ _ -> moveSelection parts keyval
   Gtk.widgetAddController entry keys
-  openCell <- newOpenCell dialog window
+  openCell <- newOpenCellWith (void (Gtk.widgetGrabFocus entry)) dialog window
   onDialogClosed dialog openCell (dispatch ClosePalette)
   queryCell <- newCell (suppressing suppress . paintEditable entry)
   rowsCell <- newCell (paintRows parts accelLabel)

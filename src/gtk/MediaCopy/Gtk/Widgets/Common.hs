@@ -2,6 +2,7 @@ module MediaCopy.Gtk.Widgets.Common
   ( Cell
   , newCell
   , newOpenCell
+  , newOpenCellWith
   , renderCell
   , toggleClass
   , nameAccessible
@@ -73,11 +74,14 @@ newCell paint = do
   pure (Cell ref paint)
 
 newOpenCell :: Adw.Dialog -> Adw.ApplicationWindow -> IO (Cell Bool)
-newOpenCell dialog window = do
+newOpenCell = newOpenCellWith (pure ())
+
+newOpenCellWith :: IO () -> Adw.Dialog -> Adw.ApplicationWindow -> IO (Cell Bool)
+newOpenCellWith presented dialog window = do
   ref <- newIORef (Just False)
   pure $ Cell ref $ \open ->
     if open
-      then Adw.dialogPresent dialog (Just window)
+      then Adw.dialogPresent dialog (Just window) >> presented
       else void (Adw.dialogClose dialog)
 
 renderCell
