@@ -138,7 +138,7 @@ buildAndPresent runtimeRef environment startup app = do
   let showFrame frame = do
         writeIORef modelRef frame
         widgets.render frame
-  mapM_ (seeded environment widgets.window widgets.activate showFrame) startup
+  forM_ startup (seeded environment widgets.window widgets.activate showFrame)
 
 dispatch :: Runtime -> Message -> IO ()
 dispatch runtime msg = do

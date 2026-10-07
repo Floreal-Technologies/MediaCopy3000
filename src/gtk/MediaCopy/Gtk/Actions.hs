@@ -3,7 +3,7 @@ module MediaCopy.Gtk.Actions
   , installActions
   ) where
 
-import Control.Monad (unless, void, when)
+import Control.Monad (forM_, unless, void, when)
 import Data.GI.Base (AttrOp (On, (:=)), new)
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.List (List)
@@ -130,13 +130,14 @@ acceleratorLabel = \case
 newButton :: IORef (List (Gtk.Button, Command.Command)) -> Command.Command -> List Text -> IO Gtk.Button
 newButton buttons command classes = do
   button <- new Gtk.Button [#actionName := actionName command]
-  mapM_ (Gtk.widgetAddCssClass button) classes
+  forM_ classes (Gtk.widgetAddCssClass button)
   modifyIORef' buttons ((button, command) :)
   pure button
 
 relabel :: Adw.ApplicationWindow -> IORef (List (Gtk.Button, Command.Command)) -> Gio.Menu -> Wording -> IO ()
 relabel window buttons menu wording = do
-  readIORef buttons >>= mapM_ (\(button, command) -> Gtk.buttonSetLabel button (commandLabel wording command))
+  labelled <- readIORef buttons
+  forM_ labelled $ \(button, command) -> Gtk.buttonSetLabel button (commandLabel wording command)
   Gio.menuRemoveAll menu
   fillMenu menu wording
   overlay <- buildShortcutsWindow wording
@@ -147,7 +148,7 @@ fillMenu menu wording = do
   jobs <- Gio.menuNew
   menuRow jobs wording Command.ClearFinished
   general <- Gio.menuNew
-  mapM_ (menuRow general wording) [Command.CommandPalette, Command.Preferences, Command.Plugins, Command.KeyboardShortcuts, Command.About]
+  forM_ [Command.CommandPalette, Command.Preferences, Command.Plugins, Command.KeyboardShortcuts, Command.About] (menuRow general wording)
   Gio.menuAppendSection menu Nothing jobs
   Gio.menuAppendSection menu Nothing general
 
@@ -158,7 +159,7 @@ buildShortcutsWindow :: Wording -> IO Gtk.ShortcutsWindow
 buildShortcutsWindow wording = do
   shortcuts <- new Gtk.ShortcutsWindow []
   section <- new Gtk.ShortcutsSection [#sectionName := "shortcuts", #maxHeight := 12]
-  mapM_ (addGroup wording section) [minBound .. maxBound]
+  forM_ [minBound .. maxBound] (addGroup wording section)
   Gtk.shortcutsWindowAddSection shortcuts section
   pure shortcuts
 
@@ -166,7 +167,7 @@ addGroup :: Wording -> Gtk.ShortcutsSection -> Section -> IO ()
 addGroup wording section wanted = do
   let rows = V.filter (\candidate -> candidate.section == Just wanted) actionTable
   group <- new Gtk.ShortcutsGroup [#title := sectionLabel wording wanted]
-  V.mapM_ (addShortcut wording group) rows
+  V.forM_ rows (addShortcut wording group)
   when (wanted == GeneralSection) $ do
     mainMenu <- new Gtk.ShortcutsShortcut [#title := mainMenuLabel wording, #accelerator := "F10"]
     Gtk.shortcutsGroupAddShortcut group mainMenu

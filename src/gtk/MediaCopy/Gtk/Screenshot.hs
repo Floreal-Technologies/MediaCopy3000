@@ -33,7 +33,7 @@ seeded environment window activate showFrame startup = do
   Gtk.windowSetFocusVisible window False
   void $ GLib.timeoutAdd GLib.PRIORITY_DEFAULT 250 $ do
     showFrame startup.frame
-    mapM_ activate startup.action
+    forM_ startup.action activate
     void (GLib.timeoutAdd GLib.PRIORITY_DEFAULT 600 prepare)
     pure False
   where
