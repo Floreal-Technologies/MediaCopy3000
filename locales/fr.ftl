@@ -99,3 +99,31 @@ plugin-unavailable = extension indisponible
 plugin-field-missing = le champ { $field } n’a pas de valeur valide
 plugin-bad-output = l’extension a envoyé une réponse invalide
 toast-plugin = { $label } : { $message }
+
+## Commands
+
+command-new-offload = Nouveau déchargement…
+command-verify = Vérifier le dossier…
+command-seal = Sceller le support…
+command-save-report = Enregistrer le rapport…
+command-cancel-job = Annuler la tâche
+command-review-job = Examiner le plan…
+command-clear-finished = Effacer les tâches terminées
+command-next-job = Tâche suivante
+command-previous-job = Tâche précédente
+command-preferences = Préférences
+command-plugins = Extensions
+command-keyboard-shortcuts = Raccourcis clavier
+command-about = À propos de MediaCopy 3000
+command-close-window = Fermer la fenêtre
+command-quit = Quitter
+command-command-palette = Palette de commandes…
+
+## Shortcuts window and palette
+
+shortcuts-section-jobs = Tâches
+shortcuts-section-navigation = Navigation
+shortcuts-section-general = Général
+shortcuts-main-menu = Menu principal
+palette-placeholder = Saisissez une commande
+palette-no-match = Aucune commande ne correspond

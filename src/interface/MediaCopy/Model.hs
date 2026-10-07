@@ -1,21 +1,4 @@
-module MediaCopy.Model
-  ( FileFilter (..)
-  , OffloadDraft (..)
-  , draftReady
-  , JobEntry (..)
-  , Model (..)
-  , initialModel
-  , PlanPhase (..)
-  , UiMessage (..)
-  , Message (..)
-  , Command (..)
-  , update
-  , selectedEntry
-  , canCancelSelected
-  , canReportSelected
-  , reviewableSpec
-  , hasFinishedJobs
-  ) where
+module MediaCopy.Model where
 
 import Ascmhl.Path (pathText)
 import Ascmhl.Types (MhlHistory)
@@ -39,6 +22,7 @@ import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan (JobPlan (..), planBlocked, planEquivalent)
 import MediaCopy.Domain.Plugin (PluginFinding (..), PluginRef (..), PluginReport (..))
 import MediaCopy.Domain.PluginCatalog (CatalogChange (..), PluginCatalog, Setting (..), emptyCatalog)
+import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Theme
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Translation.Embedded (embeddedWording)
@@ -84,6 +68,7 @@ data Model = Model
   , wording :: Wording
   , plugins :: PluginCatalog
   , pluginToasts :: Set (JobId, Text)
+  , palette :: Maybe Text
   }
   deriving stock (Eq, Generic, Show)
 
@@ -106,6 +91,7 @@ initialModel t desktop =
     , wording = embeddedWording English
     , plugins = emptyCatalog
     , pluginToasts = Set.empty
+    , palette = Nothing
     }
 
 data UiMessage
@@ -142,6 +128,10 @@ data UiMessage
   | ReloadPlugins
   | SetJobField Text Text Text
   | PickJobFieldPath Text Text
+  | OpenPalette
+  | ClosePalette
+  | SetPaletteQuery Text
+  | RunCommand Command.Command
   deriving stock (Eq, Show)
 
 data Message
@@ -174,6 +164,7 @@ data Command
   | LoadCatalog
   | ApplyChange CatalogChange
   | ShowFolder Text
+  | Activate Command.Command
 
 update :: Message -> Model -> (Model, List Command)
 update msg model = case msg of
@@ -266,6 +257,12 @@ updateUi msg model = case msg of
   ReloadPlugins -> (model, [LoadCatalog])
   SetJobField pluginId key value -> setJobField pluginId key value model
   PickJobFieldPath pluginId key -> (model, [OpenFileDialog (Ui . SetJobField pluginId key . pathText)])
+  OpenPalette -> (model {palette = Just ""}, [])
+  ClosePalette -> (model {palette = Nothing}, [])
+  SetPaletteQuery query -> (model {palette = query <$ model.palette}, [])
+  RunCommand command
+    | commandEnabled model command -> (model {palette = Nothing}, [Activate command])
+    | otherwise -> (model, [])
 
 reviewPlan :: Model -> (Model, List Command)
 reviewPlan model
@@ -497,3 +494,11 @@ canReportSelected model = case selectedEntry model of
 
 hasFinishedJobs :: Model -> Bool
 hasFinishedJobs model = Map.elems model.jobs & any (\entry -> isTerminal entry.state.phase)
+
+commandEnabled :: Model -> Command.Command -> Bool
+commandEnabled model = \case
+  Command.SaveReport -> canReportSelected model
+  Command.CancelJob -> canCancelSelected model
+  Command.ReviewJob -> isJust (reviewableSpec model)
+  Command.ClearFinished -> hasFinishedJobs model
+  _ -> True

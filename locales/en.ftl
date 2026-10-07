@@ -99,3 +99,31 @@ plugin-unavailable = plug-in unavailable
 plugin-field-missing = the field { $field } has no valid value
 plugin-bad-output = plug-in sent a bad answer
 toast-plugin = { $label }: { $message }
+
+## Commands
+
+command-new-offload = New Offload…
+command-verify = Verify Folder…
+command-seal = Seal Media…
+command-save-report = Save Report…
+command-cancel-job = Cancel Job
+command-review-job = Review Plan…
+command-clear-finished = Clear Finished
+command-next-job = Next Job
+command-previous-job = Previous Job
+command-preferences = Preferences
+command-plugins = Plug-ins
+command-keyboard-shortcuts = Keyboard Shortcuts
+command-about = About MediaCopy 3000
+command-close-window = Close Window
+command-quit = Quit
+command-command-palette = Command Palette…
+
+## Shortcuts window and palette
+
+shortcuts-section-jobs = Jobs
+shortcuts-section-navigation = Navigation
+shortcuts-section-general = General
+shortcuts-main-menu = Main Menu
+palette-placeholder = Type a command
+palette-no-match = No command matches
