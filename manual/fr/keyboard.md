@@ -9,7 +9,7 @@ associée dans cette fenêtre portent tous la même étiquette.
 
 | Touche | Action |
 |---|---|
-| <kbd>Ctrl</kbd>+<kbd>N</kbd> | `Nouveau transfert…` |
+| <kbd>Ctrl</kbd>+<kbd>N</kbd> | `Nouveau déchargement…` |
 | <kbd>Ctrl</kbd>+<kbd>O</kbd> | `Vérifier le dossier…` |
 | <kbd>Ctrl</kbd>+<kbd>L</kbd> | `Sceller le support…` |
 | <kbd>Ctrl</kbd>+<kbd>S</kbd> | `Enregistrer le rapport…` pour la tâche sélectionnée |
