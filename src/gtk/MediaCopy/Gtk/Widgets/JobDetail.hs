@@ -5,7 +5,7 @@ module MediaCopy.Gtk.Widgets.JobDetail
 
 import Ascmhl.Path (RelPath, pathText)
 import Ascmhl.Types (Generation (..), MhlHistory (..), algosText)
-import Control.Monad (void, when)
+import Control.Monad (forM_, void, when)
 import Data.Function ((&))
 import Data.GI.Base (AttrOp ((:=)), new, on, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)

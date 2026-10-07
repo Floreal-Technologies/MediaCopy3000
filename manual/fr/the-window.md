@@ -40,6 +40,7 @@ Cliquez sur une ligne pour sélectionner la tâche. <kbd>Ctrl</kbd>+<kbd>Page �
 (Page suivante) et <kbd>Ctrl</kbd>+<kbd>Page ⇞</kbd> (Page précédente) permettent de
 déplacer la sélection.
 La page [Raccourcis clavier](keyboard.md) liste toutes les touches.
+<kbd>Ctrl</kbd>+<kbd>K</kbd> ouvre la [palette de commandes](keyboard.md#la-palette-de-commandes).
 
 ## Le volet Détails
 

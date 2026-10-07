@@ -5,7 +5,7 @@ module MediaCopy.Gtk.Reload
   ) where
 
 import Control.Exception (IOException, catch, try)
-import Control.Monad (unless, void, when)
+import Control.Monad (forM_, unless, void, when)
 import Data.ByteString qualified as ByteString
 import Data.GI.Base (GError, disownObject, gerrorMessage, on)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)

@@ -1,5 +1,6 @@
 module Ascmhl.HashTest (tests) where
 
+import Control.Monad (forM_)
 import Crypto.Hash.SHA512 qualified as SHA512
 import Data.ByteString qualified as BS
 import Data.Text.Display (display)

@@ -1,6 +1,6 @@
 module MediaCopy.Conformance.InteropTest (tests) where
 
-import Control.Monad (void)
+import Control.Monad (forM_, void)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO

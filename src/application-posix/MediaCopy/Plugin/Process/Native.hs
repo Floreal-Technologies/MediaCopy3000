@@ -7,6 +7,7 @@ module MediaCopy.Plugin.Process.Native
   ) where
 
 import Control.Exception (IOException, try)
+import Control.Monad (forM_)
 import Data.List (isPrefixOf)
 import System.Posix.Signals (Signal, sigKILL, sigTERM, signalProcessGroup)
 import System.Posix.Types (CPid)

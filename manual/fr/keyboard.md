@@ -28,12 +28,23 @@ Si aucune tâche n'est sélectionnée, la touche « suivante » sélectionne la 
 | Touche | Action |
 |---|---|
 | <kbd>Ctrl</kbd>+<kbd>,</kbd> | `Préférences` |
+| <kbd>Ctrl</kbd>+<kbd>K</kbd> | `Palette de commandes…` |
 | <kbd>Ctrl</kbd>+<kbd>?</kbd> | `Raccourcis clavier` |
 | <kbd>Ctrl</kbd>+<kbd>W</kbd> | `Fermer la fenêtre` |
 | <kbd>Ctrl</kbd>+<kbd>Q</kbd> | `Quitter` |
 | <kbd>F10</kbd> | `Menu principal` |
 
 Les commandes <kbd>Ctrl</kbd>+<kbd>W</kbd> et <kbd>Ctrl</kbd>+<kbd>Q</kbd> demandent une confirmation préalable si une tâche est en cours d'exécution.
+
+## La palette de commandes
+
+<kbd>Ctrl</kbd>+<kbd>K</kbd> ouvre la liste de toutes les commandes. Tapez pour la filtrer. La
+palette lit l'étiquette et l'identifiant court sous elle, sans tenir compte de la casse ni des
+accents. Quand la correspondance porte sur l'étiquette, les lettres saisies s'affichent en gras. <kbd>Haut</kbd> et <kbd>Bas</kbd> déplacent la
+sélection, <kbd>Entrée</kbd> exécute la commande et <kbd>Échap</kbd> ferme la palette. Une ligne
+grisée est une commande qui ne peut pas s'exécuter pour le moment.
+
+![La palette de commandes](../en/images/command-palette.png)
 
 ## Dans une boîte de dialogue
 
@@ -61,4 +72,4 @@ Dans une boîte de dialogue, une lettre est soulignée sur chaque bouton. Appuye
 
 ## Sans touche d'accès rapide
 
-**Annuler la tâche** et **Effacer les tâches terminées** ne disposent pas de raccourci clavier. Utilisez le bouton dans le volet de détails ainsi que l'élément de menu correspondant.
+**Annuler la tâche** et **Effacer les tâches terminées** ne disposent pas de raccourci clavier. Utilisez le bouton dans le volet de détails, l'élément de menu correspondant ou la palette de commandes.

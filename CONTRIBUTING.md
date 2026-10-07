@@ -42,6 +42,18 @@ Msg ──▶ update :: Msg -> Model -> (Model, List Cmd)
 - `MediaCopy.Gtk.View` renders a whole model. Each widget owns a cell that leaves itself alone when
   its value has not changed.
 
+### Commands
+
+`MediaCopy.Interface.Command` is the catalogue of commands. One constructor is one command, with a
+kebab-case id and a Fluent label (`command-<id>` in `locales/*.ftl`). `MediaCopy.Gtk.Actions` binds
+each command to a GAction, an accelerator and a shortcuts-window section. The header buttons, the
+detail-pane buttons, the main menu, the shortcuts window and the command palette all read that one
+catalogue. `MediaCopy.Interface.Palette` matches and ranks the commands for the palette.
+
+To add a command: add the constructor and its id in `Command.hs`, the two Fluent keys, one row in
+`commandSpec` in `Actions.hs`, and the enable rule in `commandEnabled` in `Model.hs` when the
+command is not always available.
+
 ### The two phases of a job
 
 #### Planning

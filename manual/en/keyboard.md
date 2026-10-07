@@ -27,12 +27,22 @@ last. Both stop at the ends of the list.
 | Key | What it does |
 |---|---|
 | <kbd>Ctrl</kbd>+<kbd>,</kbd> | `Preferences` |
+| <kbd>Ctrl</kbd>+<kbd>K</kbd> | `Command Palette…` |
 | <kbd>Ctrl</kbd>+<kbd>?</kbd> | `Keyboard Shortcuts` |
 | <kbd>Ctrl</kbd>+<kbd>W</kbd> | `Close Window` |
 | <kbd>Ctrl</kbd>+<kbd>Q</kbd> | `Quit` |
 | <kbd>F10</kbd> | `Main Menu` |
 
 <kbd>Ctrl</kbd>+<kbd>W</kbd> and <kbd>Ctrl</kbd>+<kbd>Q</kbd> both ask first when a job is running.
+
+## The command palette
+
+<kbd>Ctrl</kbd>+<kbd>K</kbd> opens a list of every command. Type to filter it. The palette reads the
+label and the short id under it, and it ignores case and accents. When the match is on the label,
+the letters you typed show in bold. <kbd>Up</kbd> and <kbd>Down</kbd> move the selection, <kbd>Enter</kbd> runs it, and
+<kbd>Escape</kbd> closes the palette. A grey row is a command that cannot run at this time.
+
+![The command palette](images/command-palette.png)
 
 ## In a dialog
 
@@ -60,5 +70,5 @@ A dialog underlines one letter of each button. `Alt` and that letter press the b
 
 ## Without a key
 
-**Cancel Job** and **Clear Finished** have no shortcut. Use the button in the detail pane, and the
-menu item.
+**Cancel Job** and **Clear Finished** have no shortcut. Use the button in the detail pane, the menu
+item, or the command palette.

@@ -13,7 +13,7 @@ import Control.Concurrent.Async (asyncWithUnmask)
 import Control.Concurrent.MVar (MVar, newMVar, withMVar)
 import Control.Concurrent.STM
 import Control.Exception (IOException, bracket, displayException, try, uninterruptibleMask_)
-import Control.Monad (void, when)
+import Control.Monad (forM_, void, when)
 import Data.Aeson (FromJSON, ToJSON, Value, object, parseJSON, toJSON)
 import Data.Aeson.Types (parseEither, parseMaybe)
 import Data.Bifunctor (first)
