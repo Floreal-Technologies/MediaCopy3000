@@ -14,7 +14,6 @@ import Data.Vector qualified as V
 
 import MediaCopy.Interface.Command
 import MediaCopy.Interface.Translation (Wording)
-import MediaCopy.Model (Model (..), commandEnabled)
 
 data Target = OnLabel | OnId
   deriving stock (Eq, Show)
@@ -90,11 +89,11 @@ data PaletteRow = PaletteRow
   }
   deriving stock (Eq, Show)
 
-paletteRows :: Model -> List PaletteRow
-paletteRows model = case model.palette of
+paletteRows :: (Command -> Bool) -> Wording -> Maybe Text -> List PaletteRow
+paletteRows enabledNow wording = \case
   Nothing -> []
   Just query ->
-    [ PaletteRow {command, match, enabled = commandEnabled model command}
-    | (command, match) <- rankCommands model.wording query
+    [ PaletteRow {command, match, enabled = enabledNow command}
+    | (command, match) <- rankCommands wording query
     , command /= CommandPalette
     ]

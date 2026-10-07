@@ -25,7 +25,7 @@ import MediaCopy.Interface.Command (commandId, commandLabel, paletteNoMatch, pal
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Palette (Match (..), PaletteRow (..), Target (..), paletteRows)
 import MediaCopy.Interface.Translation (Wording)
-import MediaCopy.Model (Model (..), UiMessage (..))
+import MediaCopy.Model (Model (..), UiMessage (..), commandEnabled)
 
 data CommandPalette = CommandPalette
   { openCell :: Cell Bool
@@ -86,7 +86,7 @@ newCommandPalette window accelLabel dispatch = do
 
 renderCommandPalette :: CommandPalette -> Model -> IO ()
 renderCommandPalette palette model = do
-  renderCell palette.rowsCell (model.wording, paletteRows model)
+  renderCell palette.rowsCell (model.wording, paletteRows (commandEnabled model) model.wording model.palette)
   renderCell palette.queryCell (fromMaybe "" model.palette)
   renderCell palette.openCell (isJust model.palette)
 

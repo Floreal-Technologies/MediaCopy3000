@@ -138,7 +138,7 @@ buildAndPresent runtimeRef environment startup app = do
   let showFrame frame = do
         writeIORef modelRef frame
         widgets.render frame
-  forM_ startup (seeded environment widgets.window widgets.activate showFrame)
+  forM_ startup (seeded environment widgets.window (dispatch runtime . Ui . RunCommand) showFrame)
 
 dispatch :: Runtime -> Message -> IO ()
 dispatch runtime msg = do
@@ -188,7 +188,7 @@ runCommand runtime = \case
   LoadCatalog -> catalogWorker runtime
   ApplyChange change -> changeWorker runtime change
   ShowFolder folder -> showFolder runtime folder
-  Activate command -> runtime.widgets.activate command
+  ShowChrome chrome -> runtime.widgets.present chrome
 
 installCloseRequest :: Adw.ApplicationWindow -> (Message -> IO ()) -> IO ()
 installCloseRequest window dispatchNow =
