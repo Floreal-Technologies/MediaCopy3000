@@ -18,7 +18,7 @@ import GI.Gdk qualified as Gdk
 import GI.Gtk qualified as Gtk
 
 import MediaCopy.Gtk.Widgets.Bind (bind, closing, dialog, searchText)
-import MediaCopy.Gtk.Widgets.Common
+import MediaCopy.Gtk.Widgets.Common hiding (newRow)
 import MediaCopy.Interface.Command (commandId)
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Palette (Match (..), PaletteRow (..), Target (..))
