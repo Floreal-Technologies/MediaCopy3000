@@ -12,9 +12,9 @@ import Control.Monad (forM_, unless, void, when)
 import Data.GI.Base (AttrOp (On, (:=)), new, on)
 import Data.IORef
 import Data.Maybe (isNothing)
-import Data.Sequence (Seq)
-import Data.Sequence qualified as Seq
 import Data.Time (getCurrentTime)
+import Data.Vector (Vector)
+import Data.Vector qualified as V
 import GI.Adw qualified as Adw
 import GI.GLib qualified as GLib
 import GI.Gio qualified as Gio
@@ -45,7 +45,7 @@ data Loop = Loop
   , widgets :: Widgets
   , interpreter :: Interpreter
   , busy :: IORef Bool
-  , pending :: IORef (Seq Message)
+  , pending :: IORef (Vector Message)
   }
 
 start :: Interpret -> Maybe Startup -> IO ()
@@ -100,7 +100,7 @@ buildAndPresent loopRef environment interpret startup app = do
   modelRef <- newIORef (initialModel startedAt desktop)
   interpreter <- interpret widgets post
   busy <- newIORef False
-  pending <- newIORef Seq.empty
+  pending <- newIORef V.empty
   writeIORef loopRef (Just Loop {modelRef, widgets, interpreter, busy, pending})
   model <- readIORef modelRef
   loadWording environment model.wording.language (post . WordingReloaded) (post . ShowToast)
@@ -117,7 +117,7 @@ buildAndPresent loopRef environment interpret startup app = do
 
 dispatch :: Loop -> Message -> IO ()
 dispatch loop msg = do
-  modifyIORef' loop.pending (Seq.|> msg)
+  modifyIORef' loop.pending (`V.snoc` msg)
   running <- readIORef loop.busy
   unless running $ do
     writeIORef loop.busy True
@@ -125,9 +125,9 @@ dispatch loop msg = do
 
 drain :: Loop -> IO ()
 drain loop =
-  readIORef loop.pending >>= \case
-    Seq.Empty -> pure ()
-    next Seq.:<| rest -> do
+  readIORef loop.pending >>= \queued -> case V.uncons queued of
+    Nothing -> pure ()
+    Just (next, rest) -> do
       writeIORef loop.pending rest
       step loop next
       drain loop
