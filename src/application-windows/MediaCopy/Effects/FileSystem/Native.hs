@@ -11,7 +11,6 @@ import Control.Monad (unless, when)
 import Data.Bits ((.&.), (.|.))
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
-import Data.Int (Int64)
 import Foreign.Marshal.Alloc (allocaBytesAligned)
 import Foreign.Ptr (castPtr)
 import System.File.OsPath qualified as FileIO
