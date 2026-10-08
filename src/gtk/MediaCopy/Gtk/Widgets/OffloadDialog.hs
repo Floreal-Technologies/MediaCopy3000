@@ -15,12 +15,13 @@ import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 import System.OsPath (OsPath, takeFileName)
 
+import MediaCopy.Gtk.Widgets.Bind (bind, closing, dialog)
 import MediaCopy.Gtk.Widgets.Common
 import MediaCopy.Model (Model (..), OffloadDraft (..), UiMessage (..), draftReady)
 
 data OffloadDialog = OffloadDialog
   { draftCell :: Cell (Maybe OffloadDraft)
-  , openCell :: Cell Bool
+  , paintOpen :: Bool -> IO ()
   }
 
 newOffloadDialog :: Adw.ApplicationWindow -> (UiMessage -> IO ()) -> IO OffloadDialog
@@ -42,9 +43,9 @@ newOffloadDialog window dispatch = do
   destRows <- newIORef V.empty
   let form = DraftForm {sourceRow, destGroup, addRow, destRows, reviewButton = shell.primaryButton}
   draftCell <- newCell (renderDraft form dispatch)
-  openCell <- newOpenCell shell.dialog window
-  onDialogClosed shell.dialog openCell (dispatch CloseOffloadDialog)
-  pure OffloadDialog {draftCell, openCell}
+  openControl <- dialog shell.dialog window (pure ())
+  paintOpen <- bind openControl (closing (dispatch CloseOffloadDialog))
+  pure OffloadDialog {draftCell, paintOpen}
 
 data DraftForm = DraftForm
   { sourceRow :: Adw.ActionRow
@@ -126,4 +127,4 @@ removeButton dispatch index folder = do
 renderOffloadDialog :: OffloadDialog -> Model -> IO ()
 renderOffloadDialog widgets current = do
   renderCell widgets.draftCell current.draft
-  renderCell widgets.openCell (isJust current.draft)
+  widgets.paintOpen (isJust current.draft)

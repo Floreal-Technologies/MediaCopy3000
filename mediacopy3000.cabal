@@ -166,6 +166,13 @@ library interface
     MediaCopy.Interface.Translation.French
     MediaCopy.Interface.Translation.Messages
     MediaCopy.Interface.Translation.Splice
+    MediaCopy.Interface.View.JobDetail
+    MediaCopy.Interface.View.JobRow
+    MediaCopy.Interface.View.Palette
+    MediaCopy.Interface.View.PlanSheet
+    MediaCopy.Interface.View.Plugins
+    MediaCopy.Interface.View.Row
+    MediaCopy.Interface.View.Sidebar
     MediaCopy.Interface.Wording
     MediaCopy.Model
     MediaCopy.Report
@@ -224,6 +231,7 @@ library
     MediaCopy.Gtk.Screenshot
     MediaCopy.Gtk.Theme
     MediaCopy.Gtk.View
+    MediaCopy.Gtk.Widgets.Bind
     MediaCopy.Gtk.Widgets.CloseConfirm
     MediaCopy.Gtk.Widgets.CommandPalette
     MediaCopy.Gtk.Widgets.Common
@@ -256,6 +264,7 @@ library
     gi-gdk4,
     gi-gio ^>=2.0,
     gi-glib ^>=2.0,
+    gi-gobject ^>=2.0,
     gi-gsk,
     gi-gtk ^>=4.0,
     gi-pango ^>=1.0,

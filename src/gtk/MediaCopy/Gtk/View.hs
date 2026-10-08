@@ -5,11 +5,10 @@ module MediaCopy.Gtk.View
 
 import Control.Monad (forM_, void)
 import Data.Foldable (traverse_)
-import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
+import Data.GI.Base (AttrOp ((:=)), new, on, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Vector (Vector)
 import GI.Adw qualified as Adw
@@ -18,9 +17,10 @@ import GI.Gtk qualified as Gtk
 
 import MediaCopy.Domain.Job (JobId)
 import MediaCopy.Gtk.Actions (Actions (..), installActions, presentAbout)
+import MediaCopy.Gtk.Widgets.Bind (bindQuietly, listSelection)
 import MediaCopy.Gtk.Widgets.CloseConfirm (newCloseConfirm)
-import MediaCopy.Gtk.Widgets.CommandPalette (newCommandPalette, renderCommandPalette)
-import MediaCopy.Gtk.Widgets.Common (Cell, flatNamed, newCell, renderCell, suppressing, unlessSuppressed)
+import MediaCopy.Gtk.Widgets.CommandPalette (newCommandPalette)
+import MediaCopy.Gtk.Widgets.Common (Cell, flatNamed, newCell, renderCell)
 import MediaCopy.Gtk.Widgets.JobDetail (JobDetail (..), newJobDetail)
 import MediaCopy.Gtk.Widgets.JobRow (JobRow (..), jobIdOfRow, newJobRow)
 import MediaCopy.Gtk.Widgets.OffloadDialog (newOffloadDialog, renderOffloadDialog)
@@ -30,7 +30,9 @@ import MediaCopy.Interface.Command (mainMenuLabel)
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Theme (Appearance, PaletteMode, ThemeSection)
 import MediaCopy.Interface.Translation
-import MediaCopy.Model (Chrome (..), JobEntry (..), Model (..), UiMessage (..), selectedEntry)
+import MediaCopy.Interface.View.Palette (paletteView)
+import MediaCopy.Interface.View.Sidebar (ContentPage (..), SidebarView (..), sidebarView)
+import MediaCopy.Model (Chrome (..), JobEntry (..), Model (..), UiMessage (..), commandEnabled, selectedEntry)
 
 data Widgets = Widgets
   { window :: Adw.ApplicationWindow
@@ -65,19 +67,20 @@ buildWidgets app applyTheme wording lightSections darkSections dispatch = do
   planSheet <- newPlanSheet window dispatch
   preferences <- newPreferences window wording lightSections darkSections dispatch
   closeConfirm <- newCloseConfirm window dispatch
-  commandPalette <- newCommandPalette window actions.accelLabel dispatch
+  paintPalette <- newCommandPalette window actions.accelLabel dispatch
   let render current = do
         renderCell themeCell (current.appearance, current.desktopBase)
-        renderSidebar sidebar current
-        let selected = selectedEntry current
-        Gtk.stackSetVisibleChildName contentStack (if isJust selected then "detail" else "empty")
+        let sidebarNow = sidebarView current
+            selected = selectedEntry current
+        renderSidebar sidebar current sidebarNow
+        Gtk.stackSetVisibleChildName contentStack (contentPageName sidebarNow.page)
         detail.render current selected
         actions.render current
         renderOffloadDialog offloadDialog current
         renderPlanSheet planSheet current
         preferences.render current
-        renderCell closeConfirm current.closeConfirm
-        renderCommandPalette commandPalette current
+        closeConfirm current.closeConfirm
+        paintPalette (paletteView current.wording (commandEnabled current) current.palette)
         renderCell toastCell current.toast
       present = \case
         ShowPreferences page -> preferences.showPage page
@@ -153,40 +156,24 @@ newToastCell toastOverlay dispatch =
 data Sidebar = Sidebar
   { list :: Gtk.ListBox
   , rows :: IORef (Map JobId JobRow)
-  , suppress :: IORef Int
-  , selection :: Cell (Maybe JobId)
+  , paintSelection :: Maybe JobId -> IO ()
+  , quietly :: IO () -> IO ()
   }
 
 newSidebar :: (UiMessage -> IO ()) -> IO (Sidebar, Adw.NavigationPage)
 newSidebar dispatch = do
-  suppress <- newIORef 0
-  list <-
-    new
-      Gtk.ListBox
-      [ #selectionMode := Gtk.SelectionModeSingle
-      , On #rowSelected $ \picked ->
-          unlessSuppressed suppress $ do
-            chosen <- maybe (pure Nothing) jobIdOfRow picked
-            dispatch (SelectJob chosen)
-      ]
+  list <- new Gtk.ListBox [#selectionMode := Gtk.SelectionModeSingle]
   Gtk.widgetAddCssClass list "navigation-sidebar"
   scroll <- new Gtk.ScrolledWindow [#child := list, #hscrollbarPolicy := Gtk.PolicyTypeNever]
   page <- Adw.navigationPageNew scroll "Jobs"
   set page [#widthRequest := 260]
   rows <- newIORef Map.empty
-  selection <- newSelectionCell list rows
-  pure (Sidebar {list, rows, suppress, selection}, page)
+  let rowOf jobId = fmap (\jobRow -> jobRow.row) . Map.lookup jobId <$> readIORef rows
+  (paintSelection, quietly) <- bindQuietly (listSelection list jobIdOfRow rowOf) (dispatch . SelectJob)
+  pure (Sidebar {list, rows, paintSelection, quietly}, page)
 
-newSelectionCell :: Gtk.ListBox -> IORef (Map JobId JobRow) -> IO (Cell (Maybe JobId))
-newSelectionCell list rows =
-  newCell $ \case
-    Nothing -> Gtk.listBoxUnselectAll list
-    Just jobId -> do
-      current <- readIORef rows
-      forM_ (Map.lookup jobId current) (\jobRow -> Gtk.listBoxSelectRow list (Just jobRow.row))
-
-renderSidebar :: Sidebar -> Model -> IO ()
-renderSidebar sidebar current = suppressing sidebar.suppress $ do
+renderSidebar :: Sidebar -> Model -> SidebarView -> IO ()
+renderSidebar sidebar current view = sidebar.quietly $ do
   existing <- readIORef sidebar.rows
   let gone = Map.difference existing current.jobs
       kept = Map.intersectionWith (,) existing current.jobs
@@ -194,10 +181,11 @@ renderSidebar sidebar current = suppressing sidebar.suppress $ do
   traverse_ (\jobRow -> Gtk.listBoxRemove sidebar.list jobRow.row) gone
   added <- traverse (\entry -> newJobRow current.wording entry.state) missing
   traverse_ (\jobRow -> Gtk.listBoxAppend sidebar.list jobRow.row) added
-  let rows = Map.union (Map.map fst kept) added
-  writeIORef sidebar.rows rows
+  writeIORef sidebar.rows (Map.union (Map.map fst kept) added)
   traverse_ (\(jobRow, entry) -> jobRow.update current.wording current.now entry.state) kept
-  let chosen = case current.selected of
-        Nothing -> Nothing
-        Just jobId -> if Map.member jobId rows then Just jobId else Nothing
-  renderCell sidebar.selection chosen
+  sidebar.paintSelection view.selected
+
+contentPageName :: ContentPage -> Text
+contentPageName = \case
+  EmptyPage -> "empty"
+  DetailPage -> "detail"

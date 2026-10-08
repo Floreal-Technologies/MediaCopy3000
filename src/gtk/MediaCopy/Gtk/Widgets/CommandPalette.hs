@@ -1,7 +1,5 @@
 module MediaCopy.Gtk.Widgets.CommandPalette
-  ( CommandPalette
-  , newCommandPalette
-  , renderCommandPalette
+  ( newCommandPalette
   ) where
 
 import Control.Monad (forM_, void)
@@ -9,7 +7,6 @@ import Data.GI.Base (AttrOp ((:=)), new, on, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Int (Int32)
 import Data.List (List)
-import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Vector (Vector)
@@ -20,18 +17,13 @@ import GI.GLib qualified as GLib
 import GI.Gdk qualified as Gdk
 import GI.Gtk qualified as Gtk
 
-import MediaCopy.Gtk.Widgets.Common
-import MediaCopy.Interface.Command (commandId, commandLabel, paletteNoMatch, palettePlaceholder)
+import MediaCopy.Gtk.Widgets.Bind (bind, closing, dialog, searchText)
+import MediaCopy.Gtk.Widgets.Common hiding (newRow)
+import MediaCopy.Interface.Command (commandId)
 import MediaCopy.Interface.Command qualified as Command
-import MediaCopy.Interface.Palette (Match (..), PaletteRow (..), Target (..), paletteRows)
-import MediaCopy.Interface.Translation (Wording)
-import MediaCopy.Model (Model (..), UiMessage (..), commandEnabled)
-
-data CommandPalette = CommandPalette
-  { openCell :: Cell Bool
-  , queryCell :: Cell Text
-  , rowsCell :: Cell (Wording, List PaletteRow)
-  }
+import MediaCopy.Interface.Palette (Match (..), PaletteRow (..), Target (..))
+import MediaCopy.Interface.View.Palette (PaletteItem (..), PaletteView (..))
+import MediaCopy.Model (UiMessage (..))
 
 data Parts = Parts
   { entry :: Gtk.SearchEntry
@@ -39,16 +31,14 @@ data Parts = Parts
   , placeholder :: Gtk.Label
   , scroll :: Gtk.ScrolledWindow
   , shown :: IORef (Vector (Adw.ActionRow, Command.Command))
-  , suppress :: IORef Int
   }
 
 newCommandPalette
   :: Adw.ApplicationWindow
   -> (Command.Command -> Maybe Text)
   -> (UiMessage -> IO ())
-  -> IO CommandPalette
+  -> IO (PaletteView -> IO ())
 newCommandPalette window accelLabel dispatch = do
-  suppress <- newIORef 0
   shown <- newIORef V.empty
   entry <- new Gtk.SearchEntry [#hexpand := True]
   placeholder <- newLabel "" [#marginTop := 24, #marginBottom := 24] ["dim-label"]
@@ -66,59 +56,52 @@ newCommandPalette window accelLabel dispatch = do
   box <- paddedBox Gtk.OrientationVertical 12 12
   Gtk.boxAppend box entry
   Gtk.boxAppend box scroll
-  dialog <- new Adw.Dialog [#contentWidth := 520, #child := box]
-  let parts = Parts {entry, list, placeholder, scroll, shown, suppress}
-  void $ on entry #changed $ unlessSuppressed suppress $ do
-    text <- Gtk.editableGetText entry
-    dispatch (SetPaletteQuery text)
+  dialog' <- new Adw.Dialog [#contentWidth := 520, #child := box]
+  let parts = Parts {entry, list, placeholder, scroll, shown}
   void $ on entry #activate (runSelected parts dispatch)
-  void $ on entry #stopSearch (void (Adw.dialogClose dialog))
+  void $ on entry #stopSearch (void (Adw.dialogClose dialog'))
   void $ on list #rowSelected (\row -> forM_ row (revealRow parts))
   void $ on list #rowActivated (runRow parts dispatch)
   keys <- new Gtk.EventControllerKey []
   void $ on keys #keyPressed $ \keyval _ _ -> moveSelection parts keyval
   Gtk.widgetAddController entry keys
-  openCell <- newOpenCellWith (void (Gtk.widgetGrabFocus entry)) dialog window
-  onDialogClosed dialog openCell (dispatch ClosePalette)
-  queryCell <- newCell (suppressing suppress . paintEditable entry)
-  rowsCell <- newCell (paintRows parts accelLabel)
-  pure CommandPalette {openCell, queryCell, rowsCell}
+  openControl <- dialog dialog' window (void (Gtk.widgetGrabFocus entry))
+  paintOpen <- bind openControl (closing (dispatch ClosePalette))
+  paintQuery <- bind (searchText entry) (dispatch . SetPaletteQuery)
+  itemsCell <- newCell (paintItems parts accelLabel)
+  pure $ \view -> do
+    renderCell itemsCell (view.items, view.placeholder, view.noMatch)
+    paintQuery view.query
+    paintOpen view.open
 
-renderCommandPalette :: CommandPalette -> Model -> IO ()
-renderCommandPalette palette model = do
-  renderCell palette.rowsCell (model.wording, paletteRows (commandEnabled model) model.wording model.palette)
-  renderCell palette.queryCell (fromMaybe "" model.palette)
-  renderCell palette.openCell (isJust model.palette)
-
-paintRows :: Parts -> (Command.Command -> Maybe Text) -> (Wording, List PaletteRow) -> IO ()
-paintRows parts accelLabel (wording, rows) = do
-  set parts.entry [#placeholderText := palettePlaceholder wording]
-  set parts.placeholder [#label := paletteNoMatch wording]
+paintItems :: Parts -> (Command.Command -> Maybe Text) -> (List PaletteItem, Text, Text) -> IO ()
+paintItems parts accelLabel (items, placeholder, noMatch) = do
+  set parts.entry [#placeholderText := placeholder]
+  set parts.placeholder [#label := noMatch]
   Gtk.listBoxRemoveAll parts.list
-  built <- V.fromList <$> traverse (newRow wording accelLabel) rows
+  built <- V.fromList <$> traverse (newRow accelLabel) items
   V.forM_ built (\(row, _) -> Gtk.listBoxAppend parts.list row)
   writeIORef parts.shown built
   V.forM_ (V.take 1 built) (\(row, _) -> Gtk.listBoxSelectRow parts.list (Just row))
 
-newRow :: Wording -> (Command.Command -> Maybe Text) -> PaletteRow -> IO (Adw.ActionRow, Command.Command)
-newRow wording accelLabel row = do
-  let label = commandLabel wording row.command
-  title <- case row.match.target of
-    OnLabel -> emphasize row.match.hits label
-    OnId -> GLib.markupEscapeText label (-1)
+newRow :: (Command.Command -> Maybe Text) -> PaletteItem -> IO (Adw.ActionRow, Command.Command)
+newRow accelLabel item = do
+  title <- case item.row.match.target of
+    OnLabel -> emphasize item.row.match.hits item.label
+    OnId -> GLib.markupEscapeText item.label (-1)
   built <-
     new
       Adw.ActionRow
       [ #useMarkup := True
       , #title := title
-      , #subtitle := commandId row.command
+      , #subtitle := commandId item.row.command
       , #activatable := True
-      , #sensitive := row.enabled
+      , #sensitive := item.row.enabled
       ]
-  forM_ (accelLabel row.command) $ \text -> do
+  forM_ (accelLabel item.row.command) $ \text -> do
     suffix <- newLabel text [] ["dim-label"]
     Adw.actionRowAddSuffix built suffix
-  pure (built, row.command)
+  pure (built, item.row.command)
 
 emphasize :: List Int -> Text -> IO Text
 emphasize hits label = T.concat <$> traverse piece (zip [0 ..] (T.unpack label))

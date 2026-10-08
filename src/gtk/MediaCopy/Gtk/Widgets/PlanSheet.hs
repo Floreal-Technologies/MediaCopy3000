@@ -4,40 +4,32 @@ module MediaCopy.Gtk.Widgets.PlanSheet
   , renderPlanSheet
   ) where
 
-import Ascmhl.Path (pathText)
-import Ascmhl.Types (Author (..))
-import Ascmhl.Write (formatMhlTime)
-import Control.Monad (forM_, void, when, zipWithM_)
-import Data.Function ((&))
+import Control.Monad (forM_, void, zipWithM_)
 import Data.GI.Base
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.List (List)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (catMaybes, isJust, isNothing)
 import Data.Text (Text)
-import Data.Text qualified as T
-import Data.Text.Display (display)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import GI.Adw qualified as Adw
 import GI.GLib qualified as GLib
 import GI.Gtk qualified as Gtk
-import System.OsPath (takeFileName)
 
 import MediaCopy.Domain.Job
-import MediaCopy.Domain.JobFormat (formatAlgo)
 import MediaCopy.Domain.Plan
 import MediaCopy.Domain.Plugin
 import MediaCopy.Domain.PluginCatalog (FieldValue (..), FieldView (..), enabledJobFields)
+import MediaCopy.Gtk.Widgets.Bind (bind, checkRadio, closing, dialog, pair, switchRow)
 import MediaCopy.Gtk.Widgets.Common
 import MediaCopy.Gtk.Widgets.FieldRows (FieldActions (..), FieldRow (..), fieldRow)
-import MediaCopy.Interface.Translation
-import MediaCopy.Interface.Wording
+import MediaCopy.Interface.View.PlanSheet (BodyView (..), PhaseView (..), SealView (..), SheetPage (..), phaseView, sealChoice)
+import MediaCopy.Interface.View.Row (RowView)
 import MediaCopy.Model
 
 data PlanSheet = PlanSheet
-  { phaseCell :: Cell (Wording, PlanPhase)
-  , openCell :: Cell Bool
+  { phaseCell :: Cell (Maybe PhaseView)
+  , paintOpen :: Bool -> IO ()
   , fieldsCell :: Cell (Vector (PluginRef, Vector FieldView), Map.Map Text (Map.Map Text Text))
   }
 
@@ -58,10 +50,10 @@ newPlanSheet window dispatch = do
       stack
   let sheet = Sheet {dialog = shell.dialog, startBtn = shell.primaryButton, saveBtn, stack, errorPage, body}
   phaseCell <- newCell (renderPhase sheet)
-  openCell <- newOpenCell shell.dialog window
+  openControl <- dialog shell.dialog window (pure ())
+  paintOpen <- bind openControl (closing (dispatch DiscardPlan))
   fieldsCell <- newCell (renderJobFields body dispatch)
-  onDialogClosed shell.dialog openCell (dispatch DiscardPlan)
-  pure PlanSheet {phaseCell, openCell, fieldsCell}
+  pure PlanSheet {phaseCell, paintOpen, fieldsCell}
 
 data Sheet = Sheet
   { dialog :: Adw.Dialog
@@ -92,31 +84,21 @@ newStackPages ready = do
   void (Gtk.stackAddNamed stack errorPage (Just "error"))
   pure (stack, errorPage)
 
-renderPhase :: Sheet -> (Wording, PlanPhase) -> IO ()
-renderPhase sheet (wording, phase) = case phase of
-  Idle -> pure ()
-  Planning spec -> do
-    set sheet.dialog [#title := "Plan · " <> jobLabel spec.job]
-    set sheet.startBtn [#sensitive := False]
-    set sheet.saveBtn [#sensitive := False]
-    Gtk.stackSetVisibleChildName sheet.stack "planning"
-  PlanError message -> do
-    escaped <- GLib.markupEscapeText message (-1)
-    set sheet.errorPage [#description := escaped]
-    set sheet.startBtn [#sensitive := False]
-    set sheet.saveBtn [#sensitive := False]
-    Gtk.stackSetVisibleChildName sheet.stack "error"
-  Refreshing plan _ -> do
-    renderReadyBody (wording, sheet.body) plan
-    set sheet.startBtn [#sensitive := False]
-    set sheet.saveBtn [#sensitive := False]
-    Gtk.stackSetVisibleChildName sheet.stack "ready"
-  Ready plan -> do
-    set sheet.dialog [#title := "Plan · " <> jobLabel plan.spec.job]
-    renderReadyBody (wording, sheet.body) plan
-    set sheet.startBtn [#sensitive := not (planBlocked plan)]
-    set sheet.saveBtn [#sensitive := True]
-    Gtk.stackSetVisibleChildName sheet.stack "ready"
+renderPhase :: Sheet -> Maybe PhaseView -> IO ()
+renderPhase sheet = mapM_ $ \view -> do
+  forM_ view.title (\title -> set sheet.dialog [#title := title])
+  forM_ view.body (renderReadyBody sheet.body)
+  escaped <- GLib.markupEscapeText view.problem (-1)
+  set sheet.errorPage [#description := escaped]
+  set sheet.startBtn [#sensitive := view.startEnabled]
+  set sheet.saveBtn [#sensitive := view.saveEnabled]
+  Gtk.stackSetVisibleChildName sheet.stack (sheetPageName view.page)
+
+sheetPageName :: SheetPage -> Text
+sheetPageName = \case
+  PlanningPage -> "planning"
+  ReadyPage -> "ready"
+  ErrorPage -> "error"
 
 data ReadyBody = ReadyBody
   { scroll :: Gtk.ScrolledWindow
@@ -178,29 +160,27 @@ newReadyBody seal = do
       , seal
       }
 
-renderReadyBody :: (Wording, ReadyBody) -> JobPlan -> IO ()
-renderReadyBody (wording, body) plan = do
-  renderRows body.summaryGroup body.summaryRows (summaryOf wording plan)
-  renderRows body.targetGroup body.targetRows (V.map (targetRow wording) plan.targets)
-  renderRows body.findingGroup body.findingRows (findingRowsOf wording plan)
-  renderRows body.manifestGroup body.manifestRows (manifestRowsOf plan.plugins.contributions)
-  renderActionRows body.scriptRows (InExpander body.scriptExpander) (scriptOf wording plan)
-  renderSealChoice body.seal wording plan
+renderReadyBody :: ReadyBody -> BodyView -> IO ()
+renderReadyBody body view = do
+  renderRows body.summaryGroup body.summaryRows view.summary
+  renderRows body.targetGroup body.targetRows view.targets
+  renderRows body.findingGroup body.findingRows view.findings
+  renderRows body.manifestGroup body.manifestRows view.manifest
+  renderActionRows body.scriptRows (InExpander body.scriptExpander) (V.map fromView view.script)
+  renderSealChoice body.seal view.seal
 
 data SealControls = SealControls
   { group :: Adw.PreferencesGroup
   , sealSwitch :: Adw.SwitchRow
   , policySwitch :: Adw.SwitchRow
-  , resumeButton :: Gtk.CheckButton
-  , replaceButton :: Gtk.CheckButton
   , existingRow :: Adw.ActionRow
-  , suppress :: IORef Int
+  , paintChoice :: (Bool, Bool) -> IO ()
+  , paintExisting :: Maybe ExistingCopy -> IO ()
   }
 
 newSealGroup :: (UiMessage -> IO ()) -> IO SealControls
 newSealGroup dispatch = do
   group <- new Adw.PreferencesGroup [#title := "Before Copying"]
-  suppress <- newIORef 0
   sealSwitch <- new Adw.SwitchRow [#title := "Seal the media source first", #active := False]
   policySwitch <- new Adw.SwitchRow [#title := "Copy anyway if the seal finds a problem", #active := False]
   resumeButton <- new Gtk.CheckButton [#label := "Resume", #valign := Gtk.AlignCenter]
@@ -212,53 +192,29 @@ newSealGroup dispatch = do
   Adw.preferencesGroupAdd group existingRow
   Adw.preferencesGroupAdd group sealSwitch
   Adw.preferencesGroupAdd group policySwitch
-  let seal = SealControls {group, sealSwitch, policySwitch, resumeButton, replaceButton, existingRow, suppress}
-  void (on sealSwitch (Adw.PropertyNotify #active) (const (reportSealChoice seal dispatch)))
-  void (on policySwitch (Adw.PropertyNotify #active) (const (reportSealChoice seal dispatch)))
-  void (on resumeButton #toggled (reportExistingChoice seal dispatch))
-  void (on replaceButton #toggled (reportExistingChoice seal dispatch))
-  pure seal
+  paintChoice <-
+    bind
+      (pair (switchRow sealSwitch) (switchRow policySwitch))
+      (\(sealing, anyway) -> dispatch (SetSealFirst (sealChoice sealing anyway)))
+  paintExisting <-
+    bind
+      (checkRadio [(Resume, resumeButton), (Replace, replaceButton)])
+      (mapM_ (dispatch . SetExistingCopy))
+  pure SealControls {group, sealSwitch, policySwitch, existingRow, paintChoice, paintExisting}
 
-reportSealChoice :: SealControls -> (UiMessage -> IO ()) -> IO ()
-reportSealChoice seal dispatch = unlessSuppressed seal.suppress $ do
-  sealing <- get seal.sealSwitch #active
-  anyway <- get seal.policySwitch #active
-  dispatch (SetSealFirst (choiceOf sealing anyway))
-
-reportExistingChoice :: SealControls -> (UiMessage -> IO ()) -> IO ()
-reportExistingChoice seal dispatch = unlessSuppressed seal.suppress $ do
-  resume <- get seal.resumeButton #active
-  replace <- get seal.replaceButton #active
-  if resume then dispatch (SetExistingCopy Resume) else when replace (dispatch (SetExistingCopy Replace))
-
-renderSealChoice :: SealControls -> Wording -> JobPlan -> IO ()
-renderSealChoice seal wording plan = case plan.spec.job of
-  Offload oj -> do
-    let sealing = case plan.sealPass of
-          Nothing -> False
-          Just _ -> True
-        anyway = case plan.sealPass of
-          Just pass | pass.onFailure == CopyAnyway -> True
-          _ -> False
-    suppressing seal.suppress $ do
-      set seal.sealSwitch [#active := sealing, #subtitle := sealSubtitle wording plan]
-      set seal.policySwitch [#active := anyway, #visible := sealing]
-      set seal.resumeButton [#active := oj.existingCopy == Just Resume]
-      set seal.replaceButton [#active := oj.existingCopy == Just Replace]
-    Gtk.widgetSetVisible seal.existingRow (V.any (\target -> target.state == Partial) plan.targets)
-    Gtk.widgetSetVisible seal.group True
-  _ -> Gtk.widgetSetVisible seal.group False
-
-choiceOf :: Bool -> Bool -> SealFirst
-choiceOf sealing anyway
-  | not sealing = UseHistory
-  | anyway = SealBeforeCopy CopyAnyway
-  | otherwise = SealBeforeCopy StopBeforeCopy
+renderSealChoice :: SealControls -> SealView -> IO ()
+renderSealChoice seal view = do
+  set seal.sealSwitch [#subtitle := view.subtitle]
+  set seal.policySwitch [#visible := view.policyShown]
+  seal.paintChoice (view.sealing, view.anyway)
+  seal.paintExisting view.existing
+  Gtk.widgetSetVisible seal.existingRow view.existingShown
+  Gtk.widgetSetVisible seal.group view.shown
 
 renderPlanSheet :: PlanSheet -> Model -> IO ()
 renderPlanSheet widgets current = do
-  renderCell widgets.phaseCell (current.wording, current.planPhase)
-  renderCell widgets.openCell (isOpen current.planPhase)
+  renderCell widgets.phaseCell (phaseView current.wording current.planPhase)
+  widgets.paintOpen (isOpen current.planPhase)
   let given = case current.planPhase of
         Planning spec -> spec.pluginFields
         Refreshing _ spec -> spec.pluginFields
@@ -298,151 +254,7 @@ isOpen phase = case phase of
   Idle -> False
   _ -> True
 
-sealSubtitle :: Wording -> JobPlan -> Text
-sealSubtitle wording plan = case plan.sealPass of
-  Just pass -> "reads " <> humanBytes wording pass.bytes <> " first, then writes generation " <> count (plan.generations + 1)
-  Nothing
-    | plan.generations == 0 -> "the media source has no history; sealing records its hashes before a byte is copied"
-    | otherwise -> "the media source already holds " <> plural "generation" plan.generations <> ", which the copies are checked against"
-
-findingRowsOf :: Wording -> JobPlan -> Vector Row
-findingRowsOf wording plan =
-  V.map (findingRow wording) (blockers plan)
-    <> V.map (pluginFindingRow wording) (pluginBlockers plan.plugins)
-    <> V.map (findingRow wording) (V.filter (\finding -> finding.severity == Warning) plan.findings)
-    <> V.map (pluginFindingRow wording) (V.filter (\finding -> finding.severity == Warning) plan.plugins.findings)
-
-pluginFindingRow :: Wording -> PluginFinding -> Row
-pluginFindingRow wording finding =
-  let (title, detail) = pluginFindingTexts wording finding
-  in (plainRow title detail) {cssClass = Just (case finding.severity of Blocker -> "error"; Warning -> "warning")}
-
-manifestRowsOf :: Contributions -> Vector Row
-manifestRowsOf contributions =
-  V.map authorRow contributions.authors <> metadataRow
-  where
-    authorRow author = plainRow author.name (T.intercalate " · " (catMaybes [author.role, author.email, author.phone]))
-    metadataRow
-      | Map.null contributions.fileMetadata && isNothing contributions.manifestMetadata = V.empty
-      | otherwise =
-          V.singleton
-            ( plainRow
-                ("Metadata for " <> plural "file" (Map.size contributions.fileMetadata) <> (if isJust contributions.manifestMetadata then " and the manifest" else ""))
-                (T.intercalate ", " (V.toList (V.map (\ref -> ref.name) contributions.contributors)))
-            )
-
-summaryOf :: Wording -> JobPlan -> Vector Row
-summaryOf wording plan =
-  V.fromList
-    [ plainRow (plural "file" (V.length plan.steps)) (humanBytes wording plan.totalBytes)
-    , plainRow "Hash format" (formatText plan)
-    , plainRow "Steps" (stepCounts wording plan)
-    ]
-
-formatText :: JobPlan -> Text
-formatText plan = case plan.format of
-  Nothing -> "not settled"
-  Just fmt -> display (formatAlgo fmt) <> " · originals: " <> plan.originsUsed
-
-stepCounts :: Wording -> JobPlan -> Text
-stepCounts wording plan =
-  plan.steps
-    & V.foldr (\step tally -> Map.insertWith (\_ n -> n + 1) (stepName wording step) (1 :: Int) tally) Map.empty
-    & Map.toList
-    & map (\pair -> fst pair <> " " <> count (snd pair))
-    & T.intercalate " · "
-
-stepName :: Wording -> PlanStep -> Text
-stepName wording step = case step.op of
-  Copy _
-    | V.any (\w -> w.mode == Overwrite) step.writes -> writeModeText wording Overwrite
-    | not (V.null step.writes) && V.all (\w -> w.mode == Reuse) step.writes -> writeModeText wording Reuse
-    | otherwise -> writeModeText wording WriteNew
-  VerifyAgainst _ -> "verify"
-  ReportNew -> "record"
-  ReportMissing -> "missing"
-
-scriptSample :: Int
-scriptSample = 20
-
-scriptOf :: Wording -> JobPlan -> Vector Row
-scriptOf wording plan =
-  V.fromList
-    [ plainRow "Execution" (executionText wording plan)
-    , plainRow "Instant" (formatMhlTime plan.spec.createdAt)
-    , plainRow "Bytes" (count plan.bytesToRead <> " to read, " <> count plan.totalBytes <> " in the main pass")
-    , plainRow "Creates" (count (V.length plan.creates) <> " directories")
-    , plainRow "Directories" (directoriesText plan)
-    , plainRow "Ignores" (T.intercalate " · " (V.toList plan.ignorePatterns))
-    ]
-    <> V.map (generationRow wording) (plannedGenerations plan)
-    <> V.map (stepRow wording) (V.take scriptSample plan.steps)
-    <> overflowRow (V.length plan.steps)
-
-directoriesText :: JobPlan -> Text
-directoriesText plan =
-  plannedGenerations plan
-    & V.toList
-    & map (\planned -> count (V.length planned.directories))
-    & T.intercalate " · "
-
-executionText :: Wording -> JobPlan -> Text
-executionText wording plan = case plan.execution of
-  CopyInto copy -> processKindText wording copy.process <> " · source: " <> pathText copy.source <> " · originals: " <> plan.originsUsed <> carriedText copy.carried
-  RecordAt record -> processKindText wording record.process <> " · folder: " <> pathText record.folder
-
-carriedText :: Int -> Text
-carriedText carried
-  | carried <= 0 = ""
-  | otherwise = " · carries " <> plural "generation" carried
-
-generationRow :: Wording -> PlannedGeneration -> Row
-generationRow wording planned =
-  plainRow
-    (pathText (takeFileName planned.manifest))
-    (pathText planned.folder <> " · generation " <> count planned.number <> " · " <> processKindText wording planned.process)
-
-stepRow :: Wording -> PlanStep -> Row
-stepRow wording step =
-  plainRow
-    (display step.path)
-    (humanBytes wording step.size <> " · " <> stepName wording step <> " · " <> expectationText step.op <> tempText step)
-
-expectationText :: FileOp -> Text
-expectationText op = case op of
-  Copy NoOriginal -> "no original"
-  Copy (Recorded _) -> "recorded hash"
-  Copy FromSealPass -> "from the seal pass"
-  VerifyAgainst _ -> "history hash"
-  ReportNew -> "new"
-  ReportMissing -> "missing"
-
-tempText :: PlanStep -> Text
-tempText step = case step.writes V.!? 0 of
-  Nothing -> ""
-  Just w -> " · " <> pathText (takeFileName w.temp)
-
-overflowRow :: Int -> Vector Row
-overflowRow total
-  | total <= scriptSample = V.empty
-  | otherwise = V.singleton (plainRow ("and " <> count (total - scriptSample) <> " more") "")
-
-targetRow :: Wording -> Target -> Row
-targetRow wording target =
-  plainRow
-    (pathText (takeFileName target.root))
-    (pathText target.root <> " · " <> freeText wording target <> " · " <> targetStateText wording target.state)
-
-freeText :: Wording -> Target -> Text
-freeText wording target = maybe "free space unknown" (\free -> humanBytes wording free <> " free") target.freeBytes
-
-findingRow :: Wording -> Finding -> Row
-findingRow wording finding =
-  (plainRow (findingText wording finding.code) finding.detail)
-    { cssClass = Just (case finding.severity of Blocker -> "error"; Warning -> "warning")
-    }
-
-renderRows :: Adw.PreferencesGroup -> IORef (Vector Adw.ActionRow) -> Vector Row -> IO ()
+renderRows :: Adw.PreferencesGroup -> IORef (Vector Adw.ActionRow) -> Vector RowView -> IO ()
 renderRows group rowsRef wanted = do
-  renderActionRows rowsRef (InGroup group) wanted
+  renderActionRows rowsRef (InGroup group) (V.map fromView wanted)
   Gtk.widgetSetVisible group (not (V.null wanted))

@@ -5,15 +5,15 @@ module MediaCopy.Gtk.Widgets.CloseConfirm
 import Data.GI.Base (AttrOp (On, (:=)), new)
 import GI.Adw qualified as Adw
 
-import MediaCopy.Gtk.Widgets.Common (Cell, newOpenCell)
+import MediaCopy.Gtk.Widgets.Bind (bind, dialog)
 import MediaCopy.Model (UiMessage (..))
 
 newCloseConfirm
   :: Adw.ApplicationWindow
   -> (UiMessage -> IO ())
-  -> IO (Cell Bool)
+  -> IO (Bool -> IO ())
 newCloseConfirm window dispatch = do
-  dialog <-
+  alert <-
     new
       Adw.AlertDialog
       [ #heading := "Stop the running job?"
@@ -21,10 +21,11 @@ newCloseConfirm window dispatch = do
       , On #response $ \answer ->
           if answer == "stop" then dispatch ConfirmClose else dispatch CancelClose
       ]
-  Adw.alertDialogAddResponse dialog "keep" "_Keep Running"
-  Adw.alertDialogAddResponse dialog "stop" "_Stop and Close"
-  Adw.alertDialogSetResponseAppearance dialog "stop" Adw.ResponseAppearanceDestructive
-  Adw.alertDialogSetDefaultResponse dialog (Just "keep")
-  Adw.alertDialogSetCloseResponse dialog "keep"
-  asDialog <- Adw.toDialog dialog
-  newOpenCell asDialog window
+  Adw.alertDialogAddResponse alert "keep" "_Keep Running"
+  Adw.alertDialogAddResponse alert "stop" "_Stop and Close"
+  Adw.alertDialogSetResponseAppearance alert "stop" Adw.ResponseAppearanceDestructive
+  Adw.alertDialogSetDefaultResponse alert (Just "keep")
+  Adw.alertDialogSetCloseResponse alert "keep"
+  asDialog <- Adw.toDialog alert
+  openControl <- dialog asDialog window (pure ())
+  bind openControl (\_ -> pure ())

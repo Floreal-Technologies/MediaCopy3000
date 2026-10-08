@@ -8,11 +8,13 @@ module MediaCopy.Gtk.Runtime
   ) where
 
 import Control.Exception (finally)
-import Control.Monad (forM_, void, when)
+import Control.Monad (forM_, unless, void, when)
 import Data.GI.Base (AttrOp (On, (:=)), new, on)
 import Data.IORef
 import Data.Maybe (isNothing)
 import Data.Time (getCurrentTime)
+import Data.Vector (Vector)
+import Data.Vector qualified as V
 import GI.Adw qualified as Adw
 import GI.GLib qualified as GLib
 import GI.Gio qualified as Gio
@@ -42,6 +44,8 @@ data Loop = Loop
   { modelRef :: IORef Model
   , widgets :: Widgets
   , interpreter :: Interpreter
+  , busy :: IORef Bool
+  , pending :: IORef (Vector Message)
   }
 
 start :: Interpret -> Maybe Startup -> IO ()
@@ -95,7 +99,9 @@ buildAndPresent loopRef environment interpret startup app = do
   desktop <- readDesktopBase themeAdapter
   modelRef <- newIORef (initialModel startedAt desktop)
   interpreter <- interpret widgets post
-  writeIORef loopRef (Just Loop {modelRef, widgets, interpreter})
+  busy <- newIORef False
+  pending <- newIORef V.empty
+  writeIORef loopRef (Just Loop {modelRef, widgets, interpreter, busy, pending})
   model <- readIORef modelRef
   loadWording environment model.wording.language (post . WordingReloaded) (post . ShowToast)
   onDesktopBase themeAdapter (post . DesktopBase)
@@ -111,6 +117,23 @@ buildAndPresent loopRef environment interpret startup app = do
 
 dispatch :: Loop -> Message -> IO ()
 dispatch loop msg = do
+  modifyIORef' loop.pending (`V.snoc` msg)
+  running <- readIORef loop.busy
+  unless running $ do
+    writeIORef loop.busy True
+    drain loop `finally` (writeIORef loop.busy False >> writeIORef loop.pending V.empty)
+
+drain :: Loop -> IO ()
+drain loop =
+  readIORef loop.pending >>= \queued -> case V.uncons queued of
+    Nothing -> pure ()
+    Just (next, rest) -> do
+      writeIORef loop.pending rest
+      step loop next
+      drain loop
+
+step :: Loop -> Message -> IO ()
+step loop msg = do
   old <- readIORef loop.modelRef
   let (current, cmds) = update msg old
   writeIORef loop.modelRef current
