@@ -41,7 +41,7 @@ import MediaCopy.Domain.Job
 import MediaCopy.Domain.JobFormat (formatAlgo)
 import MediaCopy.Domain.Plan
 import MediaCopy.Domain.Plugin
-import MediaCopy.Domain.PluginCatalog (AuthorSlot (..), slotKey)
+import MediaCopy.Domain.PluginCatalog (AuthorSlot (..), emailAccepted, slotKey, validEmail)
 import MediaCopy.Plugin.Discovery (Installed (..))
 
 -- $setup
@@ -90,6 +90,8 @@ fileInfos plan = V.map (\step -> P.FileInfo {path = display step.path, size = st
 -- Left "authors"
 -- >>> fieldValues (V.singleton (field "authors" AuthorsField)) (Map.singleton "authors" (Array (V.singleton (object ["role" .= (" " :: Text)]))))
 -- Left "authors"
+-- >>> fieldValues (V.singleton (field "authors" AuthorsField)) (Map.singleton "authors" (Array (V.singleton (object ["role" .= ("DIT" :: Text), "email" .= ("jane" :: Text)]))))
+-- Left "authors"
 fieldValues :: Vector Field -> Map Text Value -> Either Text (Map Text Value)
 fieldValues fields given = foldl' step (Right Map.empty) fields
   where
@@ -110,7 +112,7 @@ fieldValues fields given = foldl' step (Right Map.empty) fields
       (BoolField, String "true") -> Just (Bool True)
       (BoolField, String "false") -> Just (Bool False)
       (ChoiceField choices, String text) | text `elem` choices -> Just (String text)
-      (AuthorsField, json) | Just slots <- slotsOf json, all (isJust . nonBlank . (.role)) slots -> Just (slotsJson slots)
+      (AuthorsField, json) | Just slots <- slotsOf json, all (\slot -> isJust (nonBlank slot.role) && emailAccepted slot.email) slots -> Just (slotsJson slots)
       _ -> Nothing
 
 -- |
@@ -177,6 +179,8 @@ nonBlank text = if T.all (\c -> isSpace c || isControl c) text then Nothing else
 -- Right (fromList [("authors",Array [])])
 -- >>> mergeAuthorSettings (V.singleton (field "dit" TextField)) Map.empty (Map.singleton "dit" (String "Jane"))
 -- Right (fromList [("dit",String "Jane")])
+-- >>> mergeAuthorSettings (V.singleton (field "authors" AuthorsField)) (Map.singleton "authors.0.email" "jane") (Map.singleton "authors" (slotsJson slots))
+-- Left "authors.0.email"
 mergeAuthorSettings :: Vector Field -> Map Text Text -> Map Text Value -> Either Text (Map Text Value)
 mergeAuthorSettings fields given settings = foldl' step (Right settings) fields
   where
@@ -186,6 +190,9 @@ mergeAuthorSettings fields given settings = foldl' step (Right settings) fields
           values <- acc
           let stored = fromMaybe V.empty (Map.lookup field.key values >>= slotsOf)
               merged = mergeAuthors field.key given stored
+          for_ [0 .. V.length stored - 1] $ \index ->
+            let key = slotKey field.key index "email"
+            in for_ (Map.lookup key given >>= nonBlank) (\email -> unless (validEmail email) (Left key))
           if V.null merged && field.required
             then Left field.key
             else Right (Map.insert field.key (slotsJson merged) values)

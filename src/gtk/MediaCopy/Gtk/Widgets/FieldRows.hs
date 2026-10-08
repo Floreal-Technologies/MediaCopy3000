@@ -15,8 +15,8 @@ import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
 import MediaCopy.Domain.Job (plural)
-import MediaCopy.Domain.PluginCatalog (AuthorSlot (..), FieldShape (..), FieldValue (..), FieldView (..), authorSlots)
-import MediaCopy.Gtk.Widgets.Bind (Control (..), bind, comboRow, entryApply, switchRow)
+import MediaCopy.Domain.PluginCatalog (AuthorSlot (..), FieldShape (..), FieldValue (..), FieldView (..), authorSlots, emailAccepted)
+import MediaCopy.Gtk.Widgets.Bind (Control (..), accepting, bind, comboRow, entryApply, switchRow)
 import MediaCopy.Gtk.Widgets.Common (paintEditable)
 
 data FieldActions = FieldActions
@@ -57,7 +57,9 @@ fieldRow actions prefix field = do
       pure FieldRow {rows = [shown], refresh = Adw.actionRowSetSubtitle header . countText . authorSlots}
     _ -> do
       row <- newEntryRow title (textOf field.value)
-      paintText <- bind (entryApply row) (\text -> if T.null text then actions.clear else actions.setText text)
+      let apply = if field.shape == EmailShape then accepting emailAccepted (entryApply row) else entryApply row
+      paintText <- bind apply (\text -> if T.null text then actions.clear else actions.setText text)
+      when (field.shape == EmailShape) (emailRow row)
       when (field.shape == PathShape) $ do
         choose <- new Gtk.Button [#label := "Choose…", #valign := Gtk.AlignCenter, On #clicked actions.pickPath]
         Gtk.widgetAddCssClass choose "flat"
@@ -79,7 +81,7 @@ authorsRow setAuthors prefix field = do
   Adw.actionRowAddSuffix header add
   edited <- traverse slotRows (V.toList slots)
   let readAll = V.fromList <$> traverse (\slot -> slot.current) edited
-      commitWith f = readAll >>= setAuthors . f
+      commitWith f = readAll >>= \shown -> let next = f shown in when (validSlots next) (setAuthors next)
       control =
         Control
           { paint = \fresh -> do
@@ -90,13 +92,16 @@ authorsRow setAuthors prefix field = do
               pure (\act -> foldr (\quiet inner -> quiet inner) act quiets)
           , current = readAll
           }
-  paintSlots <- bind control setAuthors
+  paintSlots <- bind (accepting validSlots control) setAuthors
   void $ on add #clicked (commitWith (`V.snoc` AuthorSlot "" "" "" ""))
   forM_ (zip [0 ..] edited) $ \(index, slot) ->
     void $ on slot.remove #clicked (commitWith (V.ifilter (\i _ -> i /= index)))
   headerShown <- Adw.toPreferencesRow header
   slotsShown <- traverse (\slot -> Adw.toPreferencesRow slot.expander) edited
   pure FieldRow {rows = headerShown : slotsShown, refresh = paintSlots . authorSlots}
+
+validSlots :: Vector AuthorSlot -> Bool
+validSlots = all (\slot -> emailAccepted slot.email)
 
 fieldTitle :: Text -> FieldView -> Text
 fieldTitle prefix field = prefix <> field.label <> (if field.required then " (required)" else "")
@@ -118,6 +123,15 @@ newEntryRow title text = do
   set row [#title := title]
   pure row
 
+emailRow :: Adw.EntryRow -> IO ()
+emailRow row = do
+  set row [#inputPurpose := Gtk.InputPurposeEmail]
+  let flag = do
+        text <- Gtk.editableGetText row
+        if emailAccepted text then Gtk.widgetRemoveCssClass row "error" else Gtk.widgetAddCssClass row "error"
+  flag
+  void $ on row #changed flag
+
 data SlotRows = SlotRows
   { expander :: Adw.ExpanderRow
   , entries :: [Adw.EntryRow]
@@ -133,6 +147,7 @@ slotRows slot = do
   role <- newEntryRow "Role (required)" slot.role
   name <- newEntryRow "Name" slot.name
   email <- newEntryRow "Email" slot.email
+  emailRow email
   phone <- newEntryRow "Phone" slot.phone
   let entries = [role, name, email, phone]
   forM_ entries (Adw.expanderRowAddRow expander)
