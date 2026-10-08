@@ -38,6 +38,10 @@ bindQuietly control react = do
           writeIORef painted (Just wanted)
   pure (paint, quietly)
 
+accepting :: (a -> Bool) -> Control a -> Control a
+accepting ok control =
+  control {connect = \callback -> control.connect (control.current >>= \value -> when (ok value) callback)}
+
 pair :: Control a -> Control b -> Control (a, b)
 pair left right =
   Control

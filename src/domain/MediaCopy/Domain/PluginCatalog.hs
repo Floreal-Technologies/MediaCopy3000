@@ -14,6 +14,8 @@ module MediaCopy.Domain.PluginCatalog
   , authorJobFields
   , authorSlots
   , slotKey
+  , validEmail
+  , emailAccepted
   , entryById
   ) where
 
@@ -27,7 +29,7 @@ import MediaCopy.Domain.Plugin (PluginRef (..))
 data Answer = Granted | Declined | Unanswered
   deriving stock (Bounded, Enum, Eq, Show)
 
-data FieldShape = TextShape | BoolShape | ChoiceShape (Vector Text) | PathShape | AuthorsShape
+data FieldShape = TextShape | EmailShape | BoolShape | ChoiceShape (Vector Text) | PathShape | AuthorsShape
   deriving stock (Eq, Show)
 
 data AuthorSlot = AuthorSlot
@@ -112,7 +114,7 @@ authorJobFields key slots =
     [ FieldView
         { key = slotKey key index part
         , label = slot.role <> ": " <> label
-        , shape = TextShape
+        , shape = if part == "email" then EmailShape else TextShape
         , required = False
         , value = if T.null text then NoValue else Value text
         }
@@ -125,6 +127,23 @@ authorJobFields key slots =
 -- "authors.2.email"
 slotKey :: Text -> Int -> Text -> Text
 slotKey key index part = key <> "." <> T.pack (show index) <> "." <> part
+
+-- | @EmailAddressAttributeType@ of the ASC MHL schema.
+--
+-- >>> map validEmail ["jane@example.com", "jane@mail.example.com", "a@b@c.d", "jane@example", "jane@.com", "@example.com", "jane@example.", "jane@example.c\nom", ""]
+-- [True,True,True,False,False,False,False,False,False]
+validEmail :: Text -> Bool
+validEmail text = not (T.null local || T.null rest || T.null host || T.null tld) && T.all (`notElem` ['\n', '\r']) tld
+  where
+    (local, rest) = T.breakOn "@" text
+    (host, dotted) = T.breakOn "." (T.drop 1 rest)
+    tld = T.drop 1 dotted
+
+-- |
+-- >>> map emailAccepted ["", "jane@example.com", "jane"]
+-- [True,True,False]
+emailAccepted :: Text -> Bool
+emailAccepted text = T.null text || validEmail text
 
 -- |
 -- >>> V.length (authorSlots (AuthorList (V.singleton (AuthorSlot "DIT" "" "" ""))))
