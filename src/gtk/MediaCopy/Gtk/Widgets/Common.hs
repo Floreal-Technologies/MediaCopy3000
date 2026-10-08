@@ -24,7 +24,7 @@ module MediaCopy.Gtk.Widgets.Common
   ) where
 
 import Control.Exception (bracket_)
-import Control.Monad (forM_, unless, void, when)
+import Control.Monad (forM_, void, when)
 import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
 import Data.GI.Base.Attributes (AttrOpTag (AttrConstruct))
 import Data.GI.Base.GValue (toGValue)
@@ -104,7 +104,7 @@ suppressing flag act = bracket_ (modifyIORef' flag (\val -> val + 1)) (modifyIOR
 unlessSuppressed :: IORef Int -> IO () -> IO ()
 unlessSuppressed suppress act = do
   quiet <- readIORef suppress
-  unless (quiet == 0) act
+  when (quiet == 0) act
 
 paddedBox :: Gtk.Orientation -> Int32 -> Int32 -> IO Gtk.Box
 paddedBox orientation spacing margin =
