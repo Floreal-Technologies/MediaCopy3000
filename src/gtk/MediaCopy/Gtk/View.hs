@@ -17,7 +17,7 @@ import GI.Gtk qualified as Gtk
 
 import MediaCopy.Domain.Job (JobId)
 import MediaCopy.Gtk.Actions (Actions (..), installActions, presentAbout)
-import MediaCopy.Gtk.Widgets.Bind (bind, listSelection)
+import MediaCopy.Gtk.Widgets.Bind (bindQuietly, listSelection)
 import MediaCopy.Gtk.Widgets.CloseConfirm (newCloseConfirm)
 import MediaCopy.Gtk.Widgets.CommandPalette (newCommandPalette)
 import MediaCopy.Gtk.Widgets.Common (Cell, flatNamed, newCell, renderCell)
@@ -157,6 +157,7 @@ data Sidebar = Sidebar
   { list :: Gtk.ListBox
   , rows :: IORef (Map JobId JobRow)
   , paintSelection :: Maybe JobId -> IO ()
+  , quietly :: IO () -> IO ()
   }
 
 newSidebar :: (UiMessage -> IO ()) -> IO (Sidebar, Adw.NavigationPage)
@@ -168,8 +169,8 @@ newSidebar dispatch = do
   set page [#widthRequest := 260]
   rows <- newIORef Map.empty
   let rowOf jobId = fmap (\jobRow -> jobRow.row) . Map.lookup jobId <$> readIORef rows
-  paintSelection <- bind (listSelection list jobIdOfRow rowOf) (dispatch . SelectJob)
-  pure (Sidebar {list, rows, paintSelection}, page)
+  (paintSelection, quietly) <- bindQuietly (listSelection list jobIdOfRow rowOf) (dispatch . SelectJob)
+  pure (Sidebar {list, rows, paintSelection, quietly}, page)
 
 renderSidebar :: Sidebar -> Model -> SidebarView -> IO ()
 renderSidebar sidebar current view = sidebar.quietly $ do

@@ -1,19 +1,4 @@
-module MediaCopy.Gtk.Widgets.Bind
-  ( Control (..)
-  , bind
-  , pair
-  , closing
-  , switch
-  , switchRow
-  , comboRow
-  , dropDown
-  , toggleRadio
-  , checkRadio
-  , listSelection
-  , searchText
-  , entryApply
-  , dialog
-  ) where
+module MediaCopy.Gtk.Widgets.Bind where
 
 import Control.Exception (bracket_)
 import Control.Monad (forM, forM_, unless, void, when)
@@ -37,14 +22,21 @@ data Control a = Control
   }
 
 bind :: (Eq a) => Control a -> (a -> IO ()) -> IO (a -> IO ())
-bind control react = do
+bind control react = fst <$> bindQuietly control react
+
+bindQuietly :: (Eq a) => Control a -> (a -> IO ()) -> IO (a -> IO (), IO () -> IO ())
+bindQuietly control react = do
   painted <- newIORef Nothing
-  quietly <- control.connect (control.current >>= react)
-  pure $ \wanted -> do
-    previous <- readIORef painted
-    when (previous /= Just wanted) $ do
-      writeIORef painted (Just wanted)
-      quietly (control.paint wanted)
+  quietly <- control.connect $ do
+    value <- control.current
+    writeIORef painted (Just value)
+    react value
+  let paint wanted = do
+        previous <- readIORef painted
+        when (previous /= Just wanted) $ do
+          quietly (control.paint wanted)
+          writeIORef painted (Just wanted)
+  pure (paint, quietly)
 
 pair :: Control a -> Control b -> Control (a, b)
 pair left right =

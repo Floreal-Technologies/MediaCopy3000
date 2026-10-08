@@ -8,7 +8,7 @@ module MediaCopy.Gtk.Runtime
   ) where
 
 import Control.Exception (finally)
-import Control.Monad (forM_, void, when)
+import Control.Monad (forM_, unless, void, when)
 import Data.GI.Base (AttrOp (On, (:=)), new, on)
 import Data.IORef
 import Data.Maybe (isNothing)
@@ -116,12 +116,12 @@ buildAndPresent loopRef environment interpret startup app = do
   forM_ startup (seeded environment widgets.window (dispatchNow . Ui . RunCommand) showFrame)
 
 dispatch :: Loop -> Message -> IO ()
-dispatch loop msg =
-  readIORef loop.busy >>= \case
-    True -> modifyIORef' loop.pending (Seq.|> msg)
-    False -> do
-      writeIORef loop.busy True
-      (step loop msg >> drain loop) `finally` writeIORef loop.busy False
+dispatch loop msg = do
+  modifyIORef' loop.pending (Seq.|> msg)
+  running <- readIORef loop.busy
+  unless running $ do
+    writeIORef loop.busy True
+    drain loop `finally` (writeIORef loop.busy False >> writeIORef loop.pending V.empty)
 
 drain :: Loop -> IO ()
 drain loop =
