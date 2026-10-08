@@ -97,6 +97,33 @@ CI builds and tests the application on Windows. The job `tests-windows` runs `co
 `ascmhl-test`. The job `package-windows` builds the installer on each push. Both are in
 `.github/workflows/ci.yml`.
 
+### Windows with WSL2
+
+WSL2 runs a Linux distribution inside Windows. In WSL2, you build and run the Linux version of the
+application. WSLg shows its window on the Windows desktop. Use Windows 11 or later.
+
+1. Install a distribution that has libadwaita 1.7 or later, for example Debian 13, Ubuntu 26.04 or Fedora 42.
+2. Install GHC 9.14.1 and `cabal` with GHCup, from inside the distribution.
+3. Install the development packages. On Debian, use the `apt install` list in the job `tests` of
+   `.github/workflows/ci.yml`.
+4. Make sure that the version of libadwaita is 1.7 or later:
+
+   ```
+   pkg-config --modversion gtk4 libadwaita-1
+   ```
+
+5. Clone the repository into the Linux file system, for example `~/mediacopy3000`. Do not clone it
+   under `/mnt/c`.
+
+The Linux file system is faster for `cabal`. Also, the application does not see changes to
+`assets/styles.css` under `/mnt/c`, so `MC3K_ENV=dev` cannot load the file again.
+
+`cabal.project.local` must not contain the MSYS2 directories from the section above. Those
+directories are for a native Windows build only.
+
+In WSL2, `scripts/package.sh` makes Linux packages. To make the Windows installer, use
+`scripts/package.ps1` in a native Windows build.
+
 ### Development mode
 
 ```
