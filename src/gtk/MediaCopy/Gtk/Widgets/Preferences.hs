@@ -3,10 +3,9 @@ module MediaCopy.Gtk.Widgets.Preferences
   , newPreferences
   ) where
 
-import Control.Monad (forM_, void)
-import Data.GI.Base (AttrOp (On, (:=)), new, on, set, unsafeCastTo)
+import Control.Monad (forM_)
+import Data.GI.Base (AttrOp (On, (:=)), new, set, unsafeCastTo)
 import Data.GI.Base.BasicTypes (glibType)
-import Data.IORef (IORef, newIORef)
 import Data.Text (Text)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
@@ -15,7 +14,8 @@ import GI.Adw qualified as Adw
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 
-import MediaCopy.Gtk.Widgets.Common (flatNamed, newLabel, renderCell, suppressing, unlessSuppressed)
+import MediaCopy.Gtk.Widgets.Bind (bind, comboRow, dropDown)
+import MediaCopy.Gtk.Widgets.Common (flatNamed, newLabel, renderCell)
 import MediaCopy.Gtk.Widgets.PluginsPage (PluginsPage (..), newPluginsPage)
 import MediaCopy.Interface.Theme
 import MediaCopy.Interface.Translation
@@ -37,7 +37,7 @@ newPreferences window wording lightSections darkSections dispatch = do
   dialog <- new Adw.PreferencesDialog [#title := "Preferences"]
   page <- new Adw.PreferencesPage [#name := "general", #title := "General", #iconName := "preferences-system-symbolic"]
   group <- new Adw.PreferencesGroup [#title := "Appearance", #description := "Applies to this run only"]
-  rows <- newAppearanceRows wording lightSections darkSections
+  rows <- newAppearanceRows wording lightSections darkSections dispatch
   Adw.preferencesGroupAdd group rows.baseRow
   Adw.preferencesGroupAdd group rows.lightRow
   Adw.preferencesGroupAdd group rows.darkRow
@@ -45,7 +45,6 @@ newPreferences window wording lightSections darkSections dispatch = do
   Adw.preferencesDialogAdd dialog page
   plugins <- newPluginsPage dialog dispatch
   Adw.preferencesDialogAdd dialog plugins.page
-  reportChoices rows dispatch
   pure
     Preferences
       { render = \model -> do
@@ -62,66 +61,48 @@ pageName = \case
   PluginPreferences -> "plugins"
 
 data AppearanceRows = AppearanceRows
-  { baseRow :: Adw.ComboRow
-  , lightRow :: Adw.ActionRow
-  , lightDrop :: Gtk.DropDown
+  { lightRow :: Adw.ActionRow
   , lightThemes :: Vector Theme
   , darkRow :: Adw.ActionRow
-  , darkDrop :: Gtk.DropDown
   , darkThemes :: Vector Theme
-  , suppress :: IORef Int
+  , baseRow :: Adw.ComboRow
+  , paintBase :: Word32 -> IO ()
+  , paintLight :: Word32 -> IO ()
+  , paintDark :: Word32 -> IO ()
   }
 
-newAppearanceRows :: Wording -> Vector ThemeSection -> Vector ThemeSection -> IO AppearanceRows
-newAppearanceRows wording lightSections darkSections = do
-  suppress <- newIORef 0
+newAppearanceRows :: Wording -> Vector ThemeSection -> Vector ThemeSection -> (UiMessage -> IO ()) -> IO AppearanceRows
+newAppearanceRows wording lightSections darkSections dispatch = do
   baseNames <- Gtk.stringListNew (Just (V.toList (V.map (displayBase wording) baseValues)))
   baseRow <- new Adw.ComboRow [#title := "Base", #model := baseNames]
   (lightRow, lightDrop) <- newPaletteRow wording "Light palette" lightSections
   (darkRow, darkDrop) <- newPaletteRow wording "Dark palette" darkSections
-  pure
-    AppearanceRows
-      { baseRow
-      , lightRow
-      , lightDrop
-      , lightThemes = themeRows lightSections
-      , darkRow
-      , darkDrop
-      , darkThemes = themeRows darkSections
-      , suppress
-      }
+  let lightThemes = themeRows lightSections
+      darkThemes = themeRows darkSections
+  paintBase <- bind (comboRow baseRow) (chooseFrom dispatch baseValues SetBase)
+  paintLight <- bind (dropDown lightDrop) (chooseFrom dispatch lightThemes SetPalette)
+  paintDark <- bind (dropDown darkDrop) (chooseFrom dispatch darkThemes SetPalette)
+  pure AppearanceRows {lightRow, lightThemes, darkRow, darkThemes, baseRow, paintBase, paintLight, paintDark}
 
 newPaletteRow :: Wording -> Text -> Vector ThemeSection -> IO (Adw.ActionRow, Gtk.DropDown)
 newPaletteRow wording title sections = do
   names <- themeModel wording sections
   headers <- themeHeaderFactory sections
-  dropDown <- new Gtk.DropDown [#model := names, #headerFactory := headers, #valign := Gtk.AlignCenter]
-  row <- new Adw.ActionRow [#title := title, #activatableWidget := dropDown]
-  Adw.actionRowAddSuffix row dropDown
-  pure (row, dropDown)
+  picker <- new Gtk.DropDown [#model := names, #headerFactory := headers, #valign := Gtk.AlignCenter]
+  row <- new Adw.ActionRow [#title := title, #activatableWidget := picker]
+  Adw.actionRowAddSuffix row picker
+  pure (row, picker)
 
-reportChoices :: AppearanceRows -> (UiMessage -> IO ()) -> IO ()
-reportChoices rows dispatch = do
-  void (on rows.baseRow (Adw.PropertyNotify #selected) (\_ -> chosen rows dispatch (Adw.comboRowGetSelected rows.baseRow) baseValues SetBase))
-  void (on rows.lightDrop (Gtk.PropertyNotify #selected) (\_ -> chosen rows dispatch (Gtk.dropDownGetSelected rows.lightDrop) rows.lightThemes SetPalette))
-  void (on rows.darkDrop (Gtk.PropertyNotify #selected) (\_ -> chosen rows dispatch (Gtk.dropDownGetSelected rows.darkDrop) rows.darkThemes SetPalette))
-
-chosen :: AppearanceRows -> (UiMessage -> IO ()) -> IO Word32 -> Vector a -> (a -> UiMessage) -> IO ()
-chosen rows dispatch selected values report = unlessSuppressed rows.suppress $ do
-  index <- selected
-  forM_ (values V.!? fromIntegral index) (dispatch . report)
+chooseFrom :: (UiMessage -> IO ()) -> Vector a -> (a -> UiMessage) -> Word32 -> IO ()
+chooseFrom dispatch values report index = forM_ (values V.!? fromIntegral index) (dispatch . report)
 
 paintAppearance :: AppearanceRows -> Appearance -> IO ()
 paintAppearance rows appearance = do
-  select rows.suppress (Adw.comboRowSetSelected rows.baseRow) baseValues appearance.base
+  forM_ (V.elemIndex appearance.base baseValues) (rows.paintBase . fromIntegral)
   set rows.lightRow [#sensitive := usesBase LightPalette appearance.base]
   set rows.darkRow [#sensitive := usesBase DarkPalette appearance.base]
-  select rows.suppress (Gtk.dropDownSetSelected rows.lightDrop) rows.lightThemes appearance.light
-  select rows.suppress (Gtk.dropDownSetSelected rows.darkDrop) rows.darkThemes appearance.dark
-
-select :: (Eq a) => IORef Int -> (Word32 -> IO ()) -> Vector a -> a -> IO ()
-select suppress choose values wanted =
-  forM_ (V.elemIndex wanted values) (suppressing suppress . choose . fromIntegral)
+  forM_ (V.elemIndex appearance.light rows.lightThemes) (rows.paintLight . fromIntegral)
+  forM_ (V.elemIndex appearance.dark rows.darkThemes) (rows.paintDark . fromIntegral)
 
 baseValues :: Vector Base
 baseValues = V.fromList [minBound .. maxBound]

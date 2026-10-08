@@ -12,6 +12,8 @@ import Control.Monad (forM_, void, when)
 import Data.GI.Base (AttrOp (On, (:=)), new, on)
 import Data.IORef
 import Data.Maybe (isNothing)
+import Data.Sequence (Seq)
+import Data.Sequence qualified as Seq
 import Data.Time (getCurrentTime)
 import GI.Adw qualified as Adw
 import GI.GLib qualified as GLib
@@ -42,6 +44,8 @@ data Loop = Loop
   { modelRef :: IORef Model
   , widgets :: Widgets
   , interpreter :: Interpreter
+  , busy :: IORef Bool
+  , pending :: IORef (Seq Message)
   }
 
 start :: Interpret -> Maybe Startup -> IO ()
@@ -95,7 +99,9 @@ buildAndPresent loopRef environment interpret startup app = do
   desktop <- readDesktopBase themeAdapter
   modelRef <- newIORef (initialModel startedAt desktop)
   interpreter <- interpret widgets post
-  writeIORef loopRef (Just Loop {modelRef, widgets, interpreter})
+  busy <- newIORef False
+  pending <- newIORef Seq.empty
+  writeIORef loopRef (Just Loop {modelRef, widgets, interpreter, busy, pending})
   model <- readIORef modelRef
   loadWording environment model.wording.language (post . WordingReloaded) (post . ShowToast)
   onDesktopBase themeAdapter (post . DesktopBase)
@@ -110,7 +116,24 @@ buildAndPresent loopRef environment interpret startup app = do
   forM_ startup (seeded environment widgets.window (dispatchNow . Ui . RunCommand) showFrame)
 
 dispatch :: Loop -> Message -> IO ()
-dispatch loop msg = do
+dispatch loop msg =
+  readIORef loop.busy >>= \case
+    True -> modifyIORef' loop.pending (Seq.|> msg)
+    False -> do
+      writeIORef loop.busy True
+      (step loop msg >> drain loop) `finally` writeIORef loop.busy False
+
+drain :: Loop -> IO ()
+drain loop =
+  readIORef loop.pending >>= \case
+    Seq.Empty -> pure ()
+    next Seq.:<| rest -> do
+      writeIORef loop.pending rest
+      step loop next
+      drain loop
+
+step :: Loop -> Message -> IO ()
+step loop msg = do
   old <- readIORef loop.modelRef
   let (current, cmds) = update msg old
   writeIORef loop.modelRef current

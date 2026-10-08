@@ -3,35 +3,31 @@ module MediaCopy.Gtk.Widgets.JobDetail
   , newJobDetail
   ) where
 
-import Ascmhl.Path (RelPath, pathText)
-import Ascmhl.Types (Generation (..), MhlHistory (..), algosText)
-import Control.Monad (forM_, void, when)
+import Ascmhl.Path (RelPath)
+import Control.Monad (forM_, when)
 import Data.Function ((&))
-import Data.GI.Base (AttrOp ((:=)), new, on, set)
+import Data.GI.Base (AttrOp ((:=)), new, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Int (Int32)
 import Data.List (List)
-import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
-import Data.Text qualified as T
-import Data.Text.Display (display)
-import Data.Time (UTCTime)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
 import MediaCopy.Domain.Job hiding (Progress)
-import MediaCopy.Gtk.Widgets.Common (nameAccessible, newLabel, paddedBox, renderCell, suppressing, toggleClass, unlessSuppressed)
+import MediaCopy.Gtk.Widgets.Bind (bind, toggleRadio)
+import MediaCopy.Gtk.Widgets.Common (nameAccessible, newCell, newLabel, paddedBox, renderCell, toggleClass)
 import MediaCopy.Gtk.Widgets.FileRow (FileRow (..), newFileRow)
 import MediaCopy.Gtk.Widgets.History (HistoryView (..), newHistoryView, renderHistory)
 import MediaCopy.Gtk.Widgets.PluginStatus (PluginStatus (..), newPluginStatus)
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Translation
-import MediaCopy.Interface.Wording
+import MediaCopy.Interface.View.JobDetail (DetailView (..), detailView, historyFor, pluginStatusRows)
 import MediaCopy.Model (FileFilter (..), JobEntry (..), Model (..), UiMessage (..))
 
 data JobDetail = JobDetail
@@ -46,8 +42,7 @@ newJobDetail button dispatch = do
   counters <- newCounters
   history <- newHistoryView
   plugins <- newPluginStatus
-  suppress <- newIORef 0
-  filterButtons <- newFilterButtons suppress dispatch
+  (filterBox, paintFilter) <- newFilterButtons dispatch
   files <- newFileListPane
   actions <- newActionBar button
   root <- paddedBox Gtk.OrientationVertical 12 20
@@ -59,21 +54,34 @@ newJobDetail button dispatch = do
   Gtk.boxAppend root counters.box
   Gtk.boxAppend root plugins.group
   Gtk.boxAppend root history.root
-  Gtk.boxAppend root filterButtons.box
+  Gtk.boxAppend root filterBox
   Gtk.boxAppend root files.header
   Gtk.boxAppend root files.scroll
   Gtk.boxAppend root actions
+  detailCell <- newCell $ \view -> do
+    set heading.title [#label := view.title]
+    set heading.pathLine [#label := view.pathLine]
+    set heading.originsLine [#label := fromMaybe "" view.origins]
+    Gtk.widgetSetVisible heading.originsLine (isJust view.origins)
+    Gtk.progressBarSetFraction progress.bar view.fraction
+    set progress.left [#label := view.progressLeft]
+    set progress.right [#label := view.progressRight]
+    set counters.verified [#label := view.verified]
+    set counters.failed [#label := view.failed]
+    set counters.missing [#label := view.missing]
+    set counters.newFiles [#label := view.new]
+    set counters.algo [#label := view.algo]
+    toggleClass counters.verified "success" view.anyVerified
+    toggleClass counters.failed "error" view.anyFailed
   let render model newEntry = case newEntry of
         Nothing -> renderHistory history model.wording Nothing
         Just entry -> do
           let state = entry.state
               loaded = entry.history
-          renderHeading heading loaded state
-          renderProgress progress model.now model.wording state (rateOf state)
-          renderCounters counters loaded state
-          renderCell plugins.cell (model.wording, state.plugins)
+          renderCell detailCell (detailView model.wording model.now loaded state)
+          renderCell plugins.cell (pluginStatusRows model.wording state.plugins)
           renderHistory history model.wording (historyFor loaded state)
-          suppressing suppress (selectFilter filterButtons model.fileFilter)
+          paintFilter (Just model.fileFilter)
           diffFileList files model state
   pure JobDetail {root, render}
 
@@ -89,14 +97,6 @@ newHeading = do
   pathLine <- newLabel "" [#xalign := 0, #ellipsize := Pango.EllipsizeModeMiddle] ["dim-label", "monospace"]
   originsLine <- newLabel "" [#xalign := 0, #ellipsize := Pango.EllipsizeModeEnd] ["dim-label", "caption"]
   pure Heading {title, pathLine, originsLine}
-
-renderHeading :: Heading -> Maybe MhlHistory -> JobState -> IO ()
-renderHeading heading loaded state = do
-  set heading.title [#label := jobLabel state.spec.job]
-  set heading.pathLine [#label := pathLineText loaded state]
-  let origins = originsLineText state
-  set heading.originsLine [#label := fromMaybe "" origins]
-  Gtk.widgetSetVisible heading.originsLine (isJust origins)
 
 data Progress = Progress
   { bar :: Gtk.ProgressBar
@@ -115,12 +115,6 @@ newProgress = do
   Gtk.boxAppend line left
   Gtk.boxAppend line right
   pure Progress {bar, left, right, line}
-
-renderProgress :: Progress -> UTCTime -> Wording -> JobState -> Double -> IO ()
-renderProgress progress now wording state rate = do
-  Gtk.progressBarSetFraction progress.bar (fractionOf state)
-  set progress.left [#label := progressLeftText wording state]
-  set progress.right [#label := progressRightText wording now state rate]
 
 data Counters = Counters
   { box :: Gtk.Box
@@ -142,17 +136,6 @@ newCounters = do
   forM_ [verifiedBox, failedBox, missingBox, newBox, algoBox] (Gtk.boxAppend box)
   pure Counters {box, verified, failed, missing, newFiles, algo}
 
-renderCounters :: Counters -> Maybe MhlHistory -> JobState -> IO ()
-renderCounters counters loaded state = do
-  let counts = countOutcomes state
-  set counters.verified [#label := count (counts.verified + counts.replaced)]
-  set counters.failed [#label := count counts.failed]
-  set counters.missing [#label := count counts.missing]
-  set counters.newFiles [#label := count counts.new]
-  set counters.algo [#label := algoText loaded state]
-  toggleClass counters.verified "success" (counts.verified + counts.replaced > 0)
-  toggleClass counters.failed "error" (counts.failed > 0)
-
 data FileListPane = FileListPane
   { list :: Gtk.ListBox
   , header :: Gtk.Box
@@ -161,14 +144,8 @@ data FileListPane = FileListPane
   , lastRendered :: IORef (Maybe (JobId, Int, FileFilter, Wording))
   }
 
-data FilterButtons = FilterButtons
-  { box :: Gtk.Box
-  , allButton :: Gtk.ToggleButton
-  , failedButton :: Gtk.ToggleButton
-  }
-
-newFilterButtons :: IORef Int -> (UiMessage -> IO ()) -> IO FilterButtons
-newFilterButtons suppress dispatch = do
+newFilterButtons :: (UiMessage -> IO ()) -> IO (Gtk.Box, Maybe FileFilter -> IO ())
+newFilterButtons dispatch = do
   box <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #halign := Gtk.AlignStart]
   Gtk.widgetAddCssClass box "linked"
   allButton <- new Gtk.ToggleButton [#label := "All"]
@@ -176,24 +153,9 @@ newFilterButtons suppress dispatch = do
   Gtk.toggleButtonSetGroup failedButton (Just allButton)
   Gtk.boxAppend box allButton
   Gtk.boxAppend box failedButton
-  let buttons = FilterButtons {box, allButton, failedButton}
-  reportFilter suppress dispatch allButton AllFiles
-  reportFilter suppress dispatch failedButton FailedOnly
-  suppressing suppress (selectFilter buttons AllFiles)
-  pure buttons
-
-reportFilter :: IORef Int -> (UiMessage -> IO ()) -> Gtk.ToggleButton -> FileFilter -> IO ()
-reportFilter suppress dispatch button wanted =
-  void $
-    on button #toggled $
-      unlessSuppressed suppress $ do
-        active <- Gtk.toggleButtonGetActive button
-        when active (dispatch (SetFileFilter wanted))
-
-selectFilter :: FilterButtons -> FileFilter -> IO ()
-selectFilter buttons = \case
-  AllFiles -> Gtk.toggleButtonSetActive buttons.allButton True
-  FailedOnly -> Gtk.toggleButtonSetActive buttons.failedButton True
+  paintFilter <- bind (toggleRadio [(AllFiles, allButton), (FailedOnly, failedButton)]) (mapM_ (dispatch . SetFileFilter))
+  paintFilter (Just AllFiles)
+  pure (box, paintFilter)
 
 newFileListPane :: IO FileListPane
 newFileListPane = do
@@ -295,86 +257,3 @@ visibleFiles wanted st = st.files & Map.toList & filter matches & V.fromList
     matches (_, entry) = case wanted of
       AllFiles -> True
       FailedOnly -> isFailure entry.status
-
-historyFor :: Maybe MhlHistory -> JobState -> Maybe MhlHistory
-historyFor loaded state = case historyFolder state.spec.job of
-  Nothing -> Nothing
-  Just _ -> loaded
-
-pathLineText :: Maybe MhlHistory -> JobState -> Text
-pathLineText loaded state = case state.spec.job of
-  Offload offload ->
-    pathText offload.source
-      <> " → "
-      <> (offload.destinations & NE.toList & map pathText & T.intercalate " · ")
-  (VerifyFolder _; SealMediaSource _) -> folderLine
-  where
-    folderLine =
-      pathText (jobRoot state.spec.job) <> " · ascmhl/ chain: " <> chainText loaded
-
-originsLineText :: JobState -> Maybe Text
-originsLineText state
-  | (kindUi (jobKind state.spec.job)).showsOriginals = fmap (\origin -> "Originals: " <> origin <> existingText state.spec.job) state.originsUsed
-  | otherwise = Nothing
-
-existingText :: Job -> Text
-existingText = \case
-  Offload oj | Just choice <- oj.existingCopy -> "\nExisting copy: " <> pastOf choice
-  _ -> ""
-  where
-    pastOf = \case
-      Resume -> "resumed"
-      Replace -> "replaced"
-
-chainText :: Maybe MhlHistory -> Text
-chainText = \case
-  Nothing -> "—"
-  Just loaded -> plural "generation" (V.length loaded.generations)
-
-algoText :: Maybe MhlHistory -> JobState -> Text
-algoText loaded state = case state.originsAlgo of
-  Just algo -> display algo
-  Nothing -> algoOfLatestGeneration loaded
-
-algoOfLatestGeneration :: Maybe MhlHistory -> Text
-algoOfLatestGeneration = \case
-  Nothing -> "—"
-  Just loaded -> case V.unsnoc loaded.generations of
-    Nothing -> "—"
-    Just (_earlier, latest) -> algosText latest.algos
-
-progressLeftText :: Wording -> JobState -> Text
-progressLeftText wording state =
-  verbOf wording state
-    <> " "
-    <> count (doneCount state)
-    <> " / "
-    <> plural "file" (Map.size state.files)
-    <> " · "
-    <> humanBytes wording state.bytesDone
-    <> " of "
-    <> humanBytes wording state.bytesTotal
-
-progressRightText :: Wording -> UTCTime -> JobState -> Double -> Text
-progressRightText wording now state rate = case state.phase of
-  Running
-    | Just quiet <- quietText wording now state -> quiet
-    | rate > 0 -> humanRate wording rate <> " · ETA " <> humanEta wording (remainingSeconds state rate)
-    | otherwise -> humanRate wording rate <> " · ETA —"
-  Finished _ -> "done"
-  _ -> ""
-
-remainingSeconds :: JobState -> Double -> Double
-remainingSeconds state rate = fromIntegral (state.bytesTotal - state.bytesDone) / rate
-
-verbOf :: Wording -> JobState -> Text
-verbOf wording state = case state.phase of
-  Queued -> "Queued"
-  NeedsReview -> "Needs review"
-  Finished _ -> "Finished"
-  Failed _ -> "Failed"
-  Cancelled -> "Cancelled"
-  _ -> runningVerbText wording (jobKind state.spec.job)
-
-doneCount :: JobState -> Int
-doneCount state = state.files & Map.elems & filter (\entry -> isDone entry.status) & length

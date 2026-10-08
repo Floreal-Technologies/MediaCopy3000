@@ -7,17 +7,17 @@ import Control.Monad (forM, forM_, void, when, zipWithM_)
 import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Text (Text)
-import Data.Text qualified as T
 import Data.Vector (Vector)
 import Data.Vector qualified as V
-import Data.Word (Word32)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
 import MediaCopy.Domain.Plugin (PluginRef (..))
 import MediaCopy.Domain.PluginCatalog
-import MediaCopy.Gtk.Widgets.Common (Cell, newCell, suppressing, unlessSuppressed)
-import MediaCopy.Gtk.Widgets.FieldRows (FieldActions (..), FieldRow (..), authorsRow, fieldRow, later)
+import MediaCopy.Gtk.Widgets.Bind (bind, comboRow, switch, switchRow)
+import MediaCopy.Gtk.Widgets.Common (Cell, newCell)
+import MediaCopy.Gtk.Widgets.FieldRows (FieldActions (..), FieldRow (..), authorsRow, fieldRow)
+import MediaCopy.Interface.View.Plugins (answerAt, answerIndex, capabilitySubtitle, entrySubtitle)
 import MediaCopy.Model (UiMessage (..))
 
 data PluginsPage = PluginsPage
@@ -40,8 +40,7 @@ type Layout = (Maybe Text, [(Text, [Text], [(Text, Text, FieldShape, Bool, Int)]
 
 data EntryRows = EntryRows
   { row :: Adw.ActionRow
-  , enabledSwitch :: Gtk.Switch
-  , suppress :: IORef Int
+  , paintEnabled :: Bool -> IO ()
   }
 
 data Subpage = Subpage
@@ -52,10 +51,9 @@ data Subpage = Subpage
 
 data DetailRows = DetailRows
   { groups :: [Adw.PreferencesGroup]
-  , traceRow :: Adw.SwitchRow
-  , capabilityRows :: [Adw.ComboRow]
+  , paintTrace :: Bool -> IO ()
+  , capabilityRows :: [(Adw.ComboRow, Answer -> IO ())]
   , settingRows :: [FieldRow]
-  , suppress :: IORef Int
   }
 
 newPluginsPage :: Adw.PreferencesDialog -> (UiMessage -> IO ()) -> IO PluginsPage
@@ -142,29 +140,24 @@ plainRow title subtitle classes = do
   forM_ classes (Gtk.widgetAddCssClass row)
   Adw.toPreferencesRow row
 
-subtitleOf :: PluginEntry -> Text
-subtitleOf entry = T.intercalate " · " (entry.version : T.intercalate ", " (V.toList (V.map (.name) entry.capabilities)) : maybe [] pure entry.problem)
-
 entryRows :: Groups -> (UiMessage -> IO ()) -> PluginEntry -> IO EntryRows
 entryRows groups dispatch entry = do
   let pluginId = entry.plugin.id
-  suppress <- newIORef 0
   row <- new Adw.ActionRow [#useMarkup := False, #activatable := True]
-  set row [#title := entry.plugin.name, #subtitle := subtitleOf entry]
+  set row [#title := entry.plugin.name, #subtitle := entrySubtitle entry]
   enabledSwitch <- new Gtk.Switch [#valign := Gtk.AlignCenter, #active := entry.enabled]
-  void $ on enabledSwitch (Gtk.PropertyNotify #active) $ \_ ->
-    unlessSuppressed suppress (Gtk.switchGetActive enabledSwitch >>= later . dispatch . ChangePlugin . SetEnabled pluginId)
+  paintEnabled <- bind (switch enabledSwitch) (dispatch . ChangePlugin . SetEnabled pluginId)
   chevron <- new Gtk.Image [#iconName := "go-next-symbolic"]
   Adw.actionRowAddSuffix row enabledSwitch
   Adw.actionRowAddSuffix row chevron
   void $ on row #activated (openSubpage groups dispatch pluginId)
-  pure EntryRows {row, enabledSwitch, suppress}
+  pure EntryRows {row, paintEnabled}
 
 refreshEntry :: EntryRows -> PluginEntry -> IO ()
 refreshEntry rows entry = do
   Adw.preferencesRowSetTitle rows.row entry.plugin.name
-  Adw.actionRowSetSubtitle rows.row (subtitleOf entry)
-  suppressing rows.suppress (Gtk.switchSetActive rows.enabledSwitch entry.enabled)
+  Adw.actionRowSetSubtitle rows.row (entrySubtitle entry)
+  rows.paintEnabled entry.enabled
 
 openSubpage :: Groups -> (UiMessage -> IO ()) -> Text -> IO ()
 openSubpage groups dispatch pluginId = do
@@ -193,8 +186,7 @@ fillDetail dispatch body entry = do
 detailRows :: (UiMessage -> IO ()) -> PluginEntry -> IO DetailRows
 detailRows dispatch entry = do
   let pluginId = entry.plugin.id
-      change = later . dispatch . ChangePlugin
-  suppress <- newIORef 0
+      change = dispatch . ChangePlugin
   general <- new Adw.PreferencesGroup [#description := entry.description]
   folderRow <- new Adw.ActionRow [#useMarkup := False, #subtitleSelectable := True]
   set folderRow [#title := "Folder", #subtitle := entry.folder]
@@ -204,8 +196,7 @@ detailRows dispatch entry = do
   Adw.preferencesGroupAdd general folderRow
   traceRow <- new Adw.SwitchRow [#useMarkup := False, #active := entry.trace]
   set traceRow [#title := "Trace Messages", #subtitle := "Writes each message to and from the plug-in to a file, for its developer"]
-  void $ on traceRow (Adw.PropertyNotify #active) $ \_ ->
-    unlessSuppressed suppress (Adw.switchRowGetActive traceRow >>= change . SetTrace pluginId)
+  paintTrace <- bind (switchRow traceRow) (change . SetTrace pluginId)
   Adw.preferencesGroupAdd general traceRow
   permissions <-
     new
@@ -214,31 +205,30 @@ detailRows dispatch entry = do
       , #description := "Each capability that the plug-in asks for is granted or declined"
       ]
   capabilityRows <- forM (V.toList entry.capabilities) $ \capability -> do
-    row <- capabilityRow suppress change pluginId capability
-    Adw.preferencesGroupAdd permissions row
-    pure row
+    shown <- capabilityRow change pluginId capability
+    Adw.preferencesGroupAdd permissions (fst shown)
+    pure shown
   settings <- new Adw.PreferencesGroup [#title := "Settings", #visible := not (V.null entry.settings)]
   settingRows <- forM (V.toList entry.settings) $ \field -> do
     row <- settingRow (dispatch . ChangePlugin) dispatch pluginId field
     forM_ row.rows (Adw.preferencesGroupAdd settings)
     pure row
-  pure DetailRows {groups = [general, permissions, settings], traceRow, capabilityRows, settingRows, suppress}
+  pure DetailRows {groups = [general, permissions, settings], paintTrace, capabilityRows, settingRows}
 
 refreshDetail :: DetailRows -> PluginEntry -> IO ()
 refreshDetail rows entry = do
-  suppressing rows.suppress $ do
-    Adw.switchRowSetActive rows.traceRow entry.trace
-    zipWithM_
-      ( \row capability -> do
-          Adw.comboRowSetSelected row (answerIndex capability.answer)
-          Adw.actionRowSetSubtitle row (capabilitySubtitle capability)
-      )
-      rows.capabilityRows
-      (V.toList entry.capabilities)
+  rows.paintTrace entry.trace
+  zipWithM_
+    ( \(row, paintAnswer) capability -> do
+        paintAnswer capability.answer
+        Adw.actionRowSetSubtitle row (capabilitySubtitle capability)
+    )
+    rows.capabilityRows
+    (V.toList entry.capabilities)
   zipWithM_ (\row field -> row.refresh field.value) rows.settingRows (V.toList entry.settings)
 
-capabilityRow :: IORef Int -> (CatalogChange -> IO ()) -> Text -> CapabilityView -> IO Adw.ComboRow
-capabilityRow suppress change pluginId capability = do
+capabilityRow :: (CatalogChange -> IO ()) -> Text -> CapabilityView -> IO (Adw.ComboRow, Answer -> IO ())
+capabilityRow change pluginId capability = do
   choices <- Gtk.stringListNew (Just ["Not answered", "Granted", "Declined"])
   row <-
     new
@@ -248,32 +238,8 @@ capabilityRow suppress change pluginId capability = do
       , #selected := answerIndex capability.answer
       ]
   set row [#title := capability.name, #subtitle := capabilitySubtitle capability]
-  void $ on row (Adw.PropertyNotify #selected) $ \_ ->
-    unlessSuppressed suppress $
-      Adw.comboRowGetSelected row >>= \case
-        0 -> change (SetAnswer pluginId capability.name Unanswered)
-        1 -> change (SetAnswer pluginId capability.name Granted)
-        2 -> change (SetAnswer pluginId capability.name Declined)
-        _ -> pure ()
-  pure row
-
-capabilitySubtitle :: CapabilityView -> Text
-capabilitySubtitle capability = capabilityText capability.name <> (if capability.answer == Unanswered then " – not answered yet" else "")
-
-answerIndex :: Answer -> Word32
-answerIndex = \case
-  Unanswered -> 0
-  Granted -> 1
-  Declined -> 2
-
-capabilityText :: Text -> Text
-capabilityText = \case
-  "files.read" -> "Read the media files"
-  "plan.inspect" -> "Add findings to the plan"
-  "files.inspect" -> "Add notes about each verified file to the report"
-  "block" -> "Stop a job with a blocker"
-  "manifest.write" -> "Add data to the manifest"
-  other -> other
+  paintIndex <- bind (comboRow row) (mapM_ (change . SetAnswer pluginId capability.name) . answerAt)
+  pure (row, paintIndex . answerIndex)
 
 settingRow :: (CatalogChange -> IO ()) -> (UiMessage -> IO ()) -> Text -> FieldView -> IO FieldRow
 settingRow send dispatch pluginId field

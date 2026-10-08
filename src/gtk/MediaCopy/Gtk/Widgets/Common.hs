@@ -1,14 +1,10 @@
 module MediaCopy.Gtk.Widgets.Common
   ( Cell
   , newCell
-  , newOpenCell
-  , newOpenCellWith
   , renderCell
   , toggleClass
   , nameAccessible
   , flatNamed
-  , suppressing
-  , unlessSuppressed
   , paddedBox
   , newLabel
   , paintEditable
@@ -18,17 +14,16 @@ module MediaCopy.Gtk.Widgets.Common
   , newDialogShell
   , Row (..)
   , plainRow
+  , fromView
   , RowHost (..)
   , renderActionRows
-  , onDialogClosed
   ) where
 
-import Control.Exception (bracket_)
-import Control.Monad (forM_, void, when)
-import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
+import Control.Monad (forM_, when)
+import Data.GI.Base (AttrOp (On, (:=)), new, set)
 import Data.GI.Base.Attributes (AttrOpTag (AttrConstruct))
 import Data.GI.Base.GValue (toGValue)
-import Data.IORef (IORef, modifyIORef', newIORef, readIORef, writeIORef)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Int (Int32)
 import Data.List (List)
 import Data.Text (Text)
@@ -36,6 +31,8 @@ import Data.Vector (Vector)
 import Data.Vector qualified as V
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
+
+import MediaCopy.Interface.View.Row (RowView (..), Tone (..))
 
 toggleClass
   :: (Gtk.IsWidget w)
@@ -73,17 +70,6 @@ newCell paint = do
   ref <- newIORef Nothing
   pure (Cell ref paint)
 
-newOpenCell :: Adw.Dialog -> Adw.ApplicationWindow -> IO (Cell Bool)
-newOpenCell = newOpenCellWith (pure ())
-
-newOpenCellWith :: IO () -> Adw.Dialog -> Adw.ApplicationWindow -> IO (Cell Bool)
-newOpenCellWith presented dialog window = do
-  ref <- newIORef (Just False)
-  pure $ Cell ref $ \open ->
-    if open
-      then Adw.dialogPresent dialog (Just window) >> presented
-      else void (Adw.dialogClose dialog)
-
 renderCell
   :: (Eq a)
   => Cell a
@@ -94,17 +80,6 @@ renderCell (Cell ref paint) wanted = do
   when (painted /= Just wanted) $ do
     writeIORef ref (Just wanted)
     paint wanted
-
-cellValue :: Cell a -> IO (Maybe a)
-cellValue (Cell ref _) = readIORef ref
-
-suppressing :: IORef Int -> IO a -> IO a
-suppressing flag act = bracket_ (modifyIORef' flag (\val -> val + 1)) (modifyIORef' flag (\val -> val - 1)) act
-
-unlessSuppressed :: IORef Int -> IO () -> IO ()
-unlessSuppressed suppress act = do
-  quiet <- readIORef suppress
-  when (quiet == 0) act
 
 paddedBox :: Gtk.Orientation -> Int32 -> Int32 -> IO Gtk.Box
 paddedBox orientation spacing margin =
@@ -179,6 +154,17 @@ data Row = Row
 plainRow :: Text -> Text -> Row
 plainRow title subtitle = Row {title, subtitle, cssClass = Nothing, suffix = Nothing}
 
+fromView :: RowView -> Row
+fromView view =
+  (plainRow view.title view.subtitle)
+    { cssClass = toneClass <$> view.tone
+    }
+  where
+    toneClass = \case
+      Good -> "success"
+      Warn -> "warning"
+      Bad -> "error"
+
 data RowHost = InGroup Adw.PreferencesGroup | InExpander Adw.ExpanderRow
 
 renderActionRows :: IORef (Vector Adw.ActionRow) -> RowHost -> Vector Row -> IO ()
@@ -206,9 +192,3 @@ newRow row = do
   forM_ row.cssClass (Gtk.widgetAddCssClass built)
   forM_ row.suffix (\build -> build >>= \widget -> Adw.actionRowAddSuffix built widget)
   pure built
-
-onDialogClosed :: Adw.Dialog -> Cell Bool -> IO () -> IO ()
-onDialogClosed dialog openCell report =
-  void $ on dialog #closed $ do
-    wasOpen <- cellValue openCell
-    when (wasOpen == Just True) report
