@@ -1,23 +1,4 @@
-module MediaCopy.Gtk.Widgets.Common
-  ( Cell
-  , newCell
-  , renderCell
-  , toggleClass
-  , nameAccessible
-  , flatNamed
-  , paddedBox
-  , newLabel
-  , paintEditable
-  , DialogShell (..)
-  , ShellButtons (..)
-  , ShellButton (..)
-  , newDialogShell
-  , Row (..)
-  , plainRow
-  , fromView
-  , RowHost (..)
-  , renderActionRows
-  ) where
+module MediaCopy.Gtk.Widgets.Common where
 
 import Control.Monad (forM_, when)
 import Data.GI.Base (AttrOp (On, (:=)), new, set)
