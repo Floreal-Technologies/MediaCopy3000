@@ -18,7 +18,7 @@ build:
 
 # Rebuild and start the application on each code change
 watch:
-    ghcid -c "cabal repl lib:mediacopy3000" -T MediaCopy.Gtk.Runtime.start
+    ghcid -c "cabal repl lib:mediacopy3000" -T "MediaCopy.Gtk.Runtime.start Nothing"
 
 # Remove the compilation artifacts
 clean:

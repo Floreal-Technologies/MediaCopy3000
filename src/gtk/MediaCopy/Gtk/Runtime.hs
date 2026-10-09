@@ -1,9 +1,7 @@
 {-# LANGUAGE ImplicitParams #-}
 
 module MediaCopy.Gtk.Runtime
-  ( Interpreter (..)
-  , Interpret
-  , start
+  ( start
   , buildView
   ) where
 
@@ -22,6 +20,7 @@ import GI.Gtk qualified as Gtk
 import System.Exit (ExitCode (ExitFailure), exitWith)
 
 import MediaCopy.Gtk.Environment (Environment, withEnvironment)
+import MediaCopy.Gtk.Interpret (Production, newProduction, runEffect, stopWorkers)
 import MediaCopy.Gtk.Reload (loadCss, loadWording)
 import MediaCopy.Gtk.Resources (registerResources)
 import MediaCopy.Gtk.Screenshot (Startup (..), seeded)
@@ -33,40 +32,33 @@ import MediaCopy.Interface.Translation.Embedded
 import MediaCopy.Model
 import MediaCopy.Signals (onStopSignal)
 
-data Interpreter = Interpreter
-  { run :: Model -> AppEffect -> IO ()
-  , stop :: IO ()
-  }
-
-type Interpret = Widgets -> (Message -> IO ()) -> IO Interpreter
-
 data Loop = Loop
   { modelRef :: IORef Model
   , widgets :: Widgets
-  , interpreter :: Interpreter
+  , production :: Production
   , busy :: IORef Bool
   , pending :: IORef (Vector Message)
   }
 
-start :: Interpret -> Maybe Startup -> IO ()
-start interpret startup = withEnvironment $ \environment -> do
+start :: Maybe Startup -> IO ()
+start startup = withEnvironment $ \environment -> do
   registerResources
   loopRef <- newIORef Nothing
   app <-
     new
       Adw.Application
       [ #applicationId := "tech.floreal.MediaCopy3000"
-      , On #activate (activate loopRef environment interpret startup ?self)
+      , On #activate (activate loopRef environment startup ?self)
       ]
   onStopSignal (void (GLib.idleAdd GLib.PRIORITY_DEFAULT (Gio.applicationQuit app >> pure False)))
-  status <- Gio.applicationRun app Nothing `finally` (readIORef loopRef >>= mapM_ (\loop -> loop.interpreter.stop))
+  status <- Gio.applicationRun app Nothing `finally` (readIORef loopRef >>= mapM_ (\loop -> stopWorkers loop.production))
   when (status /= 0) (exitWith (ExitFailure (fromIntegral status)))
 
-activate :: IORef (Maybe Loop) -> Environment -> Interpret -> Maybe Startup -> Adw.Application -> IO ()
-activate loopRef environment interpret startup app =
+activate :: IORef (Maybe Loop) -> Environment -> Maybe Startup -> Adw.Application -> IO ()
+activate loopRef environment startup app =
   readIORef loopRef >>= \case
     Just loop -> Gtk.windowPresent loop.widgets.window
-    Nothing -> buildAndPresent loopRef environment interpret startup app
+    Nothing -> buildAndPresent loopRef environment startup app
 
 buildView :: Environment -> Adw.Application -> (UiMessage -> IO ()) -> IO (ThemeAdapter, Widgets)
 buildView environment app dispatchUi = do
@@ -87,21 +79,20 @@ buildView environment app dispatchUi = do
 buildAndPresent
   :: IORef (Maybe Loop)
   -> Environment
-  -> Interpret
   -> Maybe Startup
   -> Adw.Application
   -> IO ()
-buildAndPresent loopRef environment interpret startup app = do
+buildAndPresent loopRef environment startup app = do
   startedAt <- getCurrentTime
   let dispatchNow msg = readIORef loopRef >>= mapM_ (\loop -> dispatch loop msg)
       post msg = void (GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE (dispatchNow msg >> pure False))
   (themeAdapter, widgets) <- buildView environment app (dispatchNow . Ui)
   desktop <- readDesktopBase themeAdapter
   modelRef <- newIORef (initialModel startedAt desktop)
-  interpreter <- interpret widgets post
+  production <- newProduction widgets post
   busy <- newIORef False
   pending <- newIORef V.empty
-  writeIORef loopRef (Just Loop {modelRef, widgets, interpreter, busy, pending})
+  writeIORef loopRef (Just Loop {modelRef, widgets, production, busy, pending})
   model <- readIORef modelRef
   loadWording environment model.wording.language (post . WordingReloaded) (post . ShowToast)
   onDesktopBase themeAdapter (post . DesktopBase)
@@ -109,7 +100,7 @@ buildAndPresent loopRef environment interpret startup app = do
   installTicker startup dispatchNow
   widgets.render model
   Gtk.windowPresent widgets.window
-  when (isNothing startup) (interpreter.run model LoadCatalog)
+  when (isNothing startup) (runEffect production model LoadCatalog)
   let showFrame frame = do
         writeIORef modelRef frame
         widgets.render frame
@@ -138,7 +129,7 @@ step loop msg = do
   let (current, cmds) = update msg old
   writeIORef loop.modelRef current
   loop.widgets.render current
-  forM_ cmds (loop.interpreter.run current)
+  forM_ cmds (runEffect loop.production current)
 
 installCloseRequest :: Adw.ApplicationWindow -> (Message -> IO ()) -> IO ()
 installCloseRequest window dispatchNow =
