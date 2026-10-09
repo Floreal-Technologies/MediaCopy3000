@@ -26,7 +26,6 @@ import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan (JobPlan, planBlocked)
 import MediaCopy.Effects.Run (runApp)
 import MediaCopy.Engine (planJob)
-import MediaCopy.Gtk.Interpret qualified as Interpret
 import MediaCopy.Gtk.Runtime qualified as Runtime
 import MediaCopy.Gtk.Screenshot (Startup (..))
 import MediaCopy.Plugin (PluginSetup (..), loadPluginSetup, planWithPlugins)
@@ -88,7 +87,7 @@ run = \case
   PlanOnly job options -> planCommand job options
   Gui -> do
     T.putStrLn banner
-    startup >>= Runtime.start Interpret.production
+    startup >>= Runtime.start
 
 commandInfo :: ParserInfo Command
 commandInfo =

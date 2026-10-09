@@ -1,6 +1,8 @@
 module MediaCopy.Gtk.Interpret
-  ( production
-  , silent
+  ( Production
+  , newProduction
+  , runEffect
+  , stopWorkers
   ) where
 
 import Control.Concurrent.Async
@@ -35,7 +37,6 @@ import MediaCopy.Effects.Plugins (runPluginsSession)
 import MediaCopy.Effects.Run (runApp)
 import MediaCopy.Engine
 import MediaCopy.EventLog (withEventLog)
-import MediaCopy.Gtk.Runtime (Interpret, Interpreter (..))
 import MediaCopy.Gtk.View (Widgets (..))
 import MediaCopy.Guard (guarded)
 import MediaCopy.Interface.Translation
@@ -57,24 +58,19 @@ data Production = Production
   , catalogLock :: MVar ()
   }
 
-production :: Interpret
-production widgets post = do
+newProduction :: Widgets -> (Message -> IO ()) -> IO Production
+newProduction widgets post = do
   engine <- newIORef Nothing
   planner <- newIORef Nothing
   workers <- newIORef Set.empty
   catalogLock <- newMVar ()
-  let site = Production {window = widgets.window, present = widgets.present, post, engine, planner, workers, catalogLock}
-  pure
-    Interpreter
-      { run = \model effect -> toasting site (runEffect site model.wording effect)
-      , stop = readIORef workers >>= mapConcurrently_ cancel
-      }
+  pure Production {window = widgets.window, present = widgets.present, post, engine, planner, workers, catalogLock}
 
-silent :: Interpret
-silent _ _ = pure Interpreter {run = \_ _ -> pure (), stop = pure ()}
+stopWorkers :: Production -> IO ()
+stopWorkers site = readIORef site.workers >>= mapConcurrently_ cancel
 
-runEffect :: Production -> Wording -> AppEffect -> IO ()
-runEffect site wording = \case
+runEffect :: Production -> Model -> AppEffect -> IO ()
+runEffect site model effect = toasting site $ case effect of
   OpenFolderDialog toMessage -> openFolderDialog site toMessage
   OpenSaveDialog title suggested toMessage -> openSaveDialog site title suggested toMessage
   ComputePlan spec -> planWorker site wording spec
@@ -92,6 +88,8 @@ runEffect site wording = \case
   ApplyChange change -> changeWorker site change
   ShowFolder folder -> showFolder site folder
   ShowChrome chrome -> site.present chrome
+  where
+    wording = model.wording
 
 tracked :: Production -> IO () -> IO (Async ())
 tracked site action = mask_ $ do
