@@ -23,6 +23,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Vector (Vector)
 import Data.Vector qualified as V
+import MediaCopy.Plugin.Manifest (Capability)
 
 import MediaCopy.Domain.Plugin (PluginRef (..))
 
@@ -53,7 +54,7 @@ data FieldView = FieldView
   deriving stock (Eq, Show)
 
 data CapabilityView = CapabilityView
-  { name :: Text
+  { capability :: Capability
   , answer :: Answer
   }
   deriving stock (Eq, Show)
@@ -89,7 +90,7 @@ data Setting = SettingText Text | SettingBool Bool | SettingAuthors (Vector Auth
 data CatalogChange
   = SetEnabled Text Bool
   | SetTrace Text Bool
-  | SetAnswer Text Text Answer
+  | SetAnswer Text Capability Answer
   | SetSetting Text Text Setting
   | ClearSetting Text Text
   deriving stock (Eq, Show)

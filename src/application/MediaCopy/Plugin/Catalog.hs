@@ -59,7 +59,7 @@ entryOf grantMap installed =
     , folder = pathText installed.folder
     , enabled
     , trace = maybe False (.trace) grant
-    , capabilities = V.map (\capability -> CapabilityView {name = capabilityName capability, answer = answerOf capability}) manifest.capabilities
+    , capabilities = V.map (\capability -> CapabilityView {capability, answer = answerOf capability}) manifest.capabilities
     , settings
     , jobFields = V.map (settingView Map.empty) manifest.jobFields <> V.concatMap (\view -> authorJobFields view.key (authorSlots view.value)) settings
     , active = isRight activated
@@ -125,9 +125,9 @@ applyChange change = do
       pure (either (\e -> Left ("plugins.json cannot be written: " <> T.show e)) Right written)
 
 -- |
--- >>> editGrants (SetAnswer "tech.floreal.probe" "block" Granted) (object [])
+-- >>> editGrants (SetAnswer "tech.floreal.probe" Block Granted) (object [])
 -- Right (Object (fromList [("plugins",Object (fromList [("tech.floreal.probe",Object (fromList [("declined",Array []),("grants",Array [String "block"])]))]))]))
--- >>> editGrants (SetAnswer "tech.floreal.probe" "block" Declined) (object ["plugins" .= object ["tech.floreal.probe" .= object ["grants" .= ["block" :: Text], "note" .= ("kept" :: Text)]]])
+-- >>> editGrants (SetAnswer "tech.floreal.probe" Block Declined) (object ["plugins" .= object ["tech.floreal.probe" .= object ["grants" .= ["block" :: Text], "note" .= ("kept" :: Text)]]])
 -- Right (Object (fromList [("plugins",Object (fromList [("tech.floreal.probe",Object (fromList [("declined",Array [String "block"]),("grants",Array []),("note",String "kept")]))]))]))
 -- >>> editGrants (ClearSetting "tech.floreal.probe" "camera") (object ["plugins" .= object ["tech.floreal.probe" .= object ["settings" .= object ["camera" .= ("B" :: Text), "dit" .= ("Jane" :: Text)]]]])
 -- Right (Object (fromList [("plugins",Object (fromList [("tech.floreal.probe",Object (fromList [("settings",Object (fromList [("dit",String "Jane")]))]))]))]))
@@ -159,11 +159,12 @@ editGrants change = \case
       SetEnabled _ on -> KeyMap.insert "enabled" (Bool on) entry
       SetTrace _ on -> KeyMap.insert "trace" (Bool on) entry
       SetAnswer _ capability answer ->
-        let grants = filter (/= capability) (texts "grants" entry)
-            declined = filter (/= capability) (texts "declined" entry)
+        let name = capabilityName capability
+            grants = filter (/= name) (texts "grants" entry)
+            declined = filter (/= name) (texts "declined" entry)
         in case answer of
-             Granted -> setTexts "grants" (capability : grants) (setTexts "declined" declined entry)
-             Declined -> setTexts "grants" grants (setTexts "declined" (capability : declined) entry)
+             Granted -> setTexts "grants" (name : grants) (setTexts "declined" declined entry)
+             Declined -> setTexts "grants" grants (setTexts "declined" (name : declined) entry)
              Unanswered -> setTexts "grants" grants (setTexts "declined" declined entry)
       SetSetting _ key setting ->
         let settings = fromRight KeyMap.empty (objectAt "settings" entry)

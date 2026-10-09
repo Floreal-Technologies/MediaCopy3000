@@ -11,6 +11,7 @@ import Data.Vector (Vector)
 import Data.Vector qualified as V
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
+import MediaCopy.Plugin.Manifest (Capability, capabilityName)
 
 import MediaCopy.Domain.Plugin (PluginRef (..))
 import MediaCopy.Domain.PluginCatalog
@@ -36,7 +37,7 @@ data Groups = Groups
   , current :: IORef (Maybe PluginCatalog)
   }
 
-type Layout = (Maybe Text, [(Text, [Text], [(Text, Text, FieldShape, Bool, Int)])])
+type Layout = (Maybe Text, [(Text, [Capability], [(Text, Text, FieldShape, Bool, Int)])])
 
 data EntryRows = EntryRows
   { row :: Adw.ActionRow
@@ -78,7 +79,7 @@ newPluginsPage dialog dispatch = do
 layoutOf :: PluginCatalog -> Layout
 layoutOf catalog =
   ( catalog.problem
-  , [ (entry.plugin.id, [capability.name | capability <- V.toList entry.capabilities], [(field.key, field.label, field.shape, field.required, V.length (authorSlots field.value)) | field <- V.toList entry.settings])
+  , [ (entry.plugin.id, [view.capability | view <- V.toList entry.capabilities], [(field.key, field.label, field.shape, field.required, V.length (authorSlots field.value)) | field <- V.toList entry.settings])
     | entry <- V.toList catalog.entries
     ]
   )
@@ -228,17 +229,17 @@ refreshDetail rows entry = do
   zipWithM_ (\row field -> row.refresh field.value) rows.settingRows (V.toList entry.settings)
 
 capabilityRow :: (CatalogChange -> IO ()) -> Text -> CapabilityView -> IO (Adw.ComboRow, Answer -> IO ())
-capabilityRow change pluginId capability = do
+capabilityRow change pluginId view = do
   choices <- Gtk.stringListNew (Just ["Not answered", "Granted", "Declined"])
   row <-
     new
       Adw.ComboRow
       [ #useMarkup := False
       , #model := choices
-      , #selected := answerIndex capability.answer
+      , #selected := answerIndex view.answer
       ]
-  set row [#title := capability.name, #subtitle := capabilitySubtitle capability]
-  paintIndex <- bind (comboRow row) (mapM_ (change . SetAnswer pluginId capability.name) . answerAt)
+  set row [#title := capabilityName view.capability, #subtitle := capabilitySubtitle view]
+  paintIndex <- bind (comboRow row) (mapM_ (change . SetAnswer pluginId view.capability) . answerAt)
   pure (row, paintIndex . answerIndex)
 
 settingRow :: (CatalogChange -> IO ()) -> (UiMessage -> IO ()) -> Text -> FieldView -> IO FieldRow
