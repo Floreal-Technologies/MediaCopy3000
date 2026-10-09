@@ -49,7 +49,7 @@ scenes =
   , (still "plan-plugins" pluginPlanMessages) {scroll = True}
   , still "job-plugins" pluginJobMessages
   , still "close-confirm" (runningMessages <> [EngineEvent first (Progress 8_640_000_000), Ui RequestClose])
-  , still "command-palette" (finishedMessages <> [Ui OpenPalette, Ui (SetPaletteQuery "job")])
+  , still "command-palette" (finishedMessages <> [Ui (RunCommand Command.CommandPalette), Ui (SetPaletteQuery "job")])
   , (still "about" []) {action = Just Command.About}
   ]
     <> [ still
@@ -112,7 +112,7 @@ pluginJobMessages =
 
 offloadDialogMessages :: List Message
 offloadDialogMessages =
-  [ Ui OpenOffloadDialog
+  [ Ui (RunCommand Command.NewOffload)
   , SourcePicked mediaSource
   , DestinationPicked shuttle
   , DestinationPicked archive

@@ -66,15 +66,15 @@ production widgets post = do
   let site = Production {window = widgets.window, present = widgets.present, post, engine, planner, workers, catalogLock}
   pure
     Interpreter
-      { run = \model command -> toasting site (runCommand site model.wording command)
+      { run = \model effect -> toasting site (runEffect site model.wording effect)
       , stop = readIORef workers >>= mapConcurrently_ cancel
       }
 
 silent :: Interpret
 silent _ _ = pure Interpreter {run = \_ _ -> pure (), stop = pure ()}
 
-runCommand :: Production -> Wording -> Command -> IO ()
-runCommand site wording = \case
+runEffect :: Production -> Wording -> AppEffect -> IO ()
+runEffect site wording = \case
   OpenFolderDialog toMessage -> openFolderDialog site toMessage
   OpenSaveDialog title suggested toMessage -> openSaveDialog site title suggested toMessage
   ComputePlan spec -> planWorker site wording spec
@@ -86,7 +86,7 @@ runCommand site wording = \case
       _ -> pure ()
   LoadHistory jobId folder -> loadHistory site wording jobId folder
   WriteFile path text -> writeFile' path (encodeUtf8 text)
-  CloseWindow -> Gtk.windowDestroy site.window
+  DestroyWindow -> Gtk.windowDestroy site.window
   OpenFileDialog toMessage -> openFileDialog site toMessage
   LoadCatalog -> catalogWorker site
   ApplyChange change -> changeWorker site change

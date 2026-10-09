@@ -34,7 +34,7 @@ import MediaCopy.Model
 import MediaCopy.Signals (onStopSignal)
 
 data Interpreter = Interpreter
-  { run :: Model -> Command -> IO ()
+  { run :: Model -> AppEffect -> IO ()
   , stop :: IO ()
   }
 

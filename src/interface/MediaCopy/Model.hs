@@ -98,7 +98,6 @@ data UiMessage
   = PickSource
   | AddDestination
   | RemoveDestination Int
-  | OpenOffloadDialog
   | CloseOffloadDialog
   | SetBase Base
   | SetPalette Theme
@@ -107,16 +106,8 @@ data UiMessage
   | SetExistingCopy ExistingCopy
   | ConfirmPlan
   | DiscardPlan
-  | PickVerifyFolder
-  | PickSealFolder
-  | CancelSelectedJob
-  | ReviewSelectedJob
-  | SaveSelectedReport
   | SavePlan
   | SelectJob (Maybe JobId)
-  | SelectNextJob
-  | SelectPreviousJob
-  | ClearFinished
   | SetFileFilter FileFilter
   | RequestClose
   | ConfirmClose
@@ -128,7 +119,6 @@ data UiMessage
   | ReloadPlugins
   | SetJobField Text Text Text
   | PickJobFieldPath Text Text
-  | OpenPalette
   | ClosePalette
   | SetPaletteQuery Text
   | RunCommand Command.Command
@@ -151,7 +141,7 @@ data Message
   | CatalogLoaded PluginCatalog
   deriving stock (Eq, Show)
 
-data Command
+data AppEffect
   = OpenFolderDialog (OsPath -> Message)
   | OpenSaveDialog Text Text (OsPath -> Message)
   | StartJob JobPlan
@@ -159,7 +149,7 @@ data Command
   | CancelRunning JobId
   | LoadHistory JobId OsPath
   | WriteFile OsPath Text
-  | CloseWindow
+  | DestroyWindow
   | OpenFileDialog (OsPath -> Message)
   | LoadCatalog
   | ApplyChange CatalogChange
@@ -175,41 +165,37 @@ data PreferencesPage = GeneralPreferences | PluginPreferences
 data Chrome = ShowPreferences PreferencesPage | ShowAbout | ShowShortcuts
   deriving stock (Eq, Show)
 
-data CommandEffect = Apply UiMessage | Present Chrome
-  deriving stock (Eq, Show)
-
 data CommandSpec = CommandSpec
   { scope :: Scope
   , accels :: List Text
   , section :: Maybe Command.Section
   , menu :: Maybe Command.Section
   , enabled :: Model -> Bool
-  , effect :: CommandEffect
   }
 
 commandSpec :: Command.Command -> CommandSpec
 commandSpec = \case
-  Command.NewOffload -> CommandSpec Win ["<Control>n"] (Just Command.JobsSection) Nothing (const True) (Apply OpenOffloadDialog)
-  Command.VerifyFolder -> CommandSpec Win ["<Control>o"] (Just Command.JobsSection) Nothing (const True) (Apply PickVerifyFolder)
-  Command.SealMedia -> CommandSpec Win ["<Control>l"] (Just Command.JobsSection) Nothing (const True) (Apply PickSealFolder)
-  Command.SaveReport -> CommandSpec Win ["<Control>s"] (Just Command.JobsSection) Nothing canReportSelected (Apply SaveSelectedReport)
-  Command.CancelJob -> CommandSpec Win [] Nothing Nothing canCancelSelected (Apply CancelSelectedJob)
-  Command.ReviewJob -> CommandSpec Win [] Nothing Nothing (isJust . reviewableSpec) (Apply ReviewSelectedJob)
-  Command.ClearFinished -> CommandSpec Win [] Nothing (Just Command.JobsSection) hasFinishedJobs (Apply ClearFinished)
-  Command.NextJob -> CommandSpec Win ["<Control>Page_Down"] (Just Command.NavigationSection) Nothing (const True) (Apply SelectNextJob)
-  Command.PreviousJob -> CommandSpec Win ["<Control>Page_Up"] (Just Command.NavigationSection) Nothing (const True) (Apply SelectPreviousJob)
-  Command.CommandPalette -> CommandSpec Win ["<Control>k"] (Just Command.GeneralSection) (Just Command.GeneralSection) (const True) (Apply OpenPalette)
-  Command.Preferences -> CommandSpec App ["<Control>comma"] (Just Command.GeneralSection) (Just Command.GeneralSection) (const True) (Present (ShowPreferences GeneralPreferences))
-  Command.Plugins -> CommandSpec App [] Nothing (Just Command.GeneralSection) (const True) (Present (ShowPreferences PluginPreferences))
-  Command.KeyboardShortcuts -> CommandSpec (Builtin "win.show-help-overlay") ["<Control>question"] (Just Command.GeneralSection) (Just Command.GeneralSection) (const True) (Present ShowShortcuts)
-  Command.About -> CommandSpec App [] Nothing (Just Command.GeneralSection) (const True) (Present ShowAbout)
-  Command.CloseWindow -> CommandSpec Win ["<Control>w"] (Just Command.GeneralSection) Nothing (const True) (Apply RequestClose)
-  Command.Quit -> CommandSpec App ["<Control>q"] (Just Command.GeneralSection) Nothing (const True) (Apply RequestClose)
+  Command.NewOffload -> CommandSpec Win ["<Control>n"] (Just Command.JobsSection) Nothing (const True)
+  Command.VerifyFolder -> CommandSpec Win ["<Control>o"] (Just Command.JobsSection) Nothing (const True)
+  Command.SealMedia -> CommandSpec Win ["<Control>l"] (Just Command.JobsSection) Nothing (const True)
+  Command.SaveReport -> CommandSpec Win ["<Control>s"] (Just Command.JobsSection) Nothing canReportSelected
+  Command.CancelJob -> CommandSpec Win [] Nothing Nothing canCancelSelected
+  Command.ReviewJob -> CommandSpec Win [] Nothing Nothing (isJust . reviewableSpec)
+  Command.ClearFinished -> CommandSpec Win [] Nothing (Just Command.JobsSection) hasFinishedJobs
+  Command.NextJob -> CommandSpec Win ["<Control>Page_Down"] (Just Command.NavigationSection) Nothing (const True)
+  Command.PreviousJob -> CommandSpec Win ["<Control>Page_Up"] (Just Command.NavigationSection) Nothing (const True)
+  Command.CommandPalette -> CommandSpec Win ["<Control>k"] (Just Command.GeneralSection) (Just Command.GeneralSection) (const True)
+  Command.Preferences -> CommandSpec App ["<Control>comma"] (Just Command.GeneralSection) (Just Command.GeneralSection) (const True)
+  Command.Plugins -> CommandSpec App [] Nothing (Just Command.GeneralSection) (const True)
+  Command.KeyboardShortcuts -> CommandSpec (Builtin "win.show-help-overlay") ["<Control>question"] (Just Command.GeneralSection) (Just Command.GeneralSection) (const True)
+  Command.About -> CommandSpec App [] Nothing (Just Command.GeneralSection) (const True)
+  Command.CloseWindow -> CommandSpec Win ["<Control>w"] (Just Command.GeneralSection) Nothing (const True)
+  Command.Quit -> CommandSpec App ["<Control>q"] (Just Command.GeneralSection) Nothing (const True)
 
 commandEnabled :: Model -> Command.Command -> Bool
 commandEnabled model command = (commandSpec command).enabled model
 
-update :: Message -> Model -> (Model, List Command)
+update :: Message -> Model -> (Model, List AppEffect)
 update msg model = case msg of
   Ui intent -> updateUi intent model
   SourcePicked p -> (model & #draft % _Just % #mediaSource ?~ p, [])
@@ -255,12 +241,11 @@ update msg model = case msg of
   WordingReloaded wording -> (model {wording}, [])
   CatalogLoaded catalog -> (model & #plugins .~ catalog, [])
 
-updateUi :: UiMessage -> Model -> (Model, List Command)
+updateUi :: UiMessage -> Model -> (Model, List AppEffect)
 updateUi msg model = case msg of
   PickSource -> (model, [OpenFolderDialog SourcePicked])
   AddDestination -> (model, [OpenFolderDialog DestinationPicked])
   RemoveDestination i -> (model & #draft % _Just % #destinations %~ deleteAt i, [])
-  OpenOffloadDialog -> (model {draft = Just OffloadDraft {mediaSource = Nothing, destinations = []}}, [])
   CloseOffloadDialog -> (model {draft = Nothing}, [])
   SetBase wanted -> (model {appearance = model.appearance {base = wanted}}, [])
   SetPalette wanted -> (model {appearance = setPalette wanted model.appearance}, [])
@@ -271,26 +256,14 @@ updateUi msg model = case msg of
     Ready plan | not (planBlocked plan) -> confirmPlan plan model
     _ -> (model, [])
   DiscardPlan -> (model {planPhase = Idle}, [])
-  PickVerifyFolder -> (model, [OpenFolderDialog (\folder -> RequestPlan (VerifyFolder VerifyJob {folder}))])
-  PickSealFolder -> (model, [OpenFolderDialog (\folder -> RequestPlan (SealMediaSource SealJob {folder}))])
-  ReviewSelectedJob -> case reviewableSpec model of
-    Just spec -> (model {planPhase = Planning spec}, [ComputePlan spec])
-    Nothing -> (model, [])
-  CancelSelectedJob -> case model.selected of
-    Nothing -> (model, [])
-    Just jid -> cancelJob jid model
-  SaveSelectedReport -> saveSelectedReport model
   SavePlan -> case model.planPhase of
     Ready plan -> (model, [OpenSaveDialog (savePlanTitle model.wording) (jobLabel plan.spec.job <> "-plan.txt") (PlanTargetPicked plan)])
     _ -> (model, [])
   SelectJob mjid -> (model {selected = mjid}, [])
-  SelectNextJob -> (model {selected = neighbour 1 model}, [])
-  SelectPreviousJob -> (model {selected = neighbour (-1) model}, [])
-  ClearFinished -> clearFinished model
   SetFileFilter f -> (model {fileFilter = f}, [])
   RequestClose
     | isJust model.running -> (model {closeConfirm = True}, [])
-    | otherwise -> (model, [CloseWindow])
+    | otherwise -> (model, [DestroyWindow])
   ConfirmClose -> confirmClose model
   CancelClose -> (model {closeConfirm = False}, [])
   DismissToast -> (model {toast = Nothing}, [])
@@ -300,16 +273,36 @@ updateUi msg model = case msg of
   ReloadPlugins -> (model, [LoadCatalog])
   SetJobField pluginId key value -> setJobField pluginId key value model
   PickJobFieldPath pluginId key -> (model, [OpenFileDialog (Ui . SetJobField pluginId key . pathText)])
-  OpenPalette -> (model {palette = Just ""}, [])
   ClosePalette -> (model {palette = Nothing}, [])
   SetPaletteQuery query -> (model {palette = query <$ model.palette}, [])
   RunCommand command
-    | commandEnabled model command -> case (commandSpec command).effect of
-        Apply intent -> updateUi intent model {palette = Nothing}
-        Present chrome -> (model {palette = Nothing}, [ShowChrome chrome])
+    | commandEnabled model command -> runCommand command model {palette = Nothing}
     | otherwise -> (model, [])
 
-reviewPlan :: Model -> (Model, List Command)
+runCommand :: Command.Command -> Model -> (Model, List AppEffect)
+runCommand command model = case command of
+  Command.NewOffload -> (model {draft = Just OffloadDraft {mediaSource = Nothing, destinations = []}}, [])
+  Command.VerifyFolder -> (model, [OpenFolderDialog (\folder -> RequestPlan (VerifyFolder VerifyJob {folder}))])
+  Command.SealMedia -> (model, [OpenFolderDialog (\folder -> RequestPlan (SealMediaSource SealJob {folder}))])
+  Command.SaveReport -> saveSelectedReport model
+  Command.CancelJob -> case model.selected of
+    Nothing -> (model, [])
+    Just jid -> cancelJob jid model
+  Command.ReviewJob -> case reviewableSpec model of
+    Just spec -> (model {planPhase = Planning spec}, [ComputePlan spec])
+    Nothing -> (model, [])
+  Command.ClearFinished -> clearFinished model
+  Command.NextJob -> (model {selected = neighbour 1 model}, [])
+  Command.PreviousJob -> (model {selected = neighbour (-1) model}, [])
+  Command.CommandPalette -> (model {palette = Just ""}, [])
+  Command.Preferences -> (model, [ShowChrome (ShowPreferences GeneralPreferences)])
+  Command.Plugins -> (model, [ShowChrome (ShowPreferences PluginPreferences)])
+  Command.KeyboardShortcuts -> (model, [ShowChrome ShowShortcuts])
+  Command.About -> (model, [ShowChrome ShowAbout])
+  Command.CloseWindow -> updateUi RequestClose model
+  Command.Quit -> updateUi RequestClose model
+
+reviewPlan :: Model -> (Model, List AppEffect)
 reviewPlan model
   | Just draft <- model.draft
   , Just src <- draft.mediaSource
@@ -318,7 +311,7 @@ reviewPlan model
       in update (RequestPlan job) model {draft = Nothing}
   | otherwise = (model, [])
 
-saveSelectedReport :: Model -> (Model, List Command)
+saveSelectedReport :: Model -> (Model, List AppEffect)
 saveSelectedReport model = case selectedEntry model of
   Nothing -> (model, [])
   Just entry ->
@@ -331,7 +324,7 @@ saveSelectedReport model = case selectedEntry model of
       ]
     )
 
-clearFinished :: Model -> (Model, List Command)
+clearFinished :: Model -> (Model, List AppEffect)
 clearFinished model =
   let kept = Map.filter (\entry -> not (isTerminal entry.state.phase)) model.jobs
       selected' = case model.selected of
@@ -340,10 +333,10 @@ clearFinished model =
       toasts = Set.filter (\(jid, _) -> Map.member jid kept) model.pluginToasts
   in (model {jobs = kept, selected = selected', pluginToasts = toasts}, [])
 
-confirmClose :: Model -> (Model, List Command)
+confirmClose :: Model -> (Model, List AppEffect)
 confirmClose model =
   let stop = maybe [] (\jid -> [CancelRunning jid]) model.running
-  in (model {closeConfirm = False, running = Nothing, queue = []}, stop <> [CloseWindow])
+  in (model {closeConfirm = False, running = Nothing, queue = []}, stop <> [DestroyWindow])
 
 setPhase :: JobId -> JobPhase -> Model -> Model
 setPhase jid phase model = model & #jobs % ix jid % #state % #phase .~ phase
@@ -351,7 +344,7 @@ setPhase jid phase model = model & #jobs % ix jid % #state % #phase .~ phase
 storePlan :: JobId -> JobPlan -> Model -> Model
 storePlan jid fresh model = model & #jobs % ix jid % #plan ?~ fresh
 
-cancelJob :: JobId -> Model -> (Model, List Command)
+cancelJob :: JobId -> Model -> (Model, List AppEffect)
 cancelJob jid model
   | model.running == Just jid =
       let (model1, cmds) = startNext (setPhase jid Cancelled model {running = Nothing})
@@ -381,12 +374,12 @@ neighbour offset model =
              Nothing -> Just jid
              Just next -> Just next
 
-historyRefresh :: JobId -> Job -> JobEvent -> List Command
+historyRefresh :: JobId -> Job -> JobEvent -> List AppEffect
 historyRefresh jid job ev = case ev of
   JobFinished _ -> historyFolder job & maybe [] (\folder -> [LoadHistory jid folder])
   _ -> []
 
-planComputed :: JobSpec -> Either Text JobPlan -> Model -> (Model, List Command)
+planComputed :: JobSpec -> Either Text JobPlan -> Model -> (Model, List AppEffect)
 planComputed spec outcome model
   | awaitingPlan model spec = case outcome of
       Right plan -> (model {planPhase = Ready plan}, [])
@@ -412,7 +405,7 @@ awaitingPlan model spec = case model.planPhase of
   Refreshing _ pending -> pending == spec
   _ -> False
 
-replanIfChanged :: (OffloadJob -> Bool) -> (OffloadJob -> OffloadJob) -> Model -> (Model, List Command)
+replanIfChanged :: (OffloadJob -> Bool) -> (OffloadJob -> OffloadJob) -> Model -> (Model, List AppEffect)
 replanIfChanged changed apply model = case planningSpec model of
   Just spec
     | Offload oj <- spec.job
@@ -431,7 +424,7 @@ pluginToast jid job ev model = case ev of
           }
   _ -> model
 
-setJobField :: Text -> Text -> Text -> Model -> (Model, List Command)
+setJobField :: Text -> Text -> Text -> Model -> (Model, List AppEffect)
 setJobField pluginId key value model = case planningSpec model of
   Just spec
     | fields /= spec.pluginFields ->
@@ -459,7 +452,7 @@ planningSpec model = case model.planPhase of
   Ready plan -> Just plan.spec
   _ -> Nothing
 
-confirmPlan :: JobPlan -> Model -> (Model, List Command)
+confirmPlan :: JobPlan -> Model -> (Model, List AppEffect)
 confirmPlan plan model =
   let jid = plan.spec.jobId
       idle = isNothing model.running && null model.queue
@@ -477,7 +470,7 @@ confirmPlan plan model =
          (setPhase jid Running model1 {running = Just jid}, refresh <> [StartJob plan])
        else (model1 {queue = model1.queue <> [jid]}, refresh)
 
-replanReady :: JobId -> JobPlan -> Model -> (Model, List Command)
+replanReady :: JobId -> JobPlan -> Model -> (Model, List AppEffect)
 replanReady jid fresh model
   | model.running /= Just jid = (model, [])
   | otherwise = case Map.lookup jid model.jobs >>= \entry -> entry.plan of
@@ -493,7 +486,7 @@ replanReady jid fresh model
                   (storePlan jid fresh model) {running = Nothing, planPhase = offered fresh model.planPhase}
               )
 
-startNext :: Model -> (Model, List Command)
+startNext :: Model -> (Model, List AppEffect)
 startNext model = case model.running of
   Just _ -> (model, [])
   Nothing -> case model.queue of

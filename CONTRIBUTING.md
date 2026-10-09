@@ -27,20 +27,14 @@ This separation of concerns allow us to keep a maximum of things outside of GTK 
 
 ### The loop
 
-The interface is a model, messages and commands (Elm architecture-style):
+The interface is a model, messages and effects (Elm architecture-style):
 
 ```
-Msg ──▶ update :: Msg -> Model -> (Model, List Cmd)
-                     │              │
-                     ▼              ▼
-                   render        runCmd (IO)
+Message ──▶ update :: Message -> Model -> (Model, List AppEffect)
+                                           │           │
+                                           ▼           ▼
+                                        render     runEffect (IO)
 ```
-
-- `MediaCopy.Model` holds `Model`, `Msg`, `Cmd` and `update`. It is pure.
-- `MediaCopy.Gtk.Runtime` owns the model, runs the commands, and turns their results back into
-  messages.
-- `MediaCopy.Gtk.View` renders a whole model. Each widget owns a cell that leaves itself alone when
-  its value has not changed.
 
 ### Commands
 
@@ -50,9 +44,15 @@ each command to a GAction, an accelerator and a shortcuts-window section. The he
 detail-pane buttons, the main menu, the shortcuts window and the command palette all read that one
 catalogue. `MediaCopy.Interface.Palette` matches and ranks the commands for the palette.
 
-To add a command: add the constructor and its id in `Command.hs`, the two Fluent keys, one row in
-`commandSpec` in `Actions.hs`, and the enable rule in `commandEnabled` in `Model.hs` when the
-command is not always available.
+A command reaches the model as the message `RunCommand`. `update` runs it only when the command is
+enabled.
+
+To add a command:
+
+1. Add the constructor and its id in `Command.hs`.
+2. Add the two Fluent keys.
+3. Add one row in `commandSpec` in `Model.hs`.
+4. Add one branch in `runCommand` in `Model.hs`.
 
 ### The two phases of a job
 
