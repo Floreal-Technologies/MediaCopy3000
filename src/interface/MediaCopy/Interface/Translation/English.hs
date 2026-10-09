@@ -5,7 +5,6 @@ module MediaCopy.Interface.Translation.English
   , languageName
   , localeFile
   , capitalise
-  , displayLanguage
   , pluralCategory
   , formatNumber
   , formatTime
@@ -30,9 +29,6 @@ languageName = "English"
 
 localeFile :: OsPath
 localeFile = [osp|locales/en.ftl|]
-
-displayLanguage :: Maybe Text
-displayLanguage = Nothing
 
 capitalise :: Text -> Text
 capitalise text = case T.uncons text of

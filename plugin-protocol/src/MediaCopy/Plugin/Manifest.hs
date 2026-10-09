@@ -121,21 +121,6 @@ instance FromJSON Field where
     defaultValue <- o .:? "default"
     pure Field {key, label, kind, required, defaultValue}
 
-instance ToJSON Field where
-  toJSON field =
-    object $
-      [ "key" .= field.key
-      , "label" .= field.label
-      , "kind" .= kindName field.kind
-      , "required" .= field.required
-      ]
-        <> options
-        <> maybe [] (\value -> ["default" .= value]) field.defaultValue
-    where
-      options = case field.kind of
-        ChoiceField choices -> ["options" .= choices]
-        _ -> []
-
 data PluginManifest = PluginManifest
   { id :: PluginId
   , name :: Text
@@ -163,21 +148,6 @@ instance FromJSON PluginManifest where
     settings <- fromMaybe V.empty <$> o .:? "settings"
     jobFields <- fromMaybe V.empty <$> o .:? "jobFields"
     pure PluginManifest {id = pluginId, name, description, version, api, namespace, executable, capabilities, settings, jobFields}
-
-instance ToJSON PluginManifest where
-  toJSON m =
-    object $
-      [ "id" .= m.id
-      , "name" .= m.name
-      , "description" .= m.description
-      , "version" .= m.version
-      , "api" .= m.api
-      , "executable" .= m.executable
-      , "capabilities" .= m.capabilities
-      , "settings" .= m.settings
-      , "jobFields" .= m.jobFields
-      ]
-        <> maybe [] (\ns -> ["namespace" .= ns]) m.namespace
 
 apiMajor :: Int
 apiMajor = 1

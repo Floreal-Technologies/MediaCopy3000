@@ -5,7 +5,6 @@ module MediaCopy.Interface.Translation.French
   , languageName
   , localeFile
   , capitalise
-  , displayLanguage
   , pluralCategory
   , formatNumber
   , formatTime
@@ -30,9 +29,6 @@ languageName = "Français"
 
 localeFile :: OsPath
 localeFile = [osp|locales/fr.ftl|]
-
-displayLanguage :: Maybe Text
-displayLanguage = Nothing
 
 capitalise :: Text -> Text
 capitalise text = case T.uncons text of

@@ -7,8 +7,6 @@ module MediaCopy.Plugin.Trace
   , Tracer (..)
   , silentTracer
   , openTracer
-  , traceFolder
-  , traceRecord
   ) where
 
 import Control.Concurrent.MVar (modifyMVar_, newMVar)

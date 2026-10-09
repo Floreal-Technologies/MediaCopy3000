@@ -11,8 +11,6 @@ module MediaCopy.Test.InMemoryFS
   , withFailOnOpen
   , withFailOnRename
   , withFailOnManifestWrite
-  , withFreeBytes
-  , withUnreadableFreeSpace
   , epoch
   , runFileSystemMem
   , slashedPath
@@ -23,7 +21,6 @@ module MediaCopy.Test.InMemoryFS
   , sampleSpec
   , statusesOf
   , isReplaced
-  , isManifestIn
   , newestManifestIn
   ) where
 
@@ -39,7 +36,6 @@ import Data.ByteString qualified as BS
 import Data.Foldable (forM_)
 import Data.Function ((&))
 import Data.IORef
-import Data.Int (Int64)
 import Data.List (List, sort, sortOn)
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
@@ -74,8 +70,6 @@ data MemFS = MemFS
   , failOnOpen :: Set OsPath
   , failOnRename :: Set OsPath
   , failOnManifestWrite :: Bool
-  , freeBytes :: Int64
-  , freeSpaceFails :: Bool
   , dirs :: Set OsPath
   }
 
@@ -88,8 +82,6 @@ emptyMemFS =
     , failOnOpen = Set.empty
     , failOnRename = Set.empty
     , failOnManifestWrite = False
-    , freeBytes = maxBound
-    , freeSpaceFails = False
     }
 
 withFile :: OsPath -> ByteString -> MemFS -> MemFS
@@ -125,12 +117,6 @@ slashedWrite w = PlannedWrite {temp = slashedPath w.temp, final = slashedPath w.
 withFiles :: Map OsPath (ByteString, UTCTime) -> MemFS -> MemFS
 withFiles m fs = fs {files = m}
 
-withFreeBytes :: Int64 -> MemFS -> MemFS
-withFreeBytes n fs = fs {freeBytes = n}
-
-withUnreadableFreeSpace :: MemFS -> MemFS
-withUnreadableFreeSpace fs = fs {freeSpaceFails = True}
-
 memChunkBytes :: Int
 memChunkBytes = 4096
 
@@ -149,9 +135,7 @@ runFileSystemMem :: (IOE :> es) => IORef MemFS -> Eff (FileSystem : es) a -> Eff
 runFileSystemMem fsRef =
   interpret $ \env -> \case
     Walk root -> liftIO (walkMem fsRef (slashedPath root))
-    FreeSpaceOf _ -> liftIO $ do
-      fs <- readIORef fsRef
-      pure (if fs.freeSpaceFails then Left (owner <> ": free space unreadable") else Right fs.freeBytes)
+    FreeSpaceOf _ -> pure (Right maxBound)
     StreamFile _ (slashedPath -> path) onChunk -> localSeqUnlift env $ \unlift -> do
       content <- liftIO (readWholeMem fsRef path)
       forM_ (chunksOf content) (\chunk -> unlift (onChunk chunk))

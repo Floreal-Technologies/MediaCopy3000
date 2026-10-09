@@ -1,6 +1,5 @@
 module MediaCopy.Effects.Hasher
   ( Hasher
-  , HasherState
   , feed
   , finish
   , withHasher
