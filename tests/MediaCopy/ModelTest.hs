@@ -14,6 +14,7 @@ import Test.Tasty.Hedgehog (testProperty)
 import MediaCopy.Demo.Fixtures
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan (JobPlan (..))
+import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Theme (PaletteMode (..))
 import MediaCopy.Model
 
@@ -75,7 +76,7 @@ tests =
 m0 :: Model
 m0 = initialModel at LightPalette
 
-run :: List Message -> Model -> (Model, List Command)
+run :: List Message -> Model -> (Model, List AppEffect)
 run msgs m = foldl (\(mm, cs) msg -> let (mm', cs') = update msg mm in (mm', cs <> cs')) (m, []) msgs
 
 planned :: JobId -> Job -> Message
@@ -91,7 +92,7 @@ planOf = \case
 
 offloadFlow' :: Int -> List Message
 offloadFlow' n =
-  [ Ui OpenOffloadDialog
+  [ Ui (RunCommand Command.NewOffload)
   , SourcePicked mediaSource
   , DestinationPicked shuttle
   , DestinationPicked archive
@@ -157,7 +158,7 @@ neverHasMoreThanOneRunningJob = property $ do
 cancelsTheRunningJobAndStartsTheNext :: Assertion
 cancelsTheRunningJobAndStartsTheNext = do
   let (m1, _) = run (offloadFlow 1 <> offloadFlow 2) m0
-      (m2, cmds) = run [Ui (SelectJob (Just (JobId 1))), Ui CancelSelectedJob] m1
+      (m2, cmds) = run [Ui (SelectJob (Just (JobId 1))), Ui (RunCommand Command.CancelJob)] m1
   (m2.jobs Map.! JobId 1).state.phase @?= Cancelled
   m2.running @?= Just (JobId 2)
   assertBool "emits CancelRunning for job 1" (any (cancels (JobId 1)) cmds)
@@ -165,21 +166,21 @@ cancelsTheRunningJobAndStartsTheNext = do
 removesAQueuedJobFromTheQueue :: Assertion
 removesAQueuedJobFromTheQueue = do
   let (m1, _) = run (offloadFlow 1 <> offloadFlow 2) m0
-      (m2, _) = run [Ui (SelectJob (Just (JobId 2))), Ui CancelSelectedJob] m1
+      (m2, _) = run [Ui (SelectJob (Just (JobId 2))), Ui (RunCommand Command.CancelJob)] m1
   m2.queue @?= []
   (m2.jobs Map.! JobId 2).state.phase @?= Cancelled
 
 cancelSelectedWithNoSelectionDoesNothing :: Assertion
 cancelSelectedWithNoSelectionDoesNothing = do
   let (m1, _) = run (offloadFlow 1) m0
-      (m2, cmds) = run [Ui (SelectJob Nothing), Ui CancelSelectedJob] m1
+      (m2, cmds) = run [Ui (SelectJob Nothing), Ui (RunCommand Command.CancelJob)] m1
   m2.running @?= Just (JobId 1)
   assertBool "no cancel was ordered" (not (any isCancelRunning cmds))
 
 saveSelectedReportAsksForAFile :: Assertion
 saveSelectedReportAsksForAFile = do
   let (m1, _) = run (offloadFlow 1) m0
-      (_, cmds) = run [Ui (SelectJob (Just (JobId 1))), Ui SaveSelectedReport] m1
+      (_, cmds) = run [EngineEvent (JobId 1) (JobFinished AllOk), Ui (SelectJob (Just (JobId 1))), Ui (RunCommand Command.SaveReport)] m1
   assertBool "asks for a save location" (any isSaveDialog cmds)
 
 savePlanAsksForAFile :: Assertion
@@ -191,31 +192,31 @@ savePlanAsksForAFile = do
 saveSelectedReportWithNoSelectionDoesNothing :: Assertion
 saveSelectedReportWithNoSelectionDoesNothing = do
   let (m1, _) = run (offloadFlow 1) m0
-      (_, cmds) = run [Ui (SelectJob Nothing), Ui SaveSelectedReport] m1
+      (_, cmds) = run [Ui (SelectJob Nothing), Ui (RunCommand Command.SaveReport)] m1
   assertBool "asks for nothing" (not (any isSaveDialog cmds))
 
 selectNextFromNoSelectionPicksTheFirst :: Assertion
 selectNextFromNoSelectionPicksTheFirst = do
   let (m1, _) = run (offloadFlow 1 <> offloadFlow 2) m0
-      (m2, _) = run [Ui (SelectJob Nothing), Ui SelectNextJob] m1
+      (m2, _) = run [Ui (SelectJob Nothing), Ui (RunCommand Command.NextJob)] m1
   m2.selected @?= Just (JobId 1)
 
 selectNextAtTheLastJobStays :: Assertion
 selectNextAtTheLastJobStays = do
   let (m1, _) = run (offloadFlow 1 <> offloadFlow 2) m0
-      (m2, _) = run [Ui (SelectJob (Just (JobId 2))), Ui SelectNextJob] m1
+      (m2, _) = run [Ui (SelectJob (Just (JobId 2))), Ui (RunCommand Command.NextJob)] m1
   m2.selected @?= Just (JobId 2)
 
 selectPreviousFromNoSelectionPicksTheLast :: Assertion
 selectPreviousFromNoSelectionPicksTheLast = do
   let (m1, _) = run (offloadFlow 1 <> offloadFlow 2) m0
-      (m2, _) = run [Ui (SelectJob Nothing), Ui SelectPreviousJob] m1
+      (m2, _) = run [Ui (SelectJob Nothing), Ui (RunCommand Command.PreviousJob)] m1
   m2.selected @?= Just (JobId 2)
 
 selectPreviousAtTheFirstJobStays :: Assertion
 selectPreviousAtTheFirstJobStays = do
   let (m1, _) = run (offloadFlow 1 <> offloadFlow 2) m0
-      (m2, _) = run [Ui (SelectJob (Just (JobId 1))), Ui SelectPreviousJob] m1
+      (m2, _) = run [Ui (SelectJob (Just (JobId 1))), Ui (RunCommand Command.PreviousJob)] m1
   m2.selected @?= Just (JobId 1)
 
 closeWhileRunningAsksFirst :: Assertion
@@ -223,7 +224,7 @@ closeWhileRunningAsksFirst = do
   let (m1, _) = run (offloadFlow 1) m0
       (m2, cmds) = update (Ui RequestClose) m1
   m2.closeConfirm @?= True
-  assertBool "the window was not closed" (not (any isCloseWindow cmds))
+  assertBool "the window was not closed" (not (any isDestroyWindow cmds))
 
 confirmCloseCancelsTheJobAndCloses :: Assertion
 confirmCloseCancelsTheJobAndCloses = do
@@ -231,11 +232,11 @@ confirmCloseCancelsTheJobAndCloses = do
       (m2, cmds) = run [Ui RequestClose, Ui ConfirmClose] m1
   m2.closeConfirm @?= False
   assertBool "cancels the running job" (any (cancels (JobId 1)) cmds)
-  assertBool "closes the window" (any isCloseWindow cmds)
+  assertBool "closes the window" (any isDestroyWindow cmds)
 
 dropsFinishedJobsAndClearsSelection :: Assertion
 dropsFinishedJobsAndClearsSelection = do
-  let (m1, _) = run (enqueueOffload <> [EngineEvent (JobId 1) (JobFinished AllOk), Ui ClearFinished]) m0
+  let (m1, _) = run (enqueueOffload <> [EngineEvent (JobId 1) (JobFinished AllOk), Ui (RunCommand Command.ClearFinished)]) m0
   Map.keys m1.jobs @?= []
   m1.selected @?= Nothing
 
@@ -292,33 +293,33 @@ staleReplanNeedsReview = do
   m3.running @?= Nothing
   assertBool "no job was started" (not (any isStartJob cmds))
 
-isComputePlan :: Command -> Bool
+isComputePlan :: AppEffect -> Bool
 isComputePlan (ComputePlan _) = True
 isComputePlan _ = False
 
 queuedJobs :: Model -> List Job
 queuedJobs model = model.jobs & Map.elems & map (.state.spec.job)
 
-isStartJob :: Command -> Bool
+isStartJob :: AppEffect -> Bool
 isStartJob (StartJob _) = True
 isStartJob _ = False
 
-isCancelRunning :: Command -> Bool
+isCancelRunning :: AppEffect -> Bool
 isCancelRunning (CancelRunning _) = True
 isCancelRunning _ = False
 
-cancels :: JobId -> Command -> Bool
+cancels :: JobId -> AppEffect -> Bool
 cancels wanted (CancelRunning jid) = jid == wanted
 cancels _ _ = False
 
-replans :: JobId -> Command -> Bool
+replans :: JobId -> AppEffect -> Bool
 replans wanted (ComputePlan spec) = spec.jobId == wanted
 replans _ _ = False
 
-isSaveDialog :: Command -> Bool
+isSaveDialog :: AppEffect -> Bool
 isSaveDialog OpenSaveDialog {} = True
 isSaveDialog _ = False
 
-isCloseWindow :: Command -> Bool
-isCloseWindow CloseWindow = True
-isCloseWindow _ = False
+isDestroyWindow :: AppEffect -> Bool
+isDestroyWindow DestroyWindow = True
+isDestroyWindow _ = False
