@@ -236,7 +236,7 @@ check_flatpak_glibc() {
   binary_glibc="$(objdump -T "${STAGING}${PREFIX}/bin/mediacopy3000" | grep -o 'GLIBC_[0-9.]*' | sed 's/^GLIBC_//' | sort -uV | tail -1)"
   runtime_glibc="$(flatpak run --user --command=ldd "${runtime}//${version}" --version | awk 'NR == 1 { print $NF }')"
   if ! printf '%s\n%s\n' "$binary_glibc" "$runtime_glibc" | sort -CV; then
-    echo "error: binary needs glibc ${binary_glibc} but ${runtime}//${version} ships ${runtime_glibc}; build on an older host" >&2
+    echo "error: binary needs glibc ${binary_glibc} but ${runtime}//${version} ships ${runtime_glibc}; build on an different host" >&2
     exit 1
   fi
   echo "==> glibc check: binary ${binary_glibc} <= runtime ${runtime_glibc}"
