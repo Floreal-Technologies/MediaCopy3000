@@ -10,6 +10,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Vector qualified as V
 import Data.Word (Word32)
+import MediaCopy.Plugin.Manifest (Capability (..), capabilityName)
 
 import MediaCopy.Domain.PluginCatalog
 
@@ -26,10 +27,10 @@ answerAt = \case
   _ -> Nothing
 
 entrySubtitle :: PluginEntry -> Text
-entrySubtitle entry = T.intercalate " · " (entry.version : T.intercalate ", " (V.toList (V.map (.name) entry.capabilities)) : maybe [] pure entry.problem)
+entrySubtitle entry = T.intercalate " · " (entry.version : T.intercalate ", " (V.toList (V.map (capabilityName . (.capability)) entry.capabilities)) : maybe [] pure entry.problem)
 
 capabilitySubtitle :: CapabilityView -> Text
-capabilitySubtitle capability = capabilityText capability.name <> (if capability.answer == Unanswered then " – not answered yet" else "")
+capabilitySubtitle view = capabilityText view.capability <> (if view.answer == Unanswered then " – not answered yet" else "")
 
 answerIndex :: Answer -> Word32
 answerIndex = \case
@@ -37,11 +38,10 @@ answerIndex = \case
   Granted -> 1
   Declined -> 2
 
-capabilityText :: Text -> Text
+capabilityText :: Capability -> Text
 capabilityText = \case
-  "files.read" -> "Read the media files"
-  "plan.inspect" -> "Add findings to the plan"
-  "files.inspect" -> "Add notes about each verified file to the report"
-  "block" -> "Stop a job with a blocker"
-  "manifest.write" -> "Add data to the manifest"
-  other -> other
+  FilesRead -> "Read the media files"
+  PlanInspect -> "Add findings to the plan"
+  FilesInspect -> "Add notes about each verified file to the report"
+  Block -> "Stop a job with a blocker"
+  ManifestWrite -> "Add data to the manifest"

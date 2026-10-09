@@ -5,25 +5,12 @@
 Here are described the different parts:
 The glossary in this manual's index holds the words the code uses for its own concepts, you should read it first.
 
-The repository holds two packages: `ascmhl`, which is the format of the manifests,
-and `mediacopy3000`, which is the application.
+The repository holds four packages:
 
-| Component | Where | What it holds |
-|---|---|---|
-| `lib:ascmhl` | `ascmhl/src` | The ASC MHL types, reader, writer, folder layout and error set. |
-| `lib:domain` | `src/domain` | Domain types (a job, a plan, a finding, the preflight decision). |
-| `lib:application` | `src/application` | The engine that runs a plan |
-| `lib:interface` | `src/interface` | The model the window shows, the report, and the appearance. |
-| `lib:mediacopy3000` | `src/gtk` | The widgets, the runtime, the theme. |
-| `lib:demo` | `src/demo` | The scenes for the screenshots, and the fixtures the model tests share. |
-| `exe:mediacopy3000` | `app/Main.hs` | Starts the runtime. |
-
-The dependency arrows go like this:
-
-* `ascmhl` ← `domain` ← `application`;
-* `domain` ← `interface`.
-
-This separation of concerns allow us to keep a maximum of things outside of GTK (and so we are able to test them independently).
+* `ascmhl`, which is the format of the manifests;
+* `plugin-protocol`, which is the format between the application and its plug-ins;
+* `mediacopy3000`, which is the application;
+* `mediacopy3000-credits`, which is the Credits plug-in.
 
 ### The loop
 

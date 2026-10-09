@@ -41,6 +41,7 @@ import Data.Text.Display (display)
 import Data.Time (UTCTime (..), addUTCTime, fromGregorian, secondsToDiffTime)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
+import MediaCopy.Plugin.Manifest (Capability (..))
 import System.OsPath (OsPath, unsafeEncodeUtf, (</>))
 
 import MediaCopy.Domain.FileSystem (Tree (..), ignorePatterns, partSuffix)
@@ -225,7 +226,7 @@ pluginCatalog =
               , folder = "/home/you/.local/share/mediacopy3000/plugins/tech.floreal.credits"
               , enabled = True
               , trace = False
-              , capabilities = V.singleton (CapabilityView "manifest.write" Granted)
+              , capabilities = V.singleton (CapabilityView ManifestWrite Granted)
               , settings = V.singleton (FieldView "authors" "Authors" AuthorsShape True (AuthorList demoSlots))
               , jobFields = authorJobFields "authors" demoSlots
               , active = True
