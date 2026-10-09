@@ -30,7 +30,7 @@ import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8Lenient)
 import GHC.Clock (getMonotonicTime)
 import MediaCopy.Plugin.JsonRpc
-import MediaCopy.Plugin.Protocol (LogLine (..), Progress, methodShutdown, notifyLog, notifyProgress)
+import MediaCopy.Plugin.Protocol (LogLine (..), methodShutdown, notifyLog, notifyProgress)
 import System.Environment (getEnvironment)
 import System.Exit (ExitCode (..))
 import System.IO (Handle, hClose, hFlush, hSetBinaryMode)
@@ -46,7 +46,6 @@ data Launch = Launch
   { executable :: OsPath
   , folder :: OsPath
   , onLog :: Text -> IO ()
-  , onProgress :: Progress -> IO ()
   , trace :: Maybe TraceTarget
   }
 
@@ -149,7 +148,7 @@ readReplies launch conn next = loop
               boxes <- readTVar conn.pending
               for_ (Map.lookup requestId boxes) (\box -> void (tryPutTMVar box result))
             Right (Notify method params)
-              | method == notifyProgress -> for_ (parseMaybe parseJSON params) launch.onProgress
+              | method == notifyProgress -> pure ()
               | method == notifyLog -> for_ (parseMaybe parseJSON params) (\(entry :: LogLine) -> launch.onLog (entry.level <> ": " <> entry.message))
               | otherwise -> launch.onLog ("an unknown notification: " <> method)
           loop

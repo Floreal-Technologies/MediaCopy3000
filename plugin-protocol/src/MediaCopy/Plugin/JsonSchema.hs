@@ -55,9 +55,6 @@ defsPrefix = "#/$defs/"
 instance JsonSchema Text where
   schema = string
 
-instance JsonSchema Bool where
-  schema = typed "boolean"
-
 instance JsonSchema Int where
   schema = typed "integer"
 

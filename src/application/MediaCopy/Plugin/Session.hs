@@ -3,9 +3,7 @@ module MediaCopy.Plugin.Session
   , SessionConfig (..)
   , Session
   , withSession
-  , planHooks
   , planWithPlugins
-  , observe
   , fileVerified
   , finishInspections
   , logFault
@@ -29,7 +27,6 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Time (getCurrentTime)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Data.Version (showVersion)
@@ -62,12 +59,10 @@ data SessionConfig = SessionConfig
   }
 
 data Session = Session
-  { stage :: Stage
-  , config :: SessionConfig
+  { config :: SessionConfig
   , plan :: JobPlan
   , members :: Vector Member
   , startFaults :: Vector PluginFinding
-  , state :: TVar JobState
   }
 
 data Member = Member
@@ -89,10 +84,8 @@ silence :: Limit
 silence = Silence 30
 
 withSession :: SessionConfig -> Stage -> JobPlan -> (Session -> IO a) -> IO a
-withSession outer stage plan use = do
-  state <- newTVarIO (newJobState plan.spec)
-  let config = outer {report = \report -> foldInto state report >> outer.report report}
-      approved = Set.fromList (V.toList (V.map (.id) plan.plugins.active))
+withSession config stage plan use = do
+  let approved = Set.fromList (V.toList (V.map (.id) plan.plugins.active))
       chosen ready = stage == PlanStage || Set.member (pluginRef ready.installed).id approved
       (needed, idle) = partition (neededAt stage . (.granted)) (V.toList config.plugins)
       wanted = needed & sortOn (.installed.manifest.id) & filter chosen
@@ -105,7 +98,7 @@ withSession outer stage plan use = do
   flip finally (stopWorkers registry) $ do
     (members, startFaults) <- startAll registry config stage plan wanted
     let fieldFaults = lefts (map (fieldCheck plan.spec.pluginFields stage) unneeded)
-    result <- use Session {stage, config, plan, members, startFaults = startFaults <> V.fromList fieldFaults, state}
+    result <- use Session {config, plan, members, startFaults = startFaults <> V.fromList fieldFaults}
     void (timeout 5_000_000 (forConcurrently members stopMember))
     pure result
 
@@ -115,11 +108,6 @@ stopWorkers registry = uninterruptibleMask_ $ do
   forM_ workers (\worker -> throwTo (asyncThreadId worker) AsyncCancelled)
   expired <- registerDelay 10_000_000
   atomically $ traverse_ waitCatchSTM workers `orElse` (readTVar expired >>= check)
-
-foldInto :: TVar JobState -> PluginReport -> IO ()
-foldInto state report = do
-  now <- getCurrentTime
-  atomically (modifyTVar' state (foldEvent now (PluginReported report)))
 
 -- |
 -- >>> neededAt PlanStage (Set.fromList [FilesInspect])
@@ -206,7 +194,6 @@ startMember registry config stage plan ready = do
               { executable = ready.installed.executable
               , folder = ready.installed.folder
               , onLog = config.report . Logged ref . oneLine
-              , onProgress = \_ -> pure ()
               , trace =
                   if ready.trace
                     then Just TraceTarget {pluginId = ref.id, stage = stageName stage}
@@ -374,11 +361,6 @@ memberPlan session member = do
               Left problem -> (findings <> fault Blocker (Malformed problem), Nothing)
               Right contribution -> (findings, Just contribution)
       | otherwise -> pure (findings, Nothing)
-
-observe :: Session -> JobEvent -> IO ()
-observe session event = do
-  now <- getCurrentTime
-  atomically (modifyTVar' session.state (foldEvent now event))
 
 fileVerified :: Session -> VerifiedFile -> IO ()
 fileVerified session file =

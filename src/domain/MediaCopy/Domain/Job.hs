@@ -37,7 +37,6 @@ module MediaCopy.Domain.Job
   , countOutcomes
   , destinationPath
   , fractionOf
-  , Throughput (..)
   , rateOf
   , plural
   ) where

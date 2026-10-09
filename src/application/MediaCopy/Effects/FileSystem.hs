@@ -121,9 +121,6 @@ runFileSystemIO chunkSize =
     WriteTextAtomically p t -> liftIO (writeTextAtomicallyIO p t)
     MakeDirectories dirs -> liftIO (V.mapM_ (Dir.createDirectoryIfMissing True) dirs)
 
-writeBufferBytes :: Int
-writeBufferBytes = 4 * 1024 * 1024
-
 walkIO :: OsPath -> IO (Maybe Tree)
 walkIO root = do
   exists <- Dir.doesDirectoryExist root
@@ -133,11 +130,7 @@ walkIO root = do
       (files, dirs) <- descend root
       pure (Just Tree {files = V.fromList (sortOn fst files), dirs = V.fromList (sort dirs)})
   where
-    descend dir = do
-      here <- Dir.doesDirectoryExist dir
-      if not here
-        then pure ([], [])
-        else Dir.listDirectory dir >>= \names -> fmap mconcat (forM names (step dir))
+    descend dir = Dir.listDirectory dir >>= \names -> fmap mconcat (forM names (step dir))
 
     step dir name =
       classifyChild dir name >>= \case
@@ -213,7 +206,7 @@ withWriter path use = do
   where
     open = do
       h <- FileIO.openBinaryFile path WriteMode
-      hSetBuffering h (BlockBuffering (Just writeBufferBytes))
+      hSetBuffering h (BlockBuffering (Just defaultChunkSize))
       pure h
 
 readTextIO :: OsPath -> IO (Maybe Text)

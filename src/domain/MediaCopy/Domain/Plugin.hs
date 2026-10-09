@@ -5,7 +5,6 @@ module MediaCopy.Domain.Plugin
   , About (..)
   , PluginFinding (..)
   , Contributions (..)
-  , noContributions
   , mergeContributions
   , joinFragments
   , PluginPlan (..)

@@ -12,7 +12,6 @@ module MediaCopy.Plugin.JsonRpc
   , decodeRequest
   , encodeReply
   , encodeFailure
-  , encodeNotification
   , methodNotFound
   , invalidParams
   ) where
@@ -94,10 +93,6 @@ encodeReply requestId result =
 encodeFailure :: Int -> RpcError -> ByteString
 encodeFailure requestId rpcError =
   envelope ["id" .= requestId, "error" .= rpcError]
-
-encodeNotification :: Text -> Value -> ByteString
-encodeNotification method params =
-  envelope ["method" .= method, "params" .= params]
 
 methodNotFound :: Text -> RpcError
 methodNotFound method = RpcError {code = -32601, message = "unknown method " <> method}

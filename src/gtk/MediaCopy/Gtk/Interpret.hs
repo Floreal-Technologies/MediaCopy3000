@@ -44,7 +44,7 @@ import MediaCopy.Interface.Wording (noHistoryText)
 import MediaCopy.Model
 import MediaCopy.Plugin.Catalog (applyChange, loadCatalog)
 import MediaCopy.Plugin.Grants (PluginSetup (..), Ready, loadPluginSetup)
-import MediaCopy.Plugin.Session (SessionConfig (..), Stage (RunStage), observe, planWithPlugins, withSession)
+import MediaCopy.Plugin.Session (SessionConfig (..), Stage (RunStage), planWithPlugins, withSession)
 import MediaCopy.Report (renderPlanText)
 
 data Production = Production
@@ -162,18 +162,11 @@ startJob site wording plan = do
       let reported report = do
             logLine (PluginReported report)
             unless (logOnly report) (sink (PluginReported report))
+          emitted ev = logLine ev >> sink ev
       if planBlocked plan
-        then runApp (runEmitIO (\ev -> logLine ev >> sink ev) (runPluginsNone (executePlan (T.pack host) plan)))
+        then runApp (runEmitIO emitted (runPluginsNone (executePlan (T.pack host) plan)))
         else withSession (pluginConfig wording setup.ready reported) RunStage plan $ \session ->
-          runApp
-            ( runEmitIO
-                ( \ev -> do
-                    logLine ev
-                    observe session ev
-                    sink ev
-                )
-                (runPluginsSession session (executePlan (T.pack host) plan))
-            )
+          runApp (runEmitIO emitted (runPluginsSession session (executePlan (T.pack host) plan)))
   writeIORef site.engine (Just (spec.jobId, worker))
   void $ async $ do
     outcome <- waitCatch worker

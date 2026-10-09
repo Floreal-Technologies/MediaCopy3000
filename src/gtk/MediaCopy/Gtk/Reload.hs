@@ -1,6 +1,5 @@
 module MediaCopy.Gtk.Reload
   ( loadCss
-  , reloadWording
   , loadWording
   ) where
 
