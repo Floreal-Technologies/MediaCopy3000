@@ -27,8 +27,9 @@ import System.OsPath (OsPath, encodeUtf)
 import MediaCopy.Domain.History (HistoryError)
 import MediaCopy.Domain.Job
 import MediaCopy.Effects.Emit
+import MediaCopy.Effects.Plugins (runPluginsNone)
 import MediaCopy.Effects.Run (runApp)
-import MediaCopy.Engine (readHistory, runJob)
+import MediaCopy.Engine (executePlan, planJob, readHistory)
 
 withTempTree :: String -> (FilePath -> IO a) -> IO a
 withTempTree label use = withSystemTempDirectory label use
@@ -45,7 +46,7 @@ osPathOf p = case encodeUtf p of
 
 runEngineIO :: JobSpec -> IO (Vector JobEvent)
 runEngineIO spec =
-  runJob "localhost" spec
+  (planJob spec >>= runPluginsNone . executePlan "localhost")
     & runEmitCollect
     & runApp
     & fmap snd

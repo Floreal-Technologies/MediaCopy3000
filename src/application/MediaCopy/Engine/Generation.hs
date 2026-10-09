@@ -1,6 +1,6 @@
 module MediaCopy.Engine.Generation
   ( writeGeneration
-  , requireNextGeneration
+  , requireGeneration
   ) where
 
 import Ascmhl.Build (appendGeneration, dirHash, directoryEntry, newManifest, orderedEntries, withFileMetadata, withManifestMetadata)
@@ -35,6 +35,13 @@ import MediaCopy.Effects.Hasher
 import MediaCopy.Engine.Violation (PlanViolation (..), orThrow)
 import MediaCopy.Mhl.Store
 
+requireGeneration :: (FileSystem :> es, Error PlanViolation :> es) => OsPath -> Int -> Eff es Chain
+requireGeneration folder number = do
+  found <- loadChain folder >>= orThrow . first (HistoryFaultAt folder)
+  let chain = fromMaybe (Chain {entries = V.empty}) found
+  orThrow (requireNextGeneration folder number chain)
+  pure chain
+
 writeGeneration
   :: (FileSystem :> es, Hasher :> es, Emit :> es, Error PlanViolation :> es, Reader JobFormat :> es, Reader CreatorInfo :> es, Reader Contributions :> es)
   => PlannedGeneration
@@ -44,9 +51,7 @@ writeGeneration
 writeGeneration planned patterns files = do
   creator <- ask @CreatorInfo
   let t = creator.creationDate
-  found <- loadChain planned.folder >>= orThrow . first (HistoryFaultAt planned.folder)
-  let chain = fromMaybe (Chain {entries = V.empty}) found
-  orThrow (requireNextGeneration planned.folder planned.number chain)
+  chain <- requireGeneration planned.folder planned.number
   hashedFiles <- traverse (\e -> orThrow (firstHash e) <&> \h -> (e.path, h)) files
   let tree = buildTree hashedFiles planned.directories
   fmt <- ask @JobFormat

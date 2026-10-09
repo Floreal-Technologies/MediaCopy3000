@@ -33,7 +33,7 @@ import MediaCopy.Domain.Plan (JobPlan (..), planBlocked)
 import MediaCopy.Domain.Plugin (PluginReport (..))
 import MediaCopy.Domain.PluginCatalog (CatalogChange)
 import MediaCopy.Effects.Emit (runEmitIO)
-import MediaCopy.Effects.Plugins (runPluginsSession)
+import MediaCopy.Effects.Plugins (runPluginsNone, runPluginsSession)
 import MediaCopy.Effects.Run (runApp)
 import MediaCopy.Engine
 import MediaCopy.EventLog (withEventLog)
@@ -42,10 +42,9 @@ import MediaCopy.Guard (guarded)
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Wording (noHistoryText)
 import MediaCopy.Model
-import MediaCopy.Plugin (PluginSetup (..), loadPluginSetup, planWithPlugins)
 import MediaCopy.Plugin.Catalog (applyChange, loadCatalog)
-import MediaCopy.Plugin.Grants (Ready)
-import MediaCopy.Plugin.Session (SessionConfig (..), Stage (RunStage), observe, withSession)
+import MediaCopy.Plugin.Grants (PluginSetup (..), Ready, loadPluginSetup)
+import MediaCopy.Plugin.Session (SessionConfig (..), Stage (RunStage), observe, planWithPlugins, withSession)
 import MediaCopy.Report (renderPlanText)
 
 data Production = Production
@@ -164,9 +163,17 @@ startJob site wording plan = do
             logLine (PluginReported report)
             unless (logOnly report) (sink (PluginReported report))
       if planBlocked plan
-        then runApp (runEmitIO (\ev -> logLine ev >> sink ev) (executePlan (T.pack host) plan))
+        then runApp (runEmitIO (\ev -> logLine ev >> sink ev) (runPluginsNone (executePlan (T.pack host) plan)))
         else withSession (pluginConfig wording setup.ready reported) RunStage plan $ \session ->
-          runApp (runEmitIO (\ev -> logLine ev >> observe session ev >> sink ev) (runPluginsSession session (executePlanWithPlugins (T.pack host) plan)))
+          runApp
+            ( runEmitIO
+                ( \ev -> do
+                    logLine ev
+                    observe session ev
+                    sink ev
+                )
+                (runPluginsSession session (executePlan (T.pack host) plan))
+            )
   writeIORef site.engine (Just (spec.jobId, worker))
   void $ async $ do
     outcome <- waitCatch worker

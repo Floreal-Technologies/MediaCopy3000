@@ -7,10 +7,11 @@ module MediaCopy.Plugin.Catalog
 import Ascmhl.Path (pathText)
 import Control.Applicative ((<|>))
 import Control.Exception (IOException, try)
-import Data.Aeson (Value (..), eitherDecodeStrict, object, toJSON)
+import Data.Aeson (Value (..), toJSON)
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.Aeson.Types (parseJSON, parseMaybe)
 import Data.Bifunctor (first)
 import Data.ByteString.Lazy qualified as LBS
 import Data.Either (fromRight, isRight)
@@ -21,8 +22,7 @@ import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8Lenient)
 import Data.Vector qualified as V
 import MediaCopy.Plugin.Manifest
-import System.Directory.OsPath (createDirectoryIfMissing, doesFileExist)
-import System.File.OsPath qualified as FileIO
+import System.Directory.OsPath (createDirectoryIfMissing)
 import System.OsPath (takeDirectory)
 
 import MediaCopy.Domain.Plugin (PluginRef (..))
@@ -30,8 +30,8 @@ import MediaCopy.Domain.PluginCatalog
 import MediaCopy.Effects.FileSystem (writeTextAtomically)
 import MediaCopy.Effects.Run (runApp)
 import MediaCopy.Plugin.Discovery
+import MediaCopy.Plugin.Fields (fieldValues)
 import MediaCopy.Plugin.Grants
-import MediaCopy.Plugin.Wire (fieldValues, slotsJson, slotsOf)
 
 -- $setup
 -- >>> import Data.Aeson (Value (..), object, (.=))
@@ -40,14 +40,12 @@ import MediaCopy.Plugin.Wire (fieldValues, slotsJson, slotsOf)
 
 loadCatalog :: IO PluginCatalog
 loadCatalog = do
-  found <- pluginRoots >>= discover
-  grantFile <- grantsPath >>= loadGrants
-  let grantMap = fromRight Map.empty grantFile
+  setup <- loadPluginSetup
   pure
     PluginCatalog
-      { entries = V.map (entryOf grantMap) found.installed
-      , rejected = V.map (\entry -> (pathText entry.folder, entry.reason)) found.rejected
-      , problem = either Just (const Nothing) grantFile
+      { entries = V.map (entryOf setup.grants) setup.installed
+      , rejected = V.map (\entry -> (pathText entry.folder, entry.reason)) setup.rejected
+      , problem = setup.grantsProblem
       }
 
 entryOf :: Map.Map PluginId Grant -> Installed -> PluginEntry
@@ -84,7 +82,7 @@ entryOf grantMap installed =
 
 settingView :: Map.Map Text Value -> Field -> FieldView
 settingView stored field = viewOf field $ case field.kind of
-  AuthorsField -> maybe NoValue AuthorList (Map.lookup field.key stored >>= slotsOf)
+  AuthorsField -> maybe NoValue AuthorList (Map.lookup field.key stored >>= parseMaybe parseJSON)
   _ -> maybe NoValue (Value . valueText) (Map.lookup field.key stored <|> field.defaultValue)
 
 viewOf :: Field -> FieldValue -> FieldView
@@ -109,15 +107,9 @@ valueText = \case
 applyChange :: CatalogChange -> IO (Either Text ())
 applyChange change = do
   path <- grantsPath
-  present <- doesFileExist path
-  current <-
-    if present
-      then do
-        bytes <- try @IOException (FileIO.readFile' path)
-        pure (either (Left . T.show) (first T.pack . eitherDecodeStrict) bytes)
-      else pure (Right (object []))
-  case current >>= editGrants change of
-    Left problem -> pure (Left ("plugins.json: " <> problem))
+  current <- readGrantsJson path
+  case current >>= first ("plugins.json: " <>) . editGrants change of
+    Left problem -> pure (Left problem)
     Right edited -> do
       written <- try @IOException $ do
         createDirectoryIfMissing True (takeDirectory path)
@@ -171,7 +163,7 @@ editGrants change = \case
             json = case setting of
               SettingText text -> String text
               SettingBool flag -> Bool flag
-              SettingAuthors slots -> slotsJson slots
+              SettingAuthors slots -> toJSON slots
         in KeyMap.insert "settings" (Object (KeyMap.insert (Key.fromText key) json settings)) entry
       ClearSetting _ key ->
         let settings = fromRight KeyMap.empty (objectAt "settings" entry)

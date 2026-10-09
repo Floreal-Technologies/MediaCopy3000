@@ -1,8 +1,6 @@
 module MediaCopy.Engine
-  ( runJob
-  , planJob
+  ( planJob
   , executePlan
-  , executePlanWithPlugins
   , readHistory
   ) where
 
@@ -19,7 +17,6 @@ import Data.Functor ((<&>))
 import Data.Int (Int64)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -45,7 +42,7 @@ import MediaCopy.Effects.Emit
 import MediaCopy.Effects.FileSystem
 import MediaCopy.Effects.Hasher
 import MediaCopy.Effects.Plugins
-import MediaCopy.Engine.Generation (requireNextGeneration, writeGeneration)
+import MediaCopy.Engine.Generation (requireGeneration, writeGeneration)
 import MediaCopy.Engine.Plan (planJob)
 import MediaCopy.Engine.Violation (PlanViolation (..), orThrow)
 import MediaCopy.Mhl.Store
@@ -85,26 +82,12 @@ data SealCheck = SealCheck
   , hash :: Hash
   }
 
-runJob
-  :: (FileSystem :> es, Hasher :> es, Time :> es, Emit :> es)
-  => Text
-  -> JobSpec
-  -> Eff es ()
-runJob hostname spec = planJob spec >>= executePlan hostname
-
 executePlan
-  :: (FileSystem :> es, Hasher :> es, Time :> es, Emit :> es)
-  => Text
-  -> JobPlan
-  -> Eff es ()
-executePlan hostname plan = runPluginsNone (executePlanWithPlugins hostname plan)
-
-executePlanWithPlugins
   :: (FileSystem :> es, Hasher :> es, Time :> es, Emit :> es, Plugins :> es)
   => Text
   -> JobPlan
   -> Eff es ()
-executePlanWithPlugins hostname plan
+executePlan hostname plan
   | planBlocked plan =
       V.toList (V.map (\finding -> display finding.code <> ": " <> finding.detail) (blockers plan))
         <> V.toList (V.map display (pluginBlockers plan.plugins))
@@ -321,11 +304,6 @@ runPlan hostname plan = do
   runReader creator $ runReader contributions $ runReader fmt $ case plan.execution of
     CopyInto copy -> runOffloadPlan plan copy
     RecordAt record -> runGenerationPlan plan record
-
-requireGeneration :: (FileSystem :> es, Error PlanViolation :> es) => OsPath -> Int -> Eff es ()
-requireGeneration folder number = do
-  found <- loadChain folder >>= orThrow . first (HistoryFaultAt folder)
-  orThrow (requireNextGeneration folder number (fromMaybe (Chain {entries = V.empty}) found))
 
 runOffloadPlan
   :: (Pass es)

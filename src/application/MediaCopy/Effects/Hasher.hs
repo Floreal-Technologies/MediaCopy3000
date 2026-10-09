@@ -45,7 +45,14 @@ feed :: (Hasher :> es) => HasherState -> ByteString -> Eff es ()
 feed st bs = getStaticRep >>= \HasherRep -> unsafeEff_ (unspent "feed" st >> st.feedH bs)
 
 finish :: (Hasher :> es) => HasherState -> Eff es Hash
-finish st = getStaticRep >>= \HasherRep -> unsafeEff_ (unspent "finish" st >> writeIORef st.spent True >> st.finishH)
+finish st =
+  getStaticRep >>= \HasherRep ->
+    unsafeEff_
+      ( do
+          unspent "finish" st
+          writeIORef st.spent True
+          st.finishH
+      )
 
 withHasher :: (Hasher :> es) => JobFormat -> (HasherState -> Eff es a) -> Eff es a
 withHasher fmt use = getStaticRep >>= \HasherRep -> unsafeEff_ (stateOf (formatAlgo fmt)) >>= use

@@ -13,6 +13,7 @@ module MediaCopy.Plugin.Manifest
     -- * Settings and job fields
   , Field (..)
   , FieldKind (..)
+  , AuthorSlot (..)
 
     -- * API version
   , apiMajor
@@ -20,9 +21,6 @@ module MediaCopy.Plugin.Manifest
 
     -- * Platform
   , platformKey
-
-    -- * Schemas without a type
-  , authorSlotSchema
   ) where
 
 import Control.Monad (unless, when)
@@ -260,20 +258,49 @@ instance JsonSchema Capability where
   defName = Just "capability"
   schema = enumOf @Capability
 
-authorSlotSchema :: Value
-authorSlotSchema =
-  object
-    [ "type" .= String "object"
-    , "required" .= ["role" :: Text]
-    , "properties"
-        .= object
-          [ "role" .= object ["type" .= String "string", "minLength" .= (1 :: Int)]
-          , "name" .= string
-          , "email" .= string
-          , "phone" .= string
-          ]
-    ]
-    & describe "One author slot of a setting of kind authors. In plugins.json, name, email and phone are the defaults. In initialize.settings, they are the merged values for the job, and slots with no name are removed."
+-- |
+-- >>> decode "[{\"role\": \"DIT\", \"name\": \"Jane Doe\"}, {\"role\": \"Camera operator\"}]" :: Maybe (V.Vector AuthorSlot)
+-- Just [AuthorSlot {role = "DIT", name = "Jane Doe", email = "", phone = ""},AuthorSlot {role = "Camera operator", name = "", email = "", phone = ""}]
+-- >>> decode "[{\"name\": \"Jane\"}]" :: Maybe (V.Vector AuthorSlot)
+-- Nothing
+-- >>> decode "[{\"role\": \"DIT\", \"email\": null}]" :: Maybe (V.Vector AuthorSlot)
+-- Nothing
+-- >>> toJSON (AuthorSlot "DIT" "Jane Doe" "" "")
+-- Object (fromList [("email",String ""),("name",String "Jane Doe"),("phone",String ""),("role",String "DIT")])
+data AuthorSlot = AuthorSlot
+  { role :: Text
+  , name :: Text
+  , email :: Text
+  , phone :: Text
+  }
+  deriving stock (Eq, Show)
+
+instance FromJSON AuthorSlot where
+  parseJSON = withObject "author slot" $ \o -> do
+    role <- o .: "role"
+    name <- o .:! "name" .!= ""
+    email <- o .:! "email" .!= ""
+    phone <- o .:! "phone" .!= ""
+    pure AuthorSlot {role, name, email, phone}
+
+instance ToJSON AuthorSlot where
+  toJSON slot = object ["role" .= slot.role, "name" .= slot.name, "email" .= slot.email, "phone" .= slot.phone]
+
+instance JsonSchema AuthorSlot where
+  defName = Just "authorSlot"
+  schema =
+    object
+      [ "type" .= String "object"
+      , "required" .= ["role" :: Text]
+      , "properties"
+          .= object
+            [ "role" .= object ["type" .= String "string", "minLength" .= (1 :: Int)]
+            , "name" .= string
+            , "email" .= string
+            , "phone" .= string
+            ]
+      ]
+      & describe "One author slot of a setting of kind authors. In plugins.json, name, email and phone are the defaults. In initialize.settings, they are the merged values for the job, and slots with no name are removed."
 
 instance JsonSchema Field where
   defName = Just "field"

@@ -4,6 +4,7 @@ module MediaCopy.Plugin.Session
   , Session
   , withSession
   , planHooks
+  , planWithPlugins
   , observe
   , fileVerified
   , finishInspections
@@ -41,6 +42,7 @@ import MediaCopy.Domain.Plan
 import MediaCopy.Domain.Plugin
 import MediaCopy.Guard (guarded)
 import MediaCopy.Plugin.Discovery (Installed (..))
+import MediaCopy.Plugin.Fields (fieldValues, mergeAuthorSettings)
 import MediaCopy.Plugin.Grants (Ready (..))
 import MediaCopy.Plugin.Process
 import MediaCopy.Plugin.Trace (TraceTarget (..))
@@ -288,7 +290,10 @@ runWorker config launch params ref mailbox queued skippedFiles broken started = 
               forM_ result.warnings (config.report . Warned . pluginSaid ref False)
               atomically (modifyTVar' queued (subtract 1))
               serve conn
-        Stop done -> stopSoftly conn >> atomically (putTMVar done ()) >> pure Nothing
+        Stop done -> do
+          stopSoftly conn
+          atomically (putTMVar done ())
+          pure Nothing
     giveUp reason = do
       firstTime <- atomically (tryPutTMVar started (Left reason))
       unless firstTime $ do
@@ -406,3 +411,8 @@ finishInspections session = do
 
 logFault :: Session -> Text -> IO ()
 logFault session problem = session.config.report (Warned PluginFinding {plugin = PluginRef {id = "mediacopy3000", name = "MediaCopy 3000"}, severity = Warning, about = Faulted (Unavailable problem)})
+
+planWithPlugins :: SessionConfig -> JobPlan -> IO JobPlan
+planWithPlugins config plan = do
+  pluginPlan <- withSession config PlanStage plan planHooks
+  pure (withPluginPlan pluginPlan plan)

@@ -35,6 +35,7 @@ import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan
 import MediaCopy.Effects.Emit
 import MediaCopy.Effects.Hasher
+import MediaCopy.Effects.Plugins (runPluginsNone)
 import MediaCopy.Engine
 import MediaCopy.Test.InMemoryFS
 
@@ -424,7 +425,7 @@ blockedPlanWritesNothing = do
   before <- readIORef ref
   plan <- runEff (runFileSystemMem ref (planJob (offloadOneDest [osp|/media-source|] [osp|/ssd1|])))
   planBlocked plan @?= True
-  (_, evs) <- runEff (runFileSystemMem ref (runHasher (runTime (runEmitCollect (executePlan "localhost" plan)))))
+  (_, evs) <- runEff (runFileSystemMem ref (runHasher (runTime (runEmitCollect (runPluginsNone (executePlan "localhost" plan))))))
   assertBool "expected JobFailed" (V.any isJobFailed evs)
   afterwards <- readIORef ref
   Map.keys afterwards.files @?= Map.keys before.files
@@ -453,7 +454,7 @@ offloadStepsMatchWhatItCopies = do
 
 runJobEvents :: IORef MemFS -> JobSpec -> IO (Vector JobEvent)
 runJobEvents ref spec = do
-  (_, evs) <- runEff (runFileSystemMem ref (runHasher (runTime (runEmitCollect (runJob "localhost" spec)))))
+  (_, evs) <- runEff (runFileSystemMem ref (runHasher (runTime (runEmitCollect (planJob spec >>= runPluginsNone . executePlan "localhost")))))
   pure evs
 
 runOffloadWith :: IORef MemFS -> List OsPath -> Maybe ExistingCopy -> IO (Vector JobEvent)
@@ -496,7 +497,7 @@ runCancelledAt status = do
         FileStatusChanged _ s | s == status -> throwIO CancelJob
         _ -> pure ()
       spec = offloadOneDest [osp|/media-source|] [osp|/ssd1|]
-  result <- try @CancelJob (runEff (runFileSystemMem ref (runHasher (runTime (runEmitIO sink (runJob "localhost" spec))))))
+  result <- try @CancelJob (runEff (runFileSystemMem ref (runHasher (runTime (runEmitIO sink (planJob spec >>= runPluginsNone . executePlan "localhost"))))))
   assertBool "expected the cancel to reach the caller" (either (const True) (const False) result)
   readIORef ref
 

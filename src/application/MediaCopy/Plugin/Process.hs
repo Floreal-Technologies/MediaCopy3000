@@ -165,7 +165,10 @@ readErrors launch conn next =
   next >>= \case
     Closed -> pure ()
     TooLong -> tooLong conn "standard error"
-    Line line -> conn.tracer.write ErrorOutput line >> launch.onLog ("stderr: " <> decodeUtf8Lenient line) >> readErrors launch conn next
+    Line line -> do
+      conn.tracer.write ErrorOutput line
+      launch.onLog ("stderr: " <> decodeUtf8Lenient line)
+      readErrors launch conn next
 
 tooLong :: Connection -> Text -> IO ()
 tooLong conn stream = do

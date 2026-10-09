@@ -69,7 +69,10 @@ openTracer target pid complain = do
               written <- try @IOException (BS.hPut h (LBS.toStrict (encode (traceRecord now direction line)) <> "\n") >> hFlush h)
               case written of
                 Right () -> pure (Just h)
-                Left e -> complain ("the trace cannot be written: " <> T.show e) >> closeQuietly h >> pure Nothing
+                Left e -> do
+                  complain ("the trace cannot be written: " <> T.show e)
+                  closeQuietly h
+                  pure Nothing
           close = modifyMVar_ state (\open -> mapM_ closeQuietly open >> pure Nothing)
       pure Tracer {write, close}
 

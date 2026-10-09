@@ -2,7 +2,6 @@ module MediaCopy.Domain.Destination
   ( TargetFacts (..)
   , Classified (..)
   , classify
-  , modeFor
   , neededPerDest
   , targetFinding
   , writesFor

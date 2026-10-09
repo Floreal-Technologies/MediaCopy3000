@@ -9,6 +9,7 @@ import Data.GI.Base (AttrOp ((:=)), new, on, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Vector (Vector)
 import GI.Adw qualified as Adw
@@ -28,10 +29,9 @@ import MediaCopy.Gtk.Widgets.PlanSheet (newPlanSheet, renderPlanSheet)
 import MediaCopy.Gtk.Widgets.Preferences (Preferences (..), newPreferences)
 import MediaCopy.Interface.Command (mainMenuLabel)
 import MediaCopy.Interface.Command qualified as Command
+import MediaCopy.Interface.Palette (paletteView)
 import MediaCopy.Interface.Theme (Appearance, PaletteMode, ThemeSection)
 import MediaCopy.Interface.Translation
-import MediaCopy.Interface.View.Palette (paletteView)
-import MediaCopy.Interface.View.Sidebar (ContentPage (..), SidebarView (..), sidebarView)
 import MediaCopy.Model (Chrome (..), JobEntry (..), Model (..), UiMessage (..), commandEnabled, selectedEntry)
 
 data Widgets = Widgets
@@ -70,10 +70,9 @@ buildWidgets app applyTheme wording lightSections darkSections dispatch = do
   paintPalette <- newCommandPalette window actions.accelLabel dispatch
   let render current = do
         renderCell themeCell (current.appearance, current.desktopBase)
-        let sidebarNow = sidebarView current
-            selected = selectedEntry current
-        renderSidebar sidebar current sidebarNow
-        Gtk.stackSetVisibleChildName contentStack (contentPageName sidebarNow.page)
+        let selected = selectedEntry current
+        renderSidebar sidebar current (if isJust selected then current.selected else Nothing)
+        Gtk.stackSetVisibleChildName contentStack (if isJust selected then "detail" else "empty")
         detail.render current selected
         actions.render current
         renderOffloadDialog offloadDialog current
@@ -172,8 +171,8 @@ newSidebar dispatch = do
   (paintSelection, quietly) <- bindQuietly (listSelection list jobIdOfRow rowOf) (dispatch . SelectJob)
   pure (Sidebar {list, rows, paintSelection, quietly}, page)
 
-renderSidebar :: Sidebar -> Model -> SidebarView -> IO ()
-renderSidebar sidebar current view = sidebar.quietly $ do
+renderSidebar :: Sidebar -> Model -> Maybe JobId -> IO ()
+renderSidebar sidebar current selected = sidebar.quietly $ do
   existing <- readIORef sidebar.rows
   let gone = Map.difference existing current.jobs
       kept = Map.intersectionWith (,) existing current.jobs
@@ -183,9 +182,4 @@ renderSidebar sidebar current view = sidebar.quietly $ do
   traverse_ (\jobRow -> Gtk.listBoxAppend sidebar.list jobRow.row) added
   writeIORef sidebar.rows (Map.union (Map.map fst kept) added)
   traverse_ (\(jobRow, entry) -> jobRow.update current.wording current.now entry.state) kept
-  sidebar.paintSelection view.selected
-
-contentPageName :: ContentPage -> Text
-contentPageName = \case
-  EmptyPage -> "empty"
-  DetailPage -> "detail"
+  sidebar.paintSelection selected

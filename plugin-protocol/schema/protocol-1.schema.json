@@ -175,6 +175,10 @@
         "kind"
       ],
       "properties": {
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
         "default": {},
         "key": {
           "type": "string"
@@ -197,10 +201,6 @@
           "items": {
             "type": "string"
           }
-        },
-        "required": {
-          "type": "boolean",
-          "default": false
         }
       },
       "allOf": [
@@ -277,6 +277,9 @@
         "detail"
       ],
       "properties": {
+        "title": {
+          "type": "string"
+        },
         "detail": {
           "type": "string"
         },
@@ -285,9 +288,6 @@
         },
         "severity": {
           "$ref": "#/$defs/severity"
-        },
-        "title": {
-          "type": "string"
         }
       }
     },
@@ -519,6 +519,11 @@
         "capabilities"
       ],
       "properties": {
+        "description": {
+          "description": "One or two short sentences that tell what the plug-in does. The preferences page shows it under the name.",
+          "type": "string",
+          "pattern": "\\S"
+        },
         "api": {
           "const": 1
         },
@@ -535,11 +540,6 @@
               "manifest.write"
             ]
           }
-        },
-        "description": {
-          "description": "One or two short sentences that tell what the plug-in does. The preferences page shows it under the name.",
-          "type": "string",
-          "pattern": "\\S"
         },
         "executable": {
           "description": "Keys: linux-x86_64, linux-aarch64, macos-aarch64, macos-x86_64, windows-x86_64. Values: paths relative to the plug-in folder. A path does not start with '/' or '\\', holds no ':', and has no '..' part. One bad path, for any platform, rejects the plug-in on every platform.",
