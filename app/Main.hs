@@ -28,10 +28,9 @@ import MediaCopy.Effects.Run (runApp)
 import MediaCopy.Engine (planJob)
 import MediaCopy.Gtk.Runtime qualified as Runtime
 import MediaCopy.Gtk.Screenshot (Startup (..))
-import MediaCopy.Plugin (PluginSetup (..), loadPluginSetup, planWithPlugins)
 import MediaCopy.Plugin.Discovery (Installed (..), Rejected (..))
-import MediaCopy.Plugin.Grants (Inactive (..))
-import MediaCopy.Plugin.Session (SessionConfig (..))
+import MediaCopy.Plugin.Grants (Inactive (..), PluginSetup (..), loadPluginSetup)
+import MediaCopy.Plugin.Session (SessionConfig (..), planWithPlugins)
 import MediaCopy.Report (renderPlanText)
 
 main :: IO ()

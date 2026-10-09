@@ -44,7 +44,8 @@ import MediaCopy.Domain.Preflight
 import MediaCopy.Effects.Emit (Emit, runEmitCollect)
 import MediaCopy.Effects.FileSystem (FileSystem)
 import MediaCopy.Effects.Hasher (Hasher, runHasher)
-import MediaCopy.Engine (executePlan, planJob, runJob)
+import MediaCopy.Effects.Plugins (runPluginsNone)
+import MediaCopy.Engine (executePlan, planJob)
 import MediaCopy.Test.InMemoryFS
 
 tests :: TestTree
@@ -488,7 +489,7 @@ planAndEngineAgree = withTests 400 $ property $ do
   cover 0.5 "all reuse with a recorded original" (allReuseWithRecordedOriginal scenario)
   ref <- evalIO (newIORef (seedScenario scenario))
   when scenario.sealed $ do
-    (_, sealEvents) <- evalIO (runEngine ref (runJob "localhost" (sealSpec mediaSource)))
+    (_, sealEvents) <- evalIO (runEngine ref (planJob (sealSpec mediaSource) >>= runPluginsNone . executePlan "localhost"))
     annotateShow sealEvents
     lastEvent sealEvents === Just (JobFinished AllOk)
   let parents = map (.parent) scenario.destinations
@@ -498,7 +499,7 @@ planAndEngineAgree = withTests 400 $ property $ do
   annotateShow plan.steps
   assert (not (planBlocked plan))
   when scenario.sealed (assert (V.any isRecordedCopy plan.steps))
-  (_, evs) <- evalIO (runEngine ref (executePlan "localhost" plan))
+  (_, evs) <- evalIO (runEngine ref (runPluginsNone (executePlan "localhost" plan)))
   annotateShow evs
   lastProgress evs === Just (plan.bytesToRead + rewriteBytes scenario)
   lastEvent evs === Just (JobFinished AllOk)

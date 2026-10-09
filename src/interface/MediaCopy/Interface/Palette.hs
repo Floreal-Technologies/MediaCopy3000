@@ -4,7 +4,7 @@ import Data.Char (GeneralCategory (NonSpacingMark), generalCategory, toLower)
 import Data.Containers.ListUtils (nubOrd)
 import Data.Function ((&))
 import Data.List (List, sortOn)
-import Data.Maybe (catMaybes, listToMaybe, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, isJust, listToMaybe, mapMaybe)
 import Data.Ord (Down (..))
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -14,6 +14,10 @@ import Data.Vector qualified as V
 
 import MediaCopy.Interface.Command
 import MediaCopy.Interface.Translation (Wording)
+
+-- $setup
+-- >>> import MediaCopy.Interface.Translation (SupportedLanguage (..))
+-- >>> import MediaCopy.Interface.Translation.Embedded (embeddedWording)
 
 data Target = OnLabel | OnId
   deriving stock (Eq, Show)
@@ -86,6 +90,7 @@ data PaletteRow = PaletteRow
   { command :: Command
   , match :: Match
   , enabled :: Bool
+  , label :: Text
   }
   deriving stock (Eq, Show)
 
@@ -93,7 +98,32 @@ paletteRows :: (Command -> Bool) -> Wording -> Maybe Text -> List PaletteRow
 paletteRows enabledNow wording = \case
   Nothing -> []
   Just query ->
-    [ PaletteRow {command, match, enabled = enabledNow command}
+    [ PaletteRow {command, match, enabled = enabledNow command, label = commandLabel wording command}
     | (command, match) <- rankCommands wording query
     , command /= CommandPalette
     ]
+
+data PaletteView = PaletteView
+  { open :: Bool
+  , query :: Text
+  , items :: List PaletteRow
+  , placeholder :: Text
+  , noMatch :: Text
+  }
+  deriving stock (Eq, Show)
+
+-- |
+-- >>> let view = paletteView (embeddedWording English) (const True) (Just "pref")
+-- >>> (view.open, view.query, map (\row -> row.label) view.items)
+-- (True,"pref",["Preferences"])
+-- >>> (paletteView (embeddedWording English) (const True) Nothing).open
+-- False
+paletteView :: Wording -> (Command -> Bool) -> Maybe Text -> PaletteView
+paletteView wording enabledNow palette =
+  PaletteView
+    { open = isJust palette
+    , query = fromMaybe "" palette
+    , items = paletteRows enabledNow wording palette
+    , placeholder = palettePlaceholder wording
+    , noMatch = paletteNoMatch wording
+    }

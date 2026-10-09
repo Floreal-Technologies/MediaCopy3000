@@ -71,7 +71,8 @@ protocolSchema
         , def @InspectFileResult
         , def @Progress
         , def @LogLine
-        , [("authorSlot", authorSlotSchema), ("jobKind", jobKindSchema), ("hashAlgo", hashAlgoSchema)]
+        , def @AuthorSlot
+        , [("jobKind", jobKindSchema), ("hashAlgo", hashAlgoSchema)]
         ]
 
 def :: forall a. (JsonSchema a) => [(Text, Value)]

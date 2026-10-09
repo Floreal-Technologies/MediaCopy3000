@@ -103,9 +103,9 @@ library application
     MediaCopy.EventLog
     MediaCopy.Guard
     MediaCopy.Mhl.Store
-    MediaCopy.Plugin
     MediaCopy.Plugin.Catalog
     MediaCopy.Plugin.Discovery
+    MediaCopy.Plugin.Fields
     MediaCopy.Plugin.Grants
     MediaCopy.Plugin.Process
     MediaCopy.Plugin.Process.Native
@@ -169,11 +169,9 @@ library interface
     MediaCopy.Interface.Translation.Splice
     MediaCopy.Interface.View.JobDetail
     MediaCopy.Interface.View.JobRow
-    MediaCopy.Interface.View.Palette
     MediaCopy.Interface.View.PlanSheet
     MediaCopy.Interface.View.Plugins
     MediaCopy.Interface.View.Row
-    MediaCopy.Interface.View.Sidebar
     MediaCopy.Interface.Wording
     MediaCopy.Model
     MediaCopy.Report

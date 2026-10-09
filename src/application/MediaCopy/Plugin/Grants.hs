@@ -1,7 +1,9 @@
 module MediaCopy.Plugin.Grants
   ( Grant (..)
   , grantsPath
-  , loadGrants
+  , readGrantsJson
+  , PluginSetup (..)
+  , loadPluginSetup
   , Ready (..)
   , Inactive (..)
   , activate
@@ -9,6 +11,9 @@ module MediaCopy.Plugin.Grants
 
 import Control.Exception (IOException, try)
 import Data.Aeson
+import Data.Aeson.Types (parseEither)
+import Data.Bifunctor (first)
+import Data.Either (fromRight, partitionEithers)
 import Data.Foldable (fold, foldlM)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -17,6 +22,7 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Vector (Vector)
 import Data.Vector qualified as V
 import MediaCopy.Plugin.Manifest
 import System.Directory.OsPath (XdgDirectory (XdgConfig), doesFileExist, getHomeDirectory, getXdgDirectory)
@@ -24,7 +30,7 @@ import System.File.OsPath qualified as FileIO
 import System.Info (os)
 import System.OsPath (OsPath, encodeUtf, (</>))
 
-import MediaCopy.Plugin.Discovery (Installed (..))
+import MediaCopy.Plugin.Discovery (Discovery (..), Installed (..), Rejected, discover, pluginRoots)
 
 -- $setup
 -- >>> import Data.Map.Strict qualified as Map
@@ -68,17 +74,48 @@ grantsPath = do
     _ -> encodeUtf "mediacopy3000" >>= getXdgDirectory XdgConfig
   (folder </>) <$> encodeUtf "plugins.json"
 
-loadGrants :: OsPath -> IO (Either Text (Map PluginId Grant))
-loadGrants path = do
+readGrantsJson :: OsPath -> IO (Either Text Value)
+readGrantsJson path = do
   present <- doesFileExist path
   if not present
-    then pure (Right Map.empty)
+    then pure (Right (object []))
     else
       try @IOException (FileIO.readFile' path) >>= \case
         Left e -> pure (Left ("plugins.json cannot be read: " <> T.show e))
-        Right bytes -> pure $ case eitherDecodeStrict bytes of
-          Left problem -> Left ("plugins.json: " <> T.pack problem)
-          Right (GrantFile entries) -> Right entries
+        Right bytes -> pure (first (\problem -> "plugins.json: " <> T.pack problem) (eitherDecodeStrict bytes))
+
+loadGrants :: OsPath -> IO (Either Text (Map PluginId Grant))
+loadGrants path = do
+  json <- readGrantsJson path
+  pure $ do
+    value <- json
+    GrantFile entries <- first (\problem -> "plugins.json: " <> T.pack problem) (parseEither parseJSON value)
+    Right entries
+
+data PluginSetup = PluginSetup
+  { installed :: Vector Installed
+  , grants :: Map PluginId Grant
+  , ready :: Vector Ready
+  , inactive :: Vector Inactive
+  , rejected :: Vector Rejected
+  , grantsProblem :: Maybe Text
+  }
+
+loadPluginSetup :: IO PluginSetup
+loadPluginSetup = do
+  found <- pluginRoots >>= discover
+  grantFile <- grantsPath >>= loadGrants
+  let grants = fromRight Map.empty grantFile
+      (inactive, ready) = partitionEithers (map (activate grants) (V.toList found.installed))
+  pure
+    PluginSetup
+      { installed = found.installed
+      , grants
+      , ready = V.fromList ready
+      , inactive = V.fromList inactive
+      , rejected = found.rejected
+      , grantsProblem = either Just (const Nothing) grantFile
+      }
 
 newtype GrantFile = GrantFile (Map PluginId Grant)
 

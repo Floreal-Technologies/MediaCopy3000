@@ -6,6 +6,8 @@ module MediaCopy.Domain.Plugin
   , PluginFinding (..)
   , Contributions (..)
   , noContributions
+  , mergeContributions
+  , joinFragments
   , PluginPlan (..)
   , noPluginPlan
   , pluginBlockers
@@ -20,7 +22,8 @@ module MediaCopy.Domain.Plugin
 
 import Ascmhl.Hash (Hash)
 import Ascmhl.Path (RelPath)
-import Ascmhl.Types (Author, Fragment)
+import Ascmhl.Types (Author, Fragment (..))
+import Control.Applicative ((<|>))
 import Data.Char (GeneralCategory (..), generalCategory, isControl)
 import Data.Int (Int64)
 import Data.Map.Strict (Map)
@@ -99,6 +102,22 @@ data Contributions = Contributions
 
 noContributions :: Contributions
 noContributions = Contributions {authors = V.empty, fileMetadata = Map.empty, manifestMetadata = Nothing, contributors = V.empty}
+
+mergeContributions :: Vector Contributions -> Contributions
+mergeContributions = foldl' merge noContributions
+  where
+    merge acc next =
+      Contributions
+        { authors = acc.authors <> next.authors
+        , fileMetadata = Map.unionWith joinFragments acc.fileMetadata next.fileMetadata
+        , manifestMetadata = case (acc.manifestMetadata, next.manifestMetadata) of
+            (Just earlier, Just later) -> Just (joinFragments earlier later)
+            (earlier, later) -> earlier <|> later
+        , contributors = acc.contributors <> next.contributors
+        }
+
+joinFragments :: Fragment -> Fragment -> Fragment
+joinFragments (Fragment earlier) (Fragment later) = Fragment (earlier <> later)
 
 data PluginPlan = PluginPlan
   { active :: Vector PluginRef

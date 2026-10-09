@@ -21,8 +21,7 @@ import MediaCopy.Gtk.Widgets.Bind (bind, closing, dialog, searchText)
 import MediaCopy.Gtk.Widgets.Common hiding (newRow)
 import MediaCopy.Interface.Command (commandId)
 import MediaCopy.Interface.Command qualified as Command
-import MediaCopy.Interface.Palette (Match (..), PaletteRow (..), Target (..))
-import MediaCopy.Interface.View.Palette (PaletteItem (..), PaletteView (..))
+import MediaCopy.Interface.Palette (Match (..), PaletteRow (..), PaletteView (..), Target (..))
 import MediaCopy.Model (UiMessage (..))
 
 data Parts = Parts
@@ -74,7 +73,7 @@ newCommandPalette window accelLabel dispatch = do
     paintQuery view.query
     paintOpen view.open
 
-paintItems :: Parts -> (Command.Command -> Maybe Text) -> (List PaletteItem, Text, Text) -> IO ()
+paintItems :: Parts -> (Command.Command -> Maybe Text) -> (List PaletteRow, Text, Text) -> IO ()
 paintItems parts accelLabel (items, placeholder, noMatch) = do
   set parts.entry [#placeholderText := placeholder]
   set parts.placeholder [#label := noMatch]
@@ -84,24 +83,24 @@ paintItems parts accelLabel (items, placeholder, noMatch) = do
   writeIORef parts.shown built
   V.forM_ (V.take 1 built) (\(row, _) -> Gtk.listBoxSelectRow parts.list (Just row))
 
-newRow :: (Command.Command -> Maybe Text) -> PaletteItem -> IO (Adw.ActionRow, Command.Command)
+newRow :: (Command.Command -> Maybe Text) -> PaletteRow -> IO (Adw.ActionRow, Command.Command)
 newRow accelLabel item = do
-  title <- case item.row.match.target of
-    OnLabel -> emphasize item.row.match.hits item.label
+  title <- case item.match.target of
+    OnLabel -> emphasize item.match.hits item.label
     OnId -> GLib.markupEscapeText item.label (-1)
   built <-
     new
       Adw.ActionRow
       [ #useMarkup := True
       , #title := title
-      , #subtitle := commandId item.row.command
+      , #subtitle := commandId item.command
       , #activatable := True
-      , #sensitive := item.row.enabled
+      , #sensitive := item.enabled
       ]
-  forM_ (accelLabel item.row.command) $ \text -> do
+  forM_ (accelLabel item.command) $ \text -> do
     suffix <- newLabel text [] ["dim-label"]
     Adw.actionRowAddSuffix built suffix
-  pure (built, item.row.command)
+  pure (built, item.command)
 
 emphasize :: List Int -> Text -> IO Text
 emphasize hits label = T.concat <$> traverse piece (zip [0 ..] (T.unpack label))

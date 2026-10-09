@@ -23,7 +23,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Vector (Vector)
 import Data.Vector qualified as V
-import MediaCopy.Plugin.Manifest (Capability)
+import MediaCopy.Plugin.Manifest (AuthorSlot (..), Capability)
 
 import MediaCopy.Domain.Plugin (PluginRef (..))
 
@@ -31,14 +31,6 @@ data Answer = Granted | Declined | Unanswered
   deriving stock (Bounded, Enum, Eq, Show)
 
 data FieldShape = TextShape | EmailShape | BoolShape | ChoiceShape (Vector Text) | PathShape | AuthorsShape
-  deriving stock (Eq, Show)
-
-data AuthorSlot = AuthorSlot
-  { role :: Text
-  , name :: Text
-  , email :: Text
-  , phone :: Text
-  }
   deriving stock (Eq, Show)
 
 data FieldValue = NoValue | Value Text | AuthorList (Vector AuthorSlot)

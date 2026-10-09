@@ -4,7 +4,7 @@ module MediaCopy.Credits
   ) where
 
 import Data.Aeson (Value (..))
-import Data.Aeson.KeyMap qualified as KeyMap
+import Data.Aeson.Types (parseJSON, parseMaybe)
 import Data.Char (isControl)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -12,6 +12,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Vector (Vector)
 import Data.Vector qualified as V
+import MediaCopy.Plugin.Manifest (AuthorSlot (..))
 import MediaCopy.Plugin.Protocol (Author (..), ContributeResult (..))
 
 -- $setup
@@ -31,15 +32,14 @@ import MediaCopy.Plugin.Protocol (Author (..), ContributeResult (..))
 -- []
 slotsOf :: Map Text Value -> Vector Author
 slotsOf settings = case Map.lookup "authors" settings of
-  Just (Array found) -> V.mapMaybe slotOf found
+  Just (Array found) -> V.mapMaybe (\value -> parseMaybe parseJSON value >>= authorOf) found
   _ -> V.empty
   where
-    slotOf = \case
-      Object slot | Just name <- text "name" slot -> Just Author {name, email = text "email" slot, phone = text "phone" slot, role = text "role" slot}
-      _ -> Nothing
-    text key slot = case KeyMap.lookup key slot of
-      Just (String raw) | cleaned <- clean raw, not (T.null cleaned) -> Just cleaned
-      _ -> Nothing
+    authorOf :: AuthorSlot -> Maybe Author
+    authorOf slot = do
+      name <- present slot.name
+      Just Author {name, email = present slot.email, phone = present slot.phone, role = present slot.role}
+    present raw = let cleaned = clean raw in if T.null cleaned then Nothing else Just cleaned
 
 clean :: Text -> Text
 clean = T.unwords . T.words . T.map (\c -> if isControl c then ' ' else c) . T.filter xmlChar

@@ -21,24 +21,20 @@ module MediaCopy.Plugin.JsonSchema
   ) where
 
 import Data.Aeson
+import Data.Aeson.Encode.Pretty (Config (..), Indent (Spaces), defConfig, encodePretty', keyOrder)
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString.Lazy (ByteString)
-import Data.Foldable (toList)
 import Data.Int (Int64)
 import Data.Kind (Type)
-import Data.List (elemIndex, sortOn)
 import Data.Map.Strict (Map)
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Lazy.Encoding (decodeUtf8, encodeUtf8)
 import Data.Vector (Vector)
 import GHC.Generics
 import GHC.TypeLits (KnownSymbol, symbolVal)
-import Prettyprinter (Doc, braces, brackets, comma, defaultLayoutOptions, hardline, layoutPretty, nest, pretty, punctuate, vsep)
-import Prettyprinter.Render.Text (renderLazy)
 
 -- | A type that has a JSON Schema. A type with a name goes into @$defs@, and the other schemas refer to it.
 class JsonSchema a where
@@ -149,30 +145,9 @@ adjust key f = \case
   other -> error ("the schema has no " <> show key <> ": " <> show other)
 
 render :: Value -> ByteString
-render document = encodeUtf8 (renderLazy (layoutPretty defaultLayoutOptions (go Schema document <> hardline)))
-  where
-    go :: Context -> Value -> Doc ()
-    go context = \case
-      Object o
-        | KeyMap.null o -> "{}"
-        | otherwise -> block braces [json (Key.toText key) <> ": " <> go (inside context key) value | (key, value) <- sortOn (rank context . fst) (KeyMap.toList o)]
-      Array items
-        | null items -> "[]"
-        | otherwise -> block brackets (map (go context) (toList items))
-      scalar -> json scalar
-    block enclose items = enclose (nest 2 (hardline <> vsep (punctuate comma items)) <> hardline)
-    json :: (ToJSON a) => a -> Doc ()
-    json = pretty . decodeUtf8 . encode
-    rank context key = case context of
-      Schema -> (fromMaybe (length keywords) (elemIndex key keywords), key)
-      Names -> (0, key)
-    inside context key = case context of
-      Names -> Schema
-      Schema -> if key `elem` ["properties", "$defs", "x-methods", "x-notifications"] then Names else Schema
+render = encodePretty' defConfig {confIndent = Spaces 2, confCompare = keyOrder keywords <> compare, confTrailingNewline = True}
 
-data Context = Schema | Names
-
-keywords :: [Key]
+keywords :: [Text]
 keywords =
   [ "$schema"
   , "$id"
