@@ -4,6 +4,7 @@ module MediaCopy.Gtk.Widgets.PluginsPage
   ) where
 
 import Control.Monad (forM, forM_, void, when, zipWithM_)
+import Data.Function ((&))
 import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Text (Text)
@@ -147,7 +148,7 @@ entryRows groups dispatch entry = do
   row <- new Adw.ActionRow [#useMarkup := False, #activatable := True]
   set row [#title := entry.plugin.name, #subtitle := entrySubtitle entry]
   enabledSwitch <- new Gtk.Switch [#valign := Gtk.AlignCenter, #active := entry.enabled]
-  paintEnabled <- bind (switch enabledSwitch) (dispatch . ChangePlugin . CatalogChange pluginId . SetEnabled)
+  paintEnabled <- bind (switch enabledSwitch) (\flag -> flag & SetEnabled & CatalogChange pluginId & ChangePlugin & dispatch)
   chevron <- new Gtk.Image [#iconName := "go-next-symbolic"]
   Adw.actionRowAddSuffix row enabledSwitch
   Adw.actionRowAddSuffix row chevron

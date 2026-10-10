@@ -5,6 +5,8 @@ module MediaCopy.Gtk.View
 
 import Control.Monad (forM_, void)
 import Data.Foldable (traverse_)
+import Data.Function ((&))
+import Data.Functor ((<&>))
 import Data.GI.Base (AttrOp ((:=)), new, on, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Map.Strict (Map)
@@ -23,7 +25,7 @@ import MediaCopy.Gtk.Widgets.CloseConfirm (newCloseConfirm)
 import MediaCopy.Gtk.Widgets.CommandPalette (newCommandPalette)
 import MediaCopy.Gtk.Widgets.Common (Cell, flatNamed, newCell, renderCell)
 import MediaCopy.Gtk.Widgets.JobDetail (JobDetail (..), newJobDetail)
-import MediaCopy.Gtk.Widgets.JobRow (JobRow (..), jobIdOfRow, newJobRow)
+import MediaCopy.Gtk.Widgets.JobRow (JobRow (..), newJobRow)
 import MediaCopy.Gtk.Widgets.OffloadDialog (newOffloadDialog, renderOffloadDialog)
 import MediaCopy.Gtk.Widgets.PlanSheet (newPlanSheet, renderPlanSheet)
 import MediaCopy.Gtk.Widgets.Preferences (Preferences (..), newPreferences)
@@ -168,7 +170,8 @@ newSidebar dispatch = do
   set page [#widthRequest := 260]
   rows <- newIORef Map.empty
   let rowOf jobId = fmap (\jobRow -> jobRow.row) . Map.lookup jobId <$> readIORef rows
-  (paintSelection, quietly) <- bindQuietly (listSelection list jobIdOfRow rowOf) (dispatch . SelectJob)
+      keyOf listRow = readIORef rows <&> \jobs -> jobs & Map.filter (\jobRow -> jobRow.row == listRow) & Map.lookupMin & fmap fst
+  (paintSelection, quietly) <- bindQuietly (listSelection list keyOf rowOf) (dispatch . SelectJob)
   pure (Sidebar {list, rows, paintSelection, quietly}, page)
 
 renderSidebar :: Sidebar -> Model -> Maybe JobId -> IO ()

@@ -268,7 +268,7 @@ updateUi msg model = case msg of
   CancelClose -> (model {closeConfirm = False}, [])
   DismissToast -> (model {toast = Nothing}, [])
   ChangePlugin change -> (model, [ApplyChange change])
-  PickPluginPath pluginId key -> (model, [OpenFileDialog (Ui . ChangePlugin . CatalogChange pluginId . SetSetting key . SettingText . pathText)])
+  PickPluginPath pluginId key -> (model, [OpenFileDialog (\path -> pathText path & SettingText & SetSetting key & CatalogChange pluginId & ChangePlugin & Ui)])
   OpenPluginFolder folder -> (model, [ShowFolder folder])
   ReloadPlugins -> (model, [LoadCatalog])
   SetJobField pluginId key value -> setJobField pluginId key value model

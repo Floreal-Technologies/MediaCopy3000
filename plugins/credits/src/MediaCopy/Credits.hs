@@ -6,6 +6,7 @@ module MediaCopy.Credits
 import Data.Aeson (Value (..))
 import Data.Aeson.Types (parseJSON, parseMaybe)
 import Data.Char (isControl)
+import Data.Function ((&))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
@@ -42,7 +43,7 @@ slotsOf settings = case Map.lookup "authors" settings of
     present raw = let cleaned = clean raw in if T.null cleaned then Nothing else Just cleaned
 
 clean :: Text -> Text
-clean = T.unwords . T.words . T.map (\c -> if isControl c then ' ' else c) . T.filter xmlChar
+clean text = text & T.filter xmlChar & T.map (\c -> if isControl c then ' ' else c) & T.words & T.unwords
   where
     xmlChar c = c `notElem` ['\xFFFE', '\xFFFF']
 

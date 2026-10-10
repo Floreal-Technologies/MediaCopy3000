@@ -1,13 +1,9 @@
 module MediaCopy.Gtk.Widgets.JobRow
   ( JobRow (..)
   , newJobRow
-  , jobIdOfRow
   ) where
 
 import Data.GI.Base (AttrOp ((:=)), new, set)
-import Data.Text (Text)
-import Data.Text qualified as T
-import Data.Text.Read qualified as TR
 import Data.Time (UTCTime)
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
@@ -17,19 +13,6 @@ import MediaCopy.Gtk.Widgets.Common
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.View.JobRow (JobRowView (..), jobRowView)
 import MediaCopy.Interface.Wording
-
-rowName :: JobId -> Text
-rowName (JobId n) = "job-" <> T.show n
-
-jobIdOfRow :: Gtk.ListBoxRow -> IO (Maybe JobId)
-jobIdOfRow listRow = do
-  name <- Gtk.widgetGetName listRow
-  pure (T.stripPrefix "job-" name >>= \digits -> readJobId digits)
-
-readJobId :: Text -> Maybe JobId
-readJobId digits = case TR.decimal digits of
-  Right (n, rest) | T.null rest -> Just (JobId n)
-  _ -> Nothing
 
 data JobRow = JobRow
   { row :: Gtk.ListBoxRow
@@ -51,7 +34,7 @@ newJobRow wording state = do
   body <- paddedBox Gtk.OrientationHorizontal 10 6
   Gtk.boxAppend body icon
   Gtk.boxAppend body lines'
-  row <- new Gtk.ListBoxRow [#child := body, #name := rowName state.spec.jobId]
+  row <- new Gtk.ListBoxRow [#child := body]
   cell <- newCell $ \view -> do
     set icon [#iconName := view.icon]
     set name [#label := view.label]
