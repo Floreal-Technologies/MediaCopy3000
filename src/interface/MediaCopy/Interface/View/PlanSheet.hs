@@ -22,7 +22,6 @@ import Data.Vector qualified as V
 import System.OsPath (takeFileName)
 
 import MediaCopy.Domain.Job
-import MediaCopy.Domain.JobFormat (formatAlgo)
 import MediaCopy.Domain.Plan
 import MediaCopy.Domain.Plugin
 import MediaCopy.Interface.Translation (Wording)
@@ -155,7 +154,7 @@ summaryOf wording plan =
 formatText :: JobPlan -> Text
 formatText plan = case plan.format of
   Nothing -> "not settled"
-  Just fmt -> display (formatAlgo fmt) <> " · originals: " <> plan.originsUsed
+  Just fmt -> display fmt <> " · originals: " <> plan.originsUsed
 
 stepCounts :: Wording -> JobPlan -> Text
 stepCounts wording plan =

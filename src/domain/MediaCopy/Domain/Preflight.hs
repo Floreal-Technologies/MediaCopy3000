@@ -34,7 +34,7 @@ import MediaCopy.Domain.Destination
 import MediaCopy.Domain.FileSystem (Tree (..), ignorePatterns)
 import MediaCopy.Domain.History
 import MediaCopy.Domain.Job
-import MediaCopy.Domain.JobFormat (FormatError (..), JobFormat, settleFormat)
+import MediaCopy.Domain.JobFormat (FormatError (..), settleFormat)
 import MediaCopy.Domain.Plan
 import MediaCopy.Domain.Plugin (noPluginPlan)
 
@@ -221,7 +221,7 @@ decideGeneration spec rule facts =
     steps = generationSteps expected disk
     sealed = not (V.null chain.entries)
 
-generationFindings :: HistoryRule -> OsPath -> GenerationFacts -> Chain -> Either FormatError JobFormat -> Vector Finding
+generationFindings :: HistoryRule -> OsPath -> GenerationFacts -> Chain -> Either FormatError HashAlgo -> Vector Finding
 generationFindings rule folder facts chain formatResult =
   [ findingIf (not exists) Finding {severity = Blocker, code = SourceMissing, detail = pathText folder}
   , case rule of
@@ -274,7 +274,7 @@ generationSteps expected disk =
   where
     sizes = Map.fromList (V.toList disk)
 
-settledOf :: Either FormatError JobFormat -> Maybe JobFormat
+settledOf :: Either FormatError HashAlgo -> Maybe HashAlgo
 settledOf result = case result of
   Left _ -> Nothing
   Right fmt -> Just fmt

@@ -37,7 +37,6 @@ import Test.Tasty.Hedgehog (testProperty)
 import MediaCopy.Domain.FileSystem (Tree (..), partPath)
 import MediaCopy.Domain.History (HistoryError (..))
 import MediaCopy.Domain.Job
-import MediaCopy.Domain.JobFormat.Internal (JobFormat (..))
 import MediaCopy.Domain.Plan
 import MediaCopy.Domain.Plugin (noPluginPlan)
 import MediaCopy.Domain.Preflight
@@ -106,7 +105,7 @@ samplePlanWithFree free findings =
             , generation = PlannedGeneration {folder = [osp|/media-source|], number = 1, manifest = [osp|/manifest|], process = ProcessInPlace, directories = V.empty}
             }
     , targets = V.singleton Target {root = [osp|/media-source|], freeBytes = Just free, state = Fresh}
-    , format = Just (JobFormat XXH64)
+    , format = Just XXH64
     , originsUsed = "none"
     , steps = V.empty
     , totalBytes = 0

@@ -23,8 +23,6 @@ import Effectful
 import Effectful.Dispatch.Static (SideEffects (..), StaticRep, evalStaticRep, getStaticRep, unsafeEff_)
 import Foreign.C.Types (CULLong (..))
 
-import MediaCopy.Domain.JobFormat (JobFormat, formatAlgo)
-
 data HasherState = HasherState
   { feedH :: ByteString -> IO ()
   , finishH :: IO Hash
@@ -53,10 +51,10 @@ finish st =
           st.finishH
       )
 
-withHasher :: (Hasher :> es) => JobFormat -> (HasherState -> Eff es a) -> Eff es a
-withHasher fmt use = getStaticRep >>= \HasherRep -> unsafeEff_ (stateOf (formatAlgo fmt)) >>= use
+withHasher :: (Hasher :> es) => HashAlgo -> (HasherState -> Eff es a) -> Eff es a
+withHasher fmt use = getStaticRep >>= \HasherRep -> unsafeEff_ (stateOf fmt) >>= use
 
-hashBytes :: (Hasher :> es) => JobFormat -> ByteString -> Eff es Hash
+hashBytes :: (Hasher :> es) => HashAlgo -> ByteString -> Eff es Hash
 hashBytes fmt bytes = withHasher fmt (\hasher -> feed hasher bytes >> finish hasher)
 
 unspent :: String -> HasherState -> IO ()

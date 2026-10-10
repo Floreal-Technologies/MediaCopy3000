@@ -1,9 +1,6 @@
 module MediaCopy.Domain.JobFormat
-  ( JobFormat
-  , FormatError (..)
-  , formatAlgo
+  ( FormatError (..)
   , settleFormat
-  , chainFormat
   ) where
 
 import Ascmhl.Hash
@@ -17,16 +14,8 @@ import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Display (Display (..), display)
 
-import MediaCopy.Domain.JobFormat.Internal (JobFormat (..))
-
 -- $setup
 -- >>> import Ascmhl.Path (RelPath (..))
-
-formatAlgo :: JobFormat -> HashAlgo
-formatAlgo (JobFormat algo) = algo
-
-chainFormat :: JobFormat
-chainFormat = JobFormat C4
 
 newtype FormatError = MixedFormats (List HashAlgo)
   deriving stock (Eq, Show)
@@ -39,19 +28,19 @@ instance Display FormatError where
 
 -- |
 -- >>> settleFormat Map.empty Set.empty
--- Right (JobFormat XXH64)
+-- Right XXH64
 -- >>> settleFormat (Map.fromList [(RelPath "a.mxf", Hash {algo = MD5, value = "0f"})]) (Set.fromList [RelPath "a.mxf"])
--- Right (JobFormat MD5)
+-- Right MD5
 -- >>> settleFormat (Map.fromList [(RelPath "a.mxf", Hash {algo = SHA1, value = "ab"})]) (Set.fromList [RelPath "b.mxf"])
--- Right (JobFormat SHA1)
+-- Right SHA1
 -- >>> settleFormat (Map.fromList [(RelPath "a.mxf", Hash {algo = MD5, value = "0f"}), (RelPath "b.mxf", Hash {algo = SHA1, value = "ab"})]) (Set.fromList [RelPath "a.mxf", RelPath "b.mxf"])
 -- Left (MixedFormats [MD5,SHA1])
-settleFormat :: Map RelPath Hash -> Set RelPath -> Either FormatError JobFormat
+settleFormat :: Map RelPath Hash -> Set RelPath -> Either FormatError HashAlgo
 settleFormat expected present = case (algosOf (Map.restrictKeys expected present), algosOf expected) of
-  ([algo], _) -> Right (JobFormat algo)
+  ([algo], _) -> Right algo
   (mixed@(_ : _ : _), _) -> Left (MixedFormats mixed)
-  ([], [algo]) -> Right (JobFormat algo)
-  ([], _) -> Right (JobFormat preferredAlgo)
+  ([], [algo]) -> Right algo
+  ([], _) -> Right preferredAlgo
 
 algosOf :: Map RelPath Hash -> List HashAlgo
 algosOf hashes = hashes & Map.elems & map (.algo) & Set.fromList & Set.toList

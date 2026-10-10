@@ -35,7 +35,6 @@ import Effectful.Time (Time, currentTime)
 import System.OsPath (OsPath)
 
 import MediaCopy.Domain.Job
-import MediaCopy.Domain.JobFormat (JobFormat, formatAlgo)
 import MediaCopy.Domain.Plan
 import MediaCopy.Domain.Plugin (Contributions (..), PluginPlan (..), VerifiedFile (..), pluginBlockers)
 import MediaCopy.Effects.Emit
@@ -54,7 +53,7 @@ type Hashing es =
   , Time :> es
   , Emit :> es
   , State JobProgress :> es
-  , Reader JobFormat :> es
+  , Reader HashAlgo :> es
   )
 
 type Copying es = (Hashing es, Reader CreatorInfo :> es, Reader Contributions :> es, Plugins :> es)
@@ -145,19 +144,19 @@ runFileStep step body = do
       pure result
 
 hashVia
-  :: (Hasher :> es, Reader JobFormat :> es)
+  :: (Hasher :> es, Reader HashAlgo :> es)
   => ((ByteString -> Eff es ()) -> Eff es UTCTime)
   -> (ByteString -> Eff es ())
   -> Eff es (Hash, UTCTime)
 hashVia readWith onChunk = do
-  fmt <- ask @JobFormat
+  fmt <- ask @HashAlgo
   withHasher fmt $ \hasherH -> do
     mtime <- readWith (\bs -> feed hasherH bs >> onChunk bs)
     h <- finish hasherH
     pure (h, mtime)
 
 hashOf
-  :: (FileSystem :> es, Hasher :> es, Reader JobFormat :> es)
+  :: (FileSystem :> es, Hasher :> es, Reader HashAlgo :> es)
   => ReadCache
   -> OsPath
   -> (ByteString -> Eff es ())
@@ -329,15 +328,15 @@ copyAfter plan copy sealTally = do
   pure (JobFinished (resultOf (sealTally.failedPaths <> copied.failedPaths)))
 
 originsForCopy
-  :: (FileSystem :> es, Emit :> es, Error PlanViolation :> es, Reader JobFormat :> es)
+  :: (FileSystem :> es, Emit :> es, Error PlanViolation :> es, Reader HashAlgo :> es)
   => JobPlan
   -> CopyPass
   -> Eff es (Map RelPath Hash)
 originsForCopy plan copy = do
-  fmt <- ask @JobFormat
+  fmt <- ask @HashAlgo
   case plan.sealPass of
     Nothing -> do
-      emit (OriginalsResolved plan.originsUsed (formatAlgo fmt))
+      emit (OriginalsResolved plan.originsUsed fmt)
       pure Map.empty
     Just _ -> do
       recorded <-
@@ -345,7 +344,7 @@ originsForCopy plan copy = do
           Left e -> throwError (OriginalsUnresolved e)
           Right Nothing -> throwError (OriginalsMissingAfterSeal copy.source)
           Right (Just hs) -> pure hs
-      emit (OriginalsResolved (originsDescription recorded) (formatAlgo fmt))
+      emit (OriginalsResolved (originsDescription recorded) fmt)
       pure recorded
 
 runSealPass
