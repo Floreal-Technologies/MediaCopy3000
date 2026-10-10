@@ -209,7 +209,6 @@ formatCode = \case
 
 data CopyPass = CopyPass
   { source :: OsPath
-  , process :: ProcessKind
   , generations :: Vector PlannedGeneration
   , carried :: Int
   }
@@ -217,7 +216,6 @@ data CopyPass = CopyPass
 
 data RecordPass = RecordPass
   { folder :: OsPath
-  , process :: ProcessKind
   , generation :: PlannedGeneration
   }
   deriving stock (Eq, Show)
