@@ -16,15 +16,13 @@ import MediaCopy.Demo.Fixtures
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan (JobPlan)
 import MediaCopy.Interface.Command qualified as Command
+import MediaCopy.Interface.Scene (Frame (..))
 import MediaCopy.Interface.Theme (Base (..), Palette (..), PaletteMode (..), Theme (..), modeDirectory, palettesFrom)
 import MediaCopy.Model (FileFilter (..), Message (..), Model (..), UiMessage (..), initialModel, update)
 
 data Scene = Scene
   { name :: Text
-  , frame :: Model
-  , action :: Maybe Command.Command
-  , expand :: Bool
-  , scroll :: Bool
+  , frame :: Frame
   }
 
 scenes :: List Scene
@@ -36,21 +34,21 @@ scenes =
   , still "plan-ready" (offered (offloadJob (SealBeforeCopy StopBeforeCopy)) readyPlan)
   , still "plan-partial" (offered (offloadJob UseHistory) partialPlan)
   , still "plan-blocked" (offered (offloadJob UseHistory) blockedPlan)
-  , (still "plan-findings" (offered (offloadJob UseHistory) blockedPlan)) {scroll = True}
+  , tweak (\frame -> frame {scroll = True}) (still "plan-findings" (offered (offloadJob UseHistory) blockedPlan))
   , still "plan-error" (RequestPlan (offloadJob UseHistory) : [PlanComputed (specFor first (offloadJob UseHistory)) (Left "/media/CARD_A001/ascmhl/ascmhl_chain.xml: unexpected end of input")])
   , still "job-running" (runningMessages <> [EngineEvent first (Progress 6_100_000_000), Tick (addUTCTime 2 at), EngineEvent first (Progress 8_640_000_000)])
   , still "job-finished" finishedMessages
   , still "job-failures" failuresMessages
   , still "job-failed-only" (failuresMessages <> [Ui (SetFileFilter FailedOnly)])
-  , (still "verify-history" verifyMessages) {expand = True}
+  , tweak (\frame -> frame {expand = True}) (still "verify-history" verifyMessages)
   , still "seal-finished" sealMessages
-  , (still "preferences" finishedMessages) {action = Just Command.Preferences}
-  , (still "plugins" [CatalogLoaded pluginCatalog]) {action = Just Command.Plugins}
-  , (still "plan-plugins" pluginPlanMessages) {scroll = True}
+  , tweak (\frame -> frame {action = Just Command.Preferences}) (still "preferences" finishedMessages)
+  , tweak (\frame -> frame {action = Just Command.Plugins}) (still "plugins" [CatalogLoaded pluginCatalog])
+  , tweak (\frame -> frame {scroll = True}) (still "plan-plugins" pluginPlanMessages)
   , still "job-plugins" pluginJobMessages
   , still "close-confirm" (runningMessages <> [EngineEvent first (Progress 8_640_000_000), Ui RequestClose])
   , still "command-palette" (finishedMessages <> [Ui (RunCommand Command.CommandPalette), Ui (SetPaletteQuery "job")])
-  , (still "about" []) {action = Just Command.About}
+  , tweak (\frame -> frame {action = Just Command.About}) (still "about" [])
   ]
     <> [ still
            ("themes/queue-" <> palette.family <> "-" <> modeDirectory palette.mode <> "-" <> palette.variant)
@@ -68,7 +66,10 @@ lookupScene :: Text -> Maybe Scene
 lookupScene wanted = find (\scene -> scene.name == wanted) scenes
 
 still :: Text -> List Message -> Scene
-still name msgs = Scene {name, frame = play msgs, action = Nothing, expand = False, scroll = False}
+still name msgs = Scene {name, frame = Frame {model = play msgs, action = Nothing, expand = False, scroll = False}}
+
+tweak :: (Frame -> Frame) -> Scene -> Scene
+tweak change scene = scene {frame = change scene.frame}
 
 play :: List Message -> Model
 play msgs = foldl (\model msg -> fst (update msg model)) (initialModel at LightPalette) msgs
