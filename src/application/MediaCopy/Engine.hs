@@ -150,10 +150,7 @@ hashVia
   -> Eff es (Hash, UTCTime)
 hashVia readWith onChunk = do
   fmt <- ask @HashAlgo
-  withHasher fmt $ \hasherH -> do
-    mtime <- readWith (\bs -> feed hasherH bs >> onChunk bs)
-    h <- finish hasherH
-    pure (h, mtime)
+  hashing fmt (\put -> readWith (\bs -> put bs >> onChunk bs))
 
 hashOf
   :: (FileSystem :> es, Hasher :> es, Reader HashAlgo :> es)
