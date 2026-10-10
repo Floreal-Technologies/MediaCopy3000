@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -fexternal-interpreter #-}
 
 module MediaCopy.Gtk.Resources (registerResources) where
 
