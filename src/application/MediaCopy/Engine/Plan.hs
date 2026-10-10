@@ -31,7 +31,7 @@ gatherOffload job = do
 gatherTarget :: (FileSystem :> es) => OsPath -> OsPath -> Eff es TargetFacts
 gatherTarget source parent = do
   let root = destinationPath parent source
-  free <- freeSpaceOf parent <&> either (const Nothing) Just
+  free <- freeSpaceOf parent
   history <- historyHashes root <&> fmap (fmap fst)
   existing <- walk root
   pure
@@ -45,6 +45,6 @@ gatherTarget source parent = do
 gatherGeneration :: (FileSystem :> es) => OsPath -> Eff es GenerationFacts
 gatherGeneration folder = do
   tree <- walk folder
-  freeBytes <- maybe (pure Nothing) (\_ -> freeSpaceOf folder <&> either (const Nothing) Just) tree
+  freeBytes <- maybe (pure Nothing) (\_ -> freeSpaceOf folder) tree
   history <- historyHashes folder
   pure GenerationFacts {tree, freeBytes, history}

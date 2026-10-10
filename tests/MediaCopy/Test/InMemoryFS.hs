@@ -135,7 +135,7 @@ runFileSystemMem :: (IOE :> es) => IORef MemFS -> Eff (FileSystem : es) a -> Eff
 runFileSystemMem fsRef =
   interpret $ \env -> \case
     Walk root -> liftIO (walkMem fsRef (slashedPath root))
-    FreeSpaceOf _ -> pure (Right maxBound)
+    FreeSpaceOf _ -> pure (Just maxBound)
     StreamFile _ (slashedPath -> path) onChunk -> localSeqUnlift env $ \unlift -> do
       content <- liftIO (readWholeMem fsRef path)
       forM_ (chunksOf content) (\chunk -> unlift (onChunk chunk))
