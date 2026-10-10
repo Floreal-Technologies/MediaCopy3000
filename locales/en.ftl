@@ -78,12 +78,19 @@ finding-already-sealed = folder is already sealed
 
 ## Theme
 
-theme-section-system = System
-theme-system-light = System light
-theme-system-dark = System dark
 theme-base-follow-desktop = Follow desktop
 theme-base-always-light = Always light
 theme-base-always-dark = Always dark
+theme-accent-desktop = Follow desktop accent
+theme-accent-blue = Blue
+theme-accent-teal = Teal
+theme-accent-green = Green
+theme-accent-yellow = Yellow
+theme-accent-orange = Orange
+theme-accent-red = Red
+theme-accent-pink = Pink
+theme-accent-purple = Purple
+theme-accent-slate = Slate
 
 ## Job toasts & dialogs
 

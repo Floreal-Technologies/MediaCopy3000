@@ -28,7 +28,6 @@ import MediaCopy.Gtk.Resources.Splice (compiledResources)
 import MediaCopy.Gtk.Screenshot (Startup (..), seeded)
 import MediaCopy.Gtk.Theme
 import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
-import MediaCopy.Interface.Theme (PaletteMode (..), themeSections)
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Translation.Embedded
 import MediaCopy.Model
@@ -65,16 +64,7 @@ activate loopRef environment startup app =
 buildView :: Environment -> Adw.Application -> (UiMessage -> IO ()) -> IO (ThemeAdapter, Widgets)
 buildView environment app dispatchUi = do
   themeAdapter <- newThemeAdapter environment
-  palettes <- loadPalettes environment
-  let wording = embeddedWording English
-  widgets <-
-    buildWidgets
-      app
-      (apply themeAdapter)
-      wording
-      (themeSections wording LightPalette palettes)
-      (themeSections wording DarkPalette palettes)
-      dispatchUi
+  widgets <- buildWidgets app (apply themeAdapter) (embeddedWording English) dispatchUi
   loadCss environment
   pure (themeAdapter, widgets)
 
@@ -90,7 +80,8 @@ buildAndPresent loopRef environment startup app = do
       post msg = void (GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE (dispatchNow msg >> pure False))
   (themeAdapter, widgets) <- buildView environment app (dispatchNow . Ui)
   desktop <- readDesktopBase themeAdapter
-  modelRef <- newIORef (initialModel startedAt desktop)
+  desktopAccent <- readDesktopAccent themeAdapter
+  modelRef <- newIORef (initialModel startedAt desktop desktopAccent)
   production <- newProduction widgets post
   busy <- newIORef False
   pending <- newIORef V.empty
@@ -98,6 +89,7 @@ buildAndPresent loopRef environment startup app = do
   model <- readIORef modelRef
   loadWording environment model.wording.language (post . WordingReloaded) (post . ShowToast)
   onDesktopBase themeAdapter (post . DesktopBase)
+  onDesktopAccent themeAdapter (post . DesktopAccent)
   installCloseRequest widgets.window dispatchNow
   installTicker startup dispatchNow
   widgets.render model

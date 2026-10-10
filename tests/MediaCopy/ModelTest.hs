@@ -15,7 +15,7 @@ import MediaCopy.Demo.Fixtures
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan (JobPlan (..))
 import MediaCopy.Interface.Command qualified as Command
-import MediaCopy.Interface.Theme (PaletteMode (..))
+import MediaCopy.Interface.Theme (Accent (..), PaletteMode (..))
 import MediaCopy.Model
 
 tests :: TestTree
@@ -74,7 +74,7 @@ tests =
     ]
 
 m0 :: Model
-m0 = initialModel at LightPalette
+m0 = initialModel at LightPalette Blue
 
 run :: List Message -> Model -> (Model, List AppEffect)
 run msgs m = foldl (\(mm, cs) msg -> let (mm', cs') = update msg mm in (mm', cs <> cs')) (m, []) msgs

@@ -34,7 +34,7 @@ import MediaCopy.Domain.Job
 import MediaCopy.Gtk.Environment (Environment, withEnvironment)
 import MediaCopy.Gtk.Runtime (buildView)
 import MediaCopy.Gtk.View (Widgets (..))
-import MediaCopy.Interface.Theme (PaletteMode (..))
+import MediaCopy.Interface.Theme (Accent (..), PaletteMode (..))
 import MediaCopy.Model
 
 benchJob :: JobId
@@ -158,7 +158,7 @@ measure widgets stream = do
         after <- getMonotonicTimeNSec
         modifyIORef' samples (\seen -> (after - before) : seen)
         pure next
-  _final <- foldM step (initialModel Fixtures.at LightPalette) stream
+  _final <- foldM step (initialModel Fixtures.at LightPalette Blue) stream
   readIORef samples <&> reverse
 
 drain :: IO ()

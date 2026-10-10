@@ -20,7 +20,6 @@ module MediaCopy.Demo.Fixtures
   , pluginPlan
   , pluginReports
   , history
-  , paletteListing
   , hashOf
   , osp
   , rel
@@ -50,7 +49,6 @@ import MediaCopy.Domain.Plan (JobPlan, withPluginPlan)
 import MediaCopy.Domain.Plugin
 import MediaCopy.Domain.PluginCatalog
 import MediaCopy.Domain.Preflight (GenerationFacts (..), HistoryRule (..), OffloadFacts (..), TargetFacts (..), decideGeneration, decideOffload)
-import MediaCopy.Interface.Theme (FamilyInfo (..), FamilyListing (..), PaletteMode (..), ThemeListing (..))
 
 at :: UTCTime
 at = UTCTime {utctDay = fromGregorian 2026 9 12, utctDayTime = secondsToDiffTime (14 * 3600 + 3 * 60)}
@@ -293,50 +291,6 @@ entriesAt t =
 
 treeHash :: UTCTime -> DirHash
 treeHash t = dirHash t (hashOf "1b7f0c9d2a4e6358") (hashOf "9e3d5a7c1f8b0246")
-
-paletteListing :: ThemeListing
-paletteListing =
-  ThemeListing
-    { families =
-        V.fromList
-          [ FamilyListing
-              { directory = "catppuccin"
-              , info = FamilyInfo {name = Just "Catppuccin", homepage = Just "https://catppuccin.com"}
-              , modes =
-                  V.fromList
-                    [ (DarkPalette, V.fromList ["frappé.css", "macchiato.css", "mocha.css"])
-                    , (LightPalette, V.singleton "latte.css")
-                    ]
-              }
-          , FamilyListing
-              { directory = "dracula"
-              , info = FamilyInfo {name = Just "Dracula", homepage = Just "https://draculatheme.com"}
-              , modes =
-                  V.fromList
-                    [ (DarkPalette, V.singleton "dracula.css")
-                    , (LightPalette, V.singleton "alucard.css")
-                    ]
-              }
-          , FamilyListing
-              { directory = "everforest"
-              , info = FamilyInfo {name = Just "Everforest", homepage = Just "https://everforest.vercel.app"}
-              , modes =
-                  V.fromList
-                    [ (DarkPalette, V.fromList ["hard.css", "medium.css", "soft.css"])
-                    , (LightPalette, V.fromList ["hard.css", "medium.css", "soft.css"])
-                    ]
-              }
-          , FamilyListing
-              { directory = "kanagawa"
-              , info = FamilyInfo {name = Just "Kanagawa", homepage = Just "https://github.com/rebelot/kanagawa.nvim"}
-              , modes =
-                  V.fromList
-                    [ (DarkPalette, V.fromList ["dragon.css", "wave.css"])
-                    , (LightPalette, V.singleton "lotus.css")
-                    ]
-              }
-          ]
-    }
 
 hashOf :: Text -> Hash
 hashOf value = Hash {algo = XXH64, value}

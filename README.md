@@ -7,12 +7,12 @@
 
   <p>
     <img width="40%" alt="The offloading dialog" src="https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/refs/heads/main/manual/en/images/offload-dialog.png">
-    <img width="40%" alt="The execution plan" src="https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/refs/heads/main/manual/en/images/themes/queue-dracula-light-alucard.png">
+    <img width="40%" alt="The execution plan" src="https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/refs/heads/main/manual/en/images/plan-ready.png">
   </p>
 
   <p>
-    <img width="40%" alt="The queue view" src="https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/refs/heads/main/manual/en/images/themes/queue-catppuccin-dark-frappé.png">
-    <img width="40%" alt="The queue view" src="https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/refs/heads/main/manual/en/images/themes/queue-catppuccin-light-latte.png">
+    <img width="40%" alt="The queue view" src="https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/refs/heads/main/manual/en/images/themes/queue-dark.png">
+    <img width="40%" alt="The queue view" src="https://raw.githubusercontent.com/Floreal-Technologies/MediaCopy3000/refs/heads/main/manual/en/images/themes/queue-light.png">
   </p>
 </div>
 

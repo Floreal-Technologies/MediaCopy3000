@@ -88,8 +88,8 @@ Copy-Into "$Ucrt/etc/fonts" "$Stage/etc/fonts"
 
 $appAssets = "$Stage/share/mediacopy3000/assets"
 Copy-Into 'assets/styles.css' "$appAssets/styles.css"
-Copy-Into 'assets/themes' "$appAssets/themes"
-foreach ($required in "$appAssets/styles.css", "$appAssets/themes") {
+Copy-Into 'assets/dark.css' "$appAssets/dark.css"
+foreach ($required in "$appAssets/styles.css", "$appAssets/dark.css") {
     if (-not (Test-Path $required)) { throw "staged tree broken: $required is missing" }
 }
 

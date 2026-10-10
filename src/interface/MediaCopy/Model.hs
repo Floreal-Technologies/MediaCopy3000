@@ -62,6 +62,7 @@ data Model = Model
   , planPhase :: PlanPhase
   , appearance :: Appearance
   , desktopBase :: PaletteMode
+  , desktopAccent :: Accent
   , toast :: Maybe Text
   , now :: UTCTime
   , closeConfirm :: Bool
@@ -72,8 +73,8 @@ data Model = Model
   }
   deriving stock (Eq, Generic, Show)
 
-initialModel :: UTCTime -> PaletteMode -> Model
-initialModel t desktop =
+initialModel :: UTCTime -> PaletteMode -> Accent -> Model
+initialModel t desktop accent =
   Model
     { jobs = Map.empty
     , queue = []
@@ -85,6 +86,7 @@ initialModel t desktop =
     , planPhase = Idle
     , appearance = systemAppearance
     , desktopBase = desktop
+    , desktopAccent = accent
     , toast = Nothing
     , now = t
     , closeConfirm = False
@@ -100,7 +102,7 @@ data UiMessage
   | RemoveDestination Int
   | CloseOffloadDialog
   | SetBase Base
-  | SetPalette Theme
+  | SetAccent (Maybe Accent)
   | ReviewPlan
   | SetSealFirst SealFirst
   | SetExistingCopy ExistingCopy
@@ -136,6 +138,7 @@ data Message
   | HistoryLoaded JobId MhlHistory
   | Tick UTCTime
   | DesktopBase PaletteMode
+  | DesktopAccent Accent
   | ShowToast Text
   | WordingReloaded Wording
   | CatalogLoaded PluginCatalog
@@ -237,6 +240,7 @@ update msg model = case msg of
   DesktopBase wanted
     | wanted == model.desktopBase -> (model, [])
     | otherwise -> (model {desktopBase = wanted}, [])
+  DesktopAccent wanted -> (model {desktopAccent = wanted}, [])
   ShowToast message -> (model {toast = Just message}, [])
   WordingReloaded wording -> (model {wording}, [])
   CatalogLoaded catalog -> (model & #plugins .~ catalog, [])
@@ -248,7 +252,7 @@ updateUi msg model = case msg of
   RemoveDestination i -> (model & #draft % _Just % #destinations %~ deleteAt i, [])
   CloseOffloadDialog -> (model {draft = Nothing}, [])
   SetBase wanted -> (model {appearance = model.appearance {base = wanted}}, [])
-  SetPalette wanted -> (model {appearance = setPalette wanted model.appearance}, [])
+  SetAccent wanted -> (model {appearance = model.appearance {accent = wanted}}, [])
   ReviewPlan -> reviewPlan model
   SetSealFirst choice -> replanIfChanged (\oj -> oj.sealFirst /= choice) (\oj -> oj {sealFirst = choice}) model
   SetExistingCopy choice -> replanIfChanged (\oj -> oj.existingCopy /= Just choice) (\oj -> oj {existingCopy = Just choice}) model
