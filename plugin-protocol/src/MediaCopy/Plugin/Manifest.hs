@@ -7,8 +7,7 @@ module MediaCopy.Plugin.Manifest
     -- * Capabilities
   , Capability (..)
   , capabilityName
-  , Hook (..)
-  , hookOf
+  , hooks
 
     -- * Settings and job fields
   , Field (..)
@@ -32,7 +31,7 @@ import Data.Function ((&))
 import Data.List (List, nub)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe, isJust, isNothing)
+import Data.Maybe (fromMaybe, isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Vector (Vector)
@@ -59,16 +58,8 @@ capabilityName = \case
 instance ToJSON Capability where
   toJSON capability = String (capabilityName capability)
 
-data Hook = InspectPlan | InspectFile | Contribute
-  deriving stock (Eq, Show)
-
-hookOf :: Capability -> Maybe Hook
-hookOf = \case
-  PlanInspect -> Just InspectPlan
-  FilesInspect -> Just InspectFile
-  ManifestWrite -> Just Contribute
-  FilesRead -> Nothing
-  Block -> Nothing
+hooks :: List Capability
+hooks = [PlanInspect, FilesInspect, ManifestWrite]
 
 instance FromJSON Capability where
   parseJSON = withText "capability" (named "capability" capabilityName)
@@ -163,7 +154,7 @@ validateManifest m = do
   when (T.null (T.strip m.description)) (Left "has a blank description")
   when (m.api /= apiMajor) $
     Left ("needs plug-in API " <> T.show m.api <> ", and this MediaCopy 3000 speaks API " <> T.show apiMajor)
-  unless (V.any (isJust . hookOf) m.capabilities) (Left "declares no capability that MediaCopy 3000 calls")
+  unless (V.any (`elem` hooks) m.capabilities) (Left "declares no capability that MediaCopy 3000 calls")
   for_ (Map.toList m.executable) $ \(platform, path) ->
     unless (insideFolder (T.pack path)) $
       Left ("names the executable " <> T.show path <> " for " <> T.show platform <> ", which is not inside the plug-in folder")
@@ -339,6 +330,5 @@ instance JsonSchema PluginManifest where
              ]
       ]
     where
-      hooks = [capability | capability <- [minBound .. maxBound], isJust (hookOf capability)]
       authors = object ["properties" .= object ["kind" .= object ["const" .= String "authors"]], "required" .= ["kind" :: Text]]
       declares capability = object ["properties" .= object ["capabilities" .= object ["contains" .= object ["const" .= capability]]]]
