@@ -68,7 +68,6 @@ library domain
     MediaCopy.Domain.Plugin
     MediaCopy.Domain.PluginCatalog
     MediaCopy.Domain.Preflight
-    MediaCopy.Domain.Severity
 
   build-depends:
     ascmhl,

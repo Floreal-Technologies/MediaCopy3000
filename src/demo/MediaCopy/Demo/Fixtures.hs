@@ -50,7 +50,6 @@ import MediaCopy.Domain.Plan (JobPlan, withPluginPlan)
 import MediaCopy.Domain.Plugin
 import MediaCopy.Domain.PluginCatalog
 import MediaCopy.Domain.Preflight (GenerationFacts (..), HistoryRule (..), OffloadFacts (..), TargetFacts (..), decideGeneration, decideOffload)
-import MediaCopy.Domain.Severity (Severity (..))
 import MediaCopy.Interface.Theme (FamilyInfo (..), FamilyListing (..), PaletteMode (..), ThemeListing (..))
 
 at :: UTCTime
