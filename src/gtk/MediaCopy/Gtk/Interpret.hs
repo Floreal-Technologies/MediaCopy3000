@@ -222,6 +222,8 @@ wasCancelled err = case fromException err of
   Just AsyncCancelled -> True
   Nothing -> False
 
+-- | Different Gio versions give different nullability information,
+-- so we have to abstract with a simple typeclass.
 class PickedFile file where
   pickedFile :: file -> Maybe Gio.File
 
