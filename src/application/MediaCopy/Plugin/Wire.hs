@@ -27,7 +27,6 @@ import MediaCopy.Plugin.Manifest (PluginId (..), PluginManifest (..))
 import MediaCopy.Plugin.Protocol qualified as P
 
 import MediaCopy.Domain.Job
-import MediaCopy.Domain.JobFormat (formatAlgo)
 import MediaCopy.Domain.Plan
 import MediaCopy.Domain.Plugin
 import MediaCopy.Plugin.Discovery (Installed (..))
@@ -43,7 +42,7 @@ jobInfo plan =
     , destinations = case plan.spec.job of
         Offload _ -> V.map (\target -> pathText target.root) plan.targets
         _ -> V.empty
-    , hashFormat = fmap (display . formatAlgo) plan.format
+    , hashFormat = fmap display plan.format
     }
 
 fileInfos :: JobPlan -> Vector P.FileInfo

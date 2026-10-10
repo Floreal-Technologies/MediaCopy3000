@@ -26,7 +26,6 @@ import Effectful.Exception (displayException, trySync)
 import System.OsPath (OsPath)
 
 import MediaCopy.Domain.History
-import MediaCopy.Domain.JobFormat (chainFormat)
 import MediaCopy.Effects.FileSystem
 import MediaCopy.Effects.Hasher
 
@@ -120,5 +119,5 @@ backfillChainEntry folder entry = case entry.c4 of
     readText path >>= \case
       Nothing -> pure (Left (ManifestNotFound path))
       Just txt -> do
-        h <- hashBytes chainFormat (TE.encodeUtf8 txt)
+        h <- hashBytes C4 (TE.encodeUtf8 txt)
         pure (Right (chainEntry entry.sequenceNr entry.path (Just h)))

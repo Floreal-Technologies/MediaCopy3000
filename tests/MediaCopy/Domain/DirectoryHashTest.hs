@@ -12,7 +12,6 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import MediaCopy.Domain.DirectoryHash
-import MediaCopy.Domain.JobFormat.Internal (JobFormat (..))
 import MediaCopy.Effects.Hasher
 
 tests :: TestTree
@@ -34,7 +33,7 @@ sampleTree =
     )
     (V.fromList [RelPath "A", RelPath "A/B", RelPath "Empty"])
 
-runHashes :: JobFormat -> DirNode -> IO (DirHashes, Vector (RelPath, DirHashes))
+runHashes :: HashAlgo -> DirNode -> IO (DirHashes, Vector (RelPath, DirHashes))
 runHashes fmt node =
   runEff (runHasher (runErrorNoCallStack @DirectoryHashError (directoryHashes (hashBytes fmt) node))) >>= \case
     Left e -> assertFailure (T.unpack (display e))
@@ -42,7 +41,7 @@ runHashes fmt node =
 
 matchesTheReferenceOnANestedTree :: Assertion
 matchesTheReferenceOnANestedTree = do
-  (rootPair, rows) <- runHashes (JobFormat XXH64) sampleTree
+  (rootPair, rows) <- runHashes XXH64 sampleTree
   V.map fst rows @?= V.fromList [RelPath "A/B", RelPath "A", RelPath "Empty"]
   V.map (\row -> (snd row).content) rows
     @?= V.fromList [Hash XXH64 "d6ea6f397b524900", Hash XXH64 "e1d1abb1814a3c33", Hash XXH64 "ef46db3751d8e999"]
@@ -53,6 +52,6 @@ matchesTheReferenceOnANestedTree = do
 
 hashesAnEmptyDirectoryAsTheDigestOfNothing :: Assertion
 hashesAnEmptyDirectoryAsTheDigestOfNothing = do
-  (rootPair, _rows) <- runHashes (JobFormat XXH64) (buildTree V.empty V.empty)
+  (rootPair, _rows) <- runHashes XXH64 (buildTree V.empty V.empty)
   rootPair.content @?= Hash XXH64 "ef46db3751d8e999"
   rootPair.structure @?= Hash XXH64 "ef46db3751d8e999"

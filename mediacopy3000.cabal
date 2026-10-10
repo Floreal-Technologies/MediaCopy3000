@@ -64,7 +64,6 @@ library domain
     MediaCopy.Domain.History
     MediaCopy.Domain.Job
     MediaCopy.Domain.JobFormat
-    MediaCopy.Domain.JobFormat.Internal
     MediaCopy.Domain.Plan
     MediaCopy.Domain.Plugin
     MediaCopy.Domain.PluginCatalog

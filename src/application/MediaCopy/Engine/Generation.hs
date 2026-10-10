@@ -26,7 +26,6 @@ import System.OsPath (OsPath, takeFileName)
 
 import MediaCopy.Domain.DirectoryHash
 import MediaCopy.Domain.Job
-import MediaCopy.Domain.JobFormat (JobFormat, chainFormat)
 import MediaCopy.Domain.Plan (PlannedGeneration (..))
 import MediaCopy.Domain.Plugin (Contributions (..))
 import MediaCopy.Effects.Emit
@@ -43,7 +42,7 @@ requireGeneration folder number = do
   pure chain
 
 writeGeneration
-  :: (FileSystem :> es, Hasher :> es, Emit :> es, Error PlanViolation :> es, Reader JobFormat :> es, Reader CreatorInfo :> es, Reader Contributions :> es)
+  :: (FileSystem :> es, Hasher :> es, Emit :> es, Error PlanViolation :> es, Reader HashAlgo :> es, Reader CreatorInfo :> es, Reader Contributions :> es)
   => PlannedGeneration
   -> Vector Text
   -> Vector HashEntry
@@ -54,7 +53,7 @@ writeGeneration planned patterns files = do
   chain <- requireGeneration planned.folder planned.number
   hashedFiles <- traverse (\e -> orThrow (firstHash e) <&> \h -> (e.path, h)) files
   let tree = buildTree hashedFiles planned.directories
-  fmt <- ask @JobFormat
+  fmt <- ask @HashAlgo
   rolled <- runErrorNoCallStack @DirectoryHashError (directoryHashes (hashBytes fmt) tree)
   (rootPair, rows) <- orThrow (first HashUndecodable rolled)
   let dirEntry (path, pair) = do
@@ -76,7 +75,7 @@ writeGeneration planned patterns files = do
       txt = renderManifest manifest
       bytes = TE.encodeUtf8 txt
   writeTextAtomically planned.manifest txt
-  mh <- hashBytes chainFormat bytes
+  mh <- hashBytes C4 bytes
   nameRel <- orThrow (maybe (Left (ManifestNameUnusable planned.manifest)) Right (mkRelPath (pathText (takeFileName planned.manifest))))
   backfilled <-
     traverse

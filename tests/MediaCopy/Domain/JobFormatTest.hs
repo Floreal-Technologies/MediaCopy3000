@@ -26,7 +26,7 @@ tests =
 takesTheFormatOfTheFilesTheJobWillProcess :: Assertion
 takesTheFormatOfTheFilesTheJobWillProcess = do
   let expected = Map.fromList [(RelPath "a.mxf", Hash MD5 "5d41402abc4b2a76b9719d911017c592")]
-  fmap formatAlgo (settleFormat expected (Set.fromList [RelPath "a.mxf"])) @?= Right MD5
+  settleFormat expected (Set.fromList [RelPath "a.mxf"]) @?= Right MD5
 
 ignoresASealedPathThatIsNoLongerPresent :: Assertion
 ignoresASealedPathThatIsNoLongerPresent = do
@@ -35,16 +35,16 @@ ignoresASealedPathThatIsNoLongerPresent = do
           [ (RelPath "gone.mxf", Hash MD5 "5d41402abc4b2a76b9719d911017c592")
           , (RelPath "here.mxf", Hash XXH64 "26c7827d889f6da3")
           ]
-  fmap formatAlgo (settleFormat expected (Set.fromList [RelPath "here.mxf"])) @?= Right XXH64
+  settleFormat expected (Set.fromList [RelPath "here.mxf"]) @?= Right XXH64
 
 fallsBackToTheWholeOriginalsWhenNoneArePresent :: Assertion
 fallsBackToTheWholeOriginalsWhenNoneArePresent = do
   let expected = Map.fromList [(RelPath "gone.mxf", Hash MD5 "5d41402abc4b2a76b9719d911017c592")]
-  fmap formatAlgo (settleFormat expected (Set.fromList [RelPath "fresh.mxf"])) @?= Right MD5
+  settleFormat expected (Set.fromList [RelPath "fresh.mxf"]) @?= Right MD5
 
 fallsBackToXxh64WhenThereAreNoOriginals :: Assertion
 fallsBackToXxh64WhenThereAreNoOriginals =
-  fmap formatAlgo (settleFormat Map.empty (Set.fromList [RelPath "fresh.mxf"])) @?= Right XXH64
+  settleFormat Map.empty (Set.fromList [RelPath "fresh.mxf"]) @?= Right XXH64
 
 rejectsAMixAmongTheFilesItWillProcess :: Assertion
 rejectsAMixAmongTheFilesItWillProcess = do

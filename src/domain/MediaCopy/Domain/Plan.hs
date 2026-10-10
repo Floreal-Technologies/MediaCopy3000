@@ -29,7 +29,7 @@ module MediaCopy.Domain.Plan
   , planRaceChecks
   ) where
 
-import Ascmhl.Hash (Hash)
+import Ascmhl.Hash (Hash, HashAlgo)
 import Ascmhl.Path (RelPath)
 import Ascmhl.Types (ProcessKind)
 import Data.Function ((&))
@@ -46,7 +46,7 @@ import System.OsPath (OsPath)
 
 import MediaCopy.Domain.History (HistoryError (..))
 import MediaCopy.Domain.Job (FileSize, JobSpec, OnSealFailure)
-import MediaCopy.Domain.JobFormat (FormatError (..), JobFormat)
+import MediaCopy.Domain.JobFormat (FormatError (..))
 import MediaCopy.Domain.Plugin (PluginPlan, pluginBlockers)
 import MediaCopy.Domain.Severity (Severity (..))
 
@@ -239,7 +239,7 @@ data JobPlan = JobPlan
   { spec :: JobSpec
   , execution :: PlanExecution
   , targets :: Vector Target
-  , format :: Maybe JobFormat
+  , format :: Maybe HashAlgo
   , originsUsed :: Text
   , steps :: Vector PlanStep
   , totalBytes :: Int64
