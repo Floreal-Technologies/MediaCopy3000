@@ -117,11 +117,9 @@ stopWorkers registry = uninterruptibleMask_ $ do
 -- >>> neededAt PlanStage (Set.fromList [FilesRead, Block])
 -- False
 neededAt :: Stage -> Set Capability -> Bool
-neededAt stage granted = any (maybe False (`elem` hooks) . hookOf) (Set.toList granted)
-  where
-    hooks = case stage of
-      PlanStage -> [InspectPlan, InspectFile, Contribute]
-      RunStage -> [InspectFile]
+neededAt stage granted = case stage of
+  PlanStage -> any (`elem` hooks) granted
+  RunStage -> Set.member FilesInspect granted
 
 -- |
 -- >>> mayBlock (Set.fromList [Block])
