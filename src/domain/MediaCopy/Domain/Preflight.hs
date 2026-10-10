@@ -89,7 +89,7 @@ decideOffload :: JobSpec -> OffloadJob -> OffloadFacts -> JobPlan
 decideOffload spec job facts =
   JobPlan
     { spec
-    , execution = CopyInto CopyPass {source, process = ProcessTransfer, generations = plannedDests, carried}
+    , execution = CopyInto CopyPass {source, generations = plannedDests, carried}
     , targets
     , format = settledOf formatResult
     , originsUsed = originsUsedText job.sealFirst src.expected
@@ -198,7 +198,7 @@ decideGeneration :: JobSpec -> HistoryRule -> GenerationFacts -> JobPlan
 decideGeneration spec rule facts =
   JobPlan
     { spec
-    , execution = RecordAt RecordPass {folder, process = ProcessInPlace, generation = generationAt spec.createdAt ProcessInPlace folder dirs chain}
+    , execution = RecordAt RecordPass {folder, generation = generationAt spec.createdAt folder dirs chain}
     , targets = V.singleton Target {root = folder, freeBytes = facts.freeBytes, state = Fresh}
     , format = settledOf formatResult
     , originsUsed = if sealed then "the folder's own history" else "none"
@@ -251,7 +251,7 @@ planSealPass t source dirs chain sealFirst recorded files = case sealFirst of
            { steps
            , bytes = sum (V.map (.size) steps)
            , onFailure = policy
-           , generation = generationAt t ProcessInPlace source dirs chain
+           , generation = generationAt t source dirs chain
            }
 
 sealedWarning :: Chain -> Finding
@@ -279,8 +279,8 @@ settledOf result = case result of
   Left _ -> Nothing
   Right fmt -> Just fmt
 
-generationAt :: UTCTime -> ProcessKind -> OsPath -> Vector RelPath -> Chain -> PlannedGeneration
-generationAt t process folder dirs chain = generationNumbered t process folder dirs (1 + highestGeneration chain)
+generationAt :: UTCTime -> OsPath -> Vector RelPath -> Chain -> PlannedGeneration
+generationAt t folder dirs chain = generationNumbered t ProcessInPlace folder dirs (1 + highestGeneration chain)
 
 generationNumbered :: UTCTime -> ProcessKind -> OsPath -> Vector RelPath -> Int -> PlannedGeneration
 generationNumbered t process folder dirs number =

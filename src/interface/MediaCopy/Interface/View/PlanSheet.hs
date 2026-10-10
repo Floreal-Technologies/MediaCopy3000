@@ -9,7 +9,7 @@ module MediaCopy.Interface.View.PlanSheet
   ) where
 
 import Ascmhl.Path (pathText)
-import Ascmhl.Types (Author (..))
+import Ascmhl.Types (Author (..), ProcessKind (..))
 import Ascmhl.Write (formatMhlTime)
 import Data.Function ((&))
 import Data.Map.Strict qualified as Map
@@ -200,8 +200,8 @@ directoriesText plan =
 
 executionText :: Wording -> JobPlan -> Text
 executionText wording plan = case plan.execution of
-  CopyInto copy -> processKindText wording copy.process <> " · source: " <> pathText copy.source <> " · originals: " <> plan.originsUsed <> carriedText copy.carried
-  RecordAt record -> processKindText wording record.process <> " · folder: " <> pathText record.folder
+  CopyInto copy -> processKindText wording ProcessTransfer <> " · source: " <> pathText copy.source <> " · originals: " <> plan.originsUsed <> carriedText copy.carried
+  RecordAt record -> processKindText wording ProcessInPlace <> " · folder: " <> pathText record.folder
 
 carriedText :: Int -> Text
 carriedText carried

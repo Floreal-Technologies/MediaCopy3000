@@ -101,7 +101,6 @@ samplePlanWithFree free findings =
         RecordAt
           RecordPass
             { folder = [osp|/media-source|]
-            , process = ProcessInPlace
             , generation = PlannedGeneration {folder = [osp|/media-source|], number = 1, manifest = [osp|/manifest|], process = ProcessInPlace, directories = V.empty}
             }
     , targets = V.singleton Target {root = [osp|/media-source|], freeBytes = Just free, state = Fresh}
