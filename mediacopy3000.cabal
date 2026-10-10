@@ -158,6 +158,7 @@ library interface
   exposed-modules:
     MediaCopy.Interface.Command
     MediaCopy.Interface.Palette
+    MediaCopy.Interface.Scene
     MediaCopy.Interface.Theme
     MediaCopy.Interface.Translation
     MediaCopy.Interface.Translation.Coverage

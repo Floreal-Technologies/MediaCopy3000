@@ -17,14 +17,12 @@ import GI.Gtk qualified as Gtk
 
 import MediaCopy.Gtk.Environment (Environment, logWith)
 import MediaCopy.Interface.Command qualified as Command
+import MediaCopy.Interface.Scene (Frame (..))
 import MediaCopy.Model (Model)
 
 data Startup = Startup
-  { frame :: Model
-  , action :: Maybe Command.Command
+  { scene :: Frame
   , shot :: Maybe FilePath
-  , expand :: Bool
-  , scroll :: Bool
   }
 
 seeded :: Environment -> Adw.ApplicationWindow -> (Command.Command -> IO ()) -> (Model -> IO ()) -> Startup -> IO ()
@@ -32,14 +30,14 @@ seeded environment window activate showFrame startup = do
   Gtk.widgetSetCanTarget window False
   Gtk.windowSetFocusVisible window False
   void $ GLib.timeoutAdd GLib.PRIORITY_DEFAULT 250 $ do
-    showFrame startup.frame
-    forM_ startup.action activate
+    showFrame startup.scene.model
+    forM_ startup.scene.action activate
     void (GLib.timeoutAdd GLib.PRIORITY_DEFAULT 600 prepare)
     pure False
   where
     prepare = do
-      when startup.expand (expandAll window)
-      when startup.scroll (scrollToEnd window)
+      when startup.scene.expand (expandAll window)
+      when startup.scene.scroll (scrollToEnd window)
       forM_ startup.shot (GLib.timeoutAdd GLib.PRIORITY_DEFAULT settleMs . takeShot)
       pure False
     settleMs = 3_500

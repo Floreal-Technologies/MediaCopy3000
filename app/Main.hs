@@ -181,16 +181,7 @@ startup =
       Nothing -> die ("no such demo scene: " <> wanted <> "\nknown scenes: " <> T.unpack (T.intercalate ", " sceneNames))
       Just scene -> do
         shot <- lookupEnv "MC3K_SHOT"
-        pure
-          ( Just
-              Startup
-                { frame = scene.frame
-                , action = scene.action
-                , shot
-                , expand = scene.expand
-                , scroll = scene.scroll
-                }
-          )
+        pure (Just Startup {scene = scene.frame, shot})
 
 banner :: T.Text
 banner =
