@@ -40,9 +40,9 @@ import System.DiskSpace (getAvailSpace)
 import System.File.OsPath qualified as FileIO
 import System.IO
 import System.IO.Error (isDoesNotExistError)
-import System.OsPath (OsPath, decodeFS, decodeUtf, takeDirectory, (</>))
+import System.OsPath (OsPath, decodeFS, takeDirectory, (</>))
 
-import MediaCopy.Domain.FileSystem (Tree (..), ignorePatterns, partPath, relPathOf)
+import MediaCopy.Domain.FileSystem (Tree (..), isIgnoredName, partPath, relPathOf)
 import MediaCopy.Domain.Job (FileSize)
 import MediaCopy.Domain.Plan (PlannedWrite (..))
 import MediaCopy.Effects.FileSystem.Native (readCold, statEntry, syncAndClose, syncDirectory)
@@ -143,11 +143,6 @@ walkIO root = do
               unless entry.isRegularFile (ioError (userError ("not a regular file: " <> T.unpack (pathText full))))
               rel <- relPathIO root full
               pure ([(rel, entry.size :: FileSize)], [])
-
-isIgnoredName :: OsPath -> Bool
-isIgnoredName name = case decodeUtf name of
-  Nothing -> False
-  Just s -> T.pack s `V.elem` ignorePatterns
 
 classifyChild :: OsPath -> OsPath -> IO (Maybe (OsPath, Entry))
 classifyChild dir name

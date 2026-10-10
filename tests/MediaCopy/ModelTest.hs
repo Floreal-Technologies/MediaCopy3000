@@ -317,7 +317,7 @@ replans wanted (ComputePlan spec) = spec.jobId == wanted
 replans _ _ = False
 
 isSaveDialog :: AppEffect -> Bool
-isSaveDialog OpenSaveDialog {} = True
+isSaveDialog (OpenDialog SaveAs {} _) = True
 isSaveDialog _ = False
 
 isDestroyWindow :: AppEffect -> Bool

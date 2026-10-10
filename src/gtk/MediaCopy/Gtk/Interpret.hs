@@ -9,7 +9,7 @@ import Control.Concurrent.Async
 import Control.Concurrent.MVar (MVar, newMVar, withMVar)
 import Control.Exception
 import Control.Monad (forM_, unless, void, when)
-import Data.GI.Base (AttrOp ((:=)), new)
+import Data.GI.Base (AttrOp ((:=)), new, set)
 import Data.GI.Base.GError (catchGErrorJustDomain)
 import Data.IORef
 import Data.Set (Set)
@@ -70,8 +70,7 @@ stopWorkers site = readIORef site.workers >>= mapConcurrently_ cancel
 
 runEffect :: Production -> Model -> AppEffect -> IO ()
 runEffect site model effect = toasting site $ case effect of
-  OpenFolderDialog toMessage -> openFolderDialog site toMessage
-  OpenSaveDialog title suggested toMessage -> openSaveDialog site title suggested toMessage
+  OpenDialog kind toMessage -> openDialog site kind toMessage
   ComputePlan spec -> planWorker site wording spec
   StartJob plan -> startJob site wording plan
   CancelRunning jobId ->
@@ -82,7 +81,6 @@ runEffect site model effect = toasting site $ case effect of
   LoadHistory jobId folder -> loadHistory site wording jobId folder
   WriteFile path text -> writeFile' path (encodeUtf8 text)
   DestroyWindow -> Gtk.windowDestroy site.window
-  OpenFileDialog toMessage -> openFileDialog site toMessage
   LoadCatalog -> catalogWorker site
   ApplyChange change -> changeWorker site change
   ShowFolder folder -> showFolder site folder
@@ -105,23 +103,23 @@ toasting site action = guarded action >>= either (toastFailure site) pure
 toastFailure :: Production -> SomeException -> IO ()
 toastFailure site err = site.post (ShowToast (T.pack (displayException err)))
 
-openFolderDialog :: Production -> (OsPath -> Message) -> IO ()
-openFolderDialog site toMessage = do
-  dialog <- new Gtk.FileDialog [#title := "Choose a Folder"]
-  Gtk.fileDialogSelectFolder dialog (Just site.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
-    toasting site (sendPicked site toMessage (Gtk.fileDialogSelectFolderFinish dialog result))
-
-openSaveDialog :: Production -> Text -> Text -> (OsPath -> Message) -> IO ()
-openSaveDialog site title suggested toMessage = do
-  dialog <- new Gtk.FileDialog [#title := title, #initialName := suggested]
-  Gtk.fileDialogSave dialog (Just site.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
-    toasting site (sendPicked site toMessage (Gtk.fileDialogSaveFinish dialog result))
-
-openFileDialog :: Production -> (OsPath -> Message) -> IO ()
-openFileDialog site toMessage = do
-  dialog <- new Gtk.FileDialog [#title := "Choose a File"]
-  Gtk.fileDialogOpen dialog (Just site.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
-    toasting site (sendPicked site toMessage (Gtk.fileDialogOpenFinish dialog result))
+openDialog :: Production -> DialogKind -> (OsPath -> Message) -> IO ()
+openDialog site kind toMessage = do
+  dialog <- new Gtk.FileDialog []
+  let picked finish = toasting site (sendPicked site toMessage finish)
+  case kind of
+    PickFolder -> do
+      set dialog [#title := "Choose a Folder"]
+      Gtk.fileDialogSelectFolder dialog (Just site.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
+        picked (Gtk.fileDialogSelectFolderFinish dialog result)
+    PickFile -> do
+      set dialog [#title := "Choose a File"]
+      Gtk.fileDialogOpen dialog (Just site.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
+        picked (Gtk.fileDialogOpenFinish dialog result)
+    SaveAs title suggested -> do
+      set dialog [#title := title, #initialName := suggested]
+      Gtk.fileDialogSave dialog (Just site.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
+        picked (Gtk.fileDialogSaveFinish dialog result)
 
 showFolder :: Production -> Text -> IO ()
 showFolder site folder = do

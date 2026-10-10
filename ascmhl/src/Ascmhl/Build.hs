@@ -22,7 +22,6 @@ import Data.Maybe (mapMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
-import Data.Text qualified as T
 import Data.Time (UTCTime)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
@@ -31,7 +30,7 @@ import Text.XML (Element (..), Name (..), Node (..))
 
 import Ascmhl.Hash (Hash)
 import Ascmhl.Layout (sequenceOf)
-import Ascmhl.Path (RelPath (..), mkRelPath, pathText)
+import Ascmhl.Path (RelPath (..), mkRelPath, parentOf, pathText)
 import Ascmhl.Schema qualified as Schema
 import Ascmhl.Types
 
@@ -121,10 +120,6 @@ orderedEntries files dirs = V.fromList (below root)
 
 groupOn :: (a -> RelPath) -> List a -> Map RelPath (List a)
 groupOn key xs = foldr (\x acc -> Map.insertWith (<>) (key x) [x] acc) Map.empty xs
-
-parentOf :: RelPath -> RelPath
-parentOf (RelPath t) = case T.breakOnEnd "/" t of
-  (before, _) -> RelPath (T.dropEnd 1 before)
 
 withAuthors :: Vector Author -> CreatorInfo -> CreatorInfo
 withAuthors authors creator = creator {authors = creator.authors <> authors}
