@@ -47,8 +47,7 @@ import System.OsPath (OsPath)
 import MediaCopy.Domain.History (HistoryError (..))
 import MediaCopy.Domain.Job (FileSize, JobSpec, OnSealFailure)
 import MediaCopy.Domain.JobFormat (FormatError (..))
-import MediaCopy.Domain.Plugin (PluginPlan, pluginBlockers)
-import MediaCopy.Domain.Severity (Severity (..))
+import MediaCopy.Domain.Plugin (PluginPlan, Severity (..), pluginBlockers)
 
 -- $setup
 -- >>> import System.OsPath (unsafeEncodeUtf)

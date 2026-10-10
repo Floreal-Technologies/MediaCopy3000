@@ -3,6 +3,7 @@ module MediaCopy.Domain.Plugin
   , PluginFault (..)
   , PluginSays (..)
   , About (..)
+  , Severity (..)
   , PluginFinding (..)
   , Contributions (..)
   , mergeContributions
@@ -33,8 +34,6 @@ import Data.Text.Display (Display (..))
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import System.OsPath (OsPath)
-
-import MediaCopy.Domain.Severity
 
 -- $setup
 -- >>> import Data.Text.Display (display)
@@ -72,6 +71,16 @@ data About
   = Said PluginSays
   | Faulted PluginFault
   deriving stock (Eq, Ord, Show)
+
+data Severity = Blocker | Warning
+  deriving stock (Eq, Ord, Show)
+
+-- | >>> map display [Blocker, Warning]
+-- ["blocker","warning"]
+instance Display Severity where
+  displayBuilder = \case
+    Blocker -> "blocker"
+    Warning -> "warning"
 
 data PluginFinding = PluginFinding
   { plugin :: PluginRef
