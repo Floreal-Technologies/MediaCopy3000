@@ -4,36 +4,33 @@ module MediaCopy.Gtk.Theme
   , apply
   , readDesktopBase
   , onDesktopBase
-  , loadPalettes
+  , readDesktopAccent
+  , onDesktopAccent
   ) where
 
+import Control.Exception (IOException, try)
 import Control.Monad.Extra
-import Data.Aeson qualified as Aeson
-import Data.Function ((&))
+import Data.ByteString qualified as ByteString
 import Data.Functor ((<&>))
 import Data.GI.Base (AttrOp ((:=)), on, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
-import Data.List (List, find)
-import Data.Maybe (catMaybes)
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Vector (Vector)
-import Data.Vector qualified as V
+import Data.Text.Encoding (decodeUtf8')
 import Effectful.Log (logAttention_)
 import GI.Adw qualified as Adw
 import GI.Gdk qualified as Gdk
 import GI.Gtk qualified as Gtk
-import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
-import System.FilePath (takeExtension, (</>))
 
 import MediaCopy.Gtk.Assets (resolveAsset)
 import MediaCopy.Gtk.Environment (Environment, logWith)
 import MediaCopy.Interface.Theme
 
 data ThemeAdapter = ThemeAdapter
-  { environment :: Environment
-  , provider :: Gtk.CssProvider
+  { provider :: Gtk.CssProvider
   , manager :: Adw.StyleManager
+  , darkSheet :: Text
   , forced :: IORef (Maybe PaletteMode)
   , handler :: IORef (Maybe (PaletteMode -> IO ()))
   }
@@ -47,9 +44,10 @@ newThemeAdapter environment = do
       provider
       (fromIntegral Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1)
   manager <- Adw.styleManagerGetDefault
+  darkSheet <- readDarkSheet environment
   forced <- newIORef Nothing
   handler <- newIORef Nothing
-  let adapter = ThemeAdapter {environment, provider, manager, forced, handler}
+  let adapter = ThemeAdapter {provider, manager, darkSheet, forced, handler}
   void $ on manager (Adw.PropertyNotify #dark) $ \_ ->
     readIORef forced >>= \case
       Just _ -> pure ()
@@ -58,13 +56,26 @@ newThemeAdapter environment = do
           >>= \observed -> report adapter observed
   pure adapter
 
-apply :: ThemeAdapter -> Appearance -> PaletteMode -> IO ()
-apply adapter appearance desktop = do
-  case themeAsset (resolveTheme appearance desktop) of
-    Nothing -> Gtk.cssProviderLoadFromString adapter.provider ""
-    Just relative -> do
-      path <- resolveAsset adapter.environment relative
-      Gtk.cssProviderLoadFromPath adapter.provider path
+readDarkSheet :: Environment -> IO Text
+readDarkSheet environment = do
+  path <- resolveAsset environment "assets/dark.css"
+  try @IOException (ByteString.readFile path) >>= \case
+    Left reason -> unreadable path (show reason)
+    Right bytes -> either (unreadable path . show) pure (decodeUtf8' bytes)
+  where
+    unreadable path reason = do
+      logWith environment (logAttention_ (T.pack (path <> ": " <> reason)))
+      pure ""
+
+apply :: ThemeAdapter -> Appearance -> PaletteMode -> Accent -> IO ()
+apply adapter appearance desktop desktopAccent = do
+  let mode = resolveMode appearance.base desktop
+      sheet = case mode of
+        DarkPalette -> adapter.darkSheet
+        LightPalette -> ""
+  Gtk.cssProviderLoadFromString
+    adapter.provider
+    (sheet <> accentCss mode (fromMaybe desktopAccent appearance.accent) desktopAccent)
   previous <- readIORef adapter.forced
   let wanted = forcedBase appearance.base
   writeIORef adapter.forced wanted
@@ -95,57 +106,20 @@ report :: ThemeAdapter -> PaletteMode -> IO ()
 report adapter observed =
   readIORef adapter.handler >>= mapM_ (\notify -> notify observed)
 
-loadPalettes :: Environment -> IO (Vector Palette)
-loadPalettes environment = readThemeListing environment <&> maybe V.empty (uncurry palettesFrom)
+readDesktopAccent :: ThemeAdapter -> IO Accent
+readDesktopAccent adapter =
+  Adw.styleManagerGetAccentColor adapter.manager <&> \case
+    Adw.AccentColorTeal -> Teal
+    Adw.AccentColorGreen -> Green
+    Adw.AccentColorYellow -> Yellow
+    Adw.AccentColorOrange -> Orange
+    Adw.AccentColorRed -> Red
+    Adw.AccentColorPink -> Pink
+    Adw.AccentColorPurple -> Purple
+    Adw.AccentColorSlate -> Slate
+    _ -> Blue
 
-readThemeListing :: Environment -> IO (Maybe (FilePath, ThemeListing))
-readThemeListing environment = do
-  root <- resolveAsset environment themeRoot
-  present <- doesDirectoryExist root
-  if not present
-    then pure Nothing
-    else do
-      directories <- childDirectories root
-      listed <- forM directories (familyListing environment root)
-      pure (Just (root, ThemeListing {families = V.fromList listed}))
-
-themeRoot :: FilePath
-themeRoot = "assets" </> "themes"
-
-familyListing :: Environment -> FilePath -> FilePath -> IO FamilyListing
-familyListing environment root family = do
-  info <- familyInfo environment (root </> family)
-  directories <- childDirectories (root </> family)
-  listed <- forM directories (modeListing (root </> family))
-  pure FamilyListing {directory = T.pack family, info, modes = V.fromList (catMaybes listed)}
-
-modeListing :: FilePath -> FilePath -> IO (Maybe (PaletteMode, Vector Text))
-modeListing familyDir directory = case paletteMode directory of
-  Nothing -> pure Nothing
-  Just mode -> do
-    entries <- listDirectory (familyDir </> directory)
-    let files = entries & filter (\entry -> takeExtension entry == ".css") & map T.pack & V.fromList
-    pure (Just (mode, files))
-
-paletteMode :: FilePath -> Maybe PaletteMode
-paletteMode directory =
-  find (\mode -> modeDirectory mode == T.pack directory) [minBound .. maxBound]
-
-familyInfo :: Environment -> FilePath -> IO FamilyInfo
-familyInfo environment familyDir = do
-  present <- doesFileExist path
-  if not present
-    then pure noFamilyInfo
-    else
-      Aeson.eitherDecodeFileStrict' path >>= \case
-        Left reason -> do
-          logWith environment (logAttention_ (T.pack (path <> ": " <> reason)))
-          pure noFamilyInfo
-        Right found -> pure found
-  where
-    path = familyDir </> "family.json"
-
-childDirectories :: FilePath -> IO (List FilePath)
-childDirectories parent = do
-  entries <- listDirectory parent
-  filterM (\entry -> doesDirectoryExist (parent </> entry)) entries
+onDesktopAccent :: ThemeAdapter -> (Accent -> IO ()) -> IO ()
+onDesktopAccent adapter notify =
+  void $ on adapter.manager (Adw.PropertyNotify #accentColor) $ \_ ->
+    readDesktopAccent adapter >>= notify

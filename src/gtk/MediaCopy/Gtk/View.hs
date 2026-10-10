@@ -13,7 +13,6 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust)
 import Data.Text (Text)
-import Data.Vector (Vector)
 import GI.Adw qualified as Adw
 import GI.GLib qualified as GLib
 import GI.Gtk qualified as Gtk
@@ -31,7 +30,7 @@ import MediaCopy.Gtk.Widgets.Preferences (Preferences (..), newPreferences)
 import MediaCopy.Interface.Command (mainMenuLabel)
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Palette (paletteView)
-import MediaCopy.Interface.Theme (Appearance, PaletteMode, ThemeSection)
+import MediaCopy.Interface.Theme (Accent, Appearance, PaletteMode)
 import MediaCopy.Interface.Translation
 import MediaCopy.Model (Chrome (..), JobEntry (..), Model (..), UiMessage (..), commandEnabled, selectedEntry)
 
@@ -43,13 +42,11 @@ data Widgets = Widgets
 
 buildWidgets
   :: Adw.Application
-  -> (Appearance -> PaletteMode -> IO ())
+  -> (Appearance -> PaletteMode -> Accent -> IO ())
   -> Wording
-  -> Vector ThemeSection
-  -> Vector ThemeSection
   -> (UiMessage -> IO ())
   -> IO Widgets
-buildWidgets app applyTheme wording lightSections darkSections dispatch = do
+buildWidgets app applyTheme wording dispatch = do
   window <- newAppWindow app
   actions <- installActions app window dispatch
   toolbar <- newHeaderToolbar actions wording
@@ -63,14 +60,14 @@ buildWidgets app applyTheme wording lightSections darkSections dispatch = do
   set toastOverlay [#child := toolbar]
   set window [#content := toastOverlay]
   toastCell <- newToastCell toastOverlay dispatch
-  themeCell <- newCell (\(appearance, desktop) -> applyTheme appearance desktop)
+  themeCell <- newCell (\(appearance, desktop, desktopAccent) -> applyTheme appearance desktop desktopAccent)
   offloadDialog <- newOffloadDialog window dispatch
   planSheet <- newPlanSheet window dispatch
-  preferences <- newPreferences window wording lightSections darkSections dispatch
+  preferences <- newPreferences window wording dispatch
   closeConfirm <- newCloseConfirm window dispatch
   paintPalette <- newCommandPalette window actions.accelLabel dispatch
   let render current = do
-        renderCell themeCell (current.appearance, current.desktopBase)
+        renderCell themeCell (current.appearance, current.desktopBase, current.desktopAccent)
         let selected = selectedEntry current
         renderSidebar sidebar current (if isJust selected then current.selected else Nothing)
         Gtk.stackSetVisibleChildName contentStack (if isJust selected then "detail" else "empty")

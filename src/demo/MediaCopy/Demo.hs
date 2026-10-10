@@ -17,7 +17,7 @@ import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan (JobPlan)
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Scene (Frame (..))
-import MediaCopy.Interface.Theme (Base (..), Palette (..), PaletteMode (..), Theme (..), modeDirectory, palettesFrom)
+import MediaCopy.Interface.Theme (Accent (..), Base (..), PaletteMode (..))
 import MediaCopy.Model (FileFilter (..), Message (..), Model (..), UiMessage (..), initialModel, update)
 
 data Scene = Scene
@@ -49,15 +49,9 @@ scenes =
   , still "close-confirm" (runningMessages <> [EngineEvent first (Progress 8_640_000_000), Ui RequestClose])
   , still "command-palette" (finishedMessages <> [Ui (RunCommand Command.CommandPalette), Ui (SetPaletteQuery "job")])
   , tweak (\frame -> frame {action = Just Command.About}) (still "about" [])
+  , still "themes/queue-light" (queueMessages <> [Ui (SetBase AlwaysLight)])
+  , still "themes/queue-dark" (queueMessages <> [Ui (SetBase AlwaysDark)])
   ]
-    <> [ still
-           ("themes/queue-" <> palette.family <> "-" <> modeDirectory palette.mode <> "-" <> palette.variant)
-           (queueMessages <> [Ui (SetBase base), Ui (SetPalette (PaletteTheme palette))])
-       | palette <- V.toList (palettesFrom "assets/themes" paletteListing)
-       , let base = case palette.mode of
-               DarkPalette -> AlwaysDark
-               LightPalette -> AlwaysLight
-       ]
 
 sceneNames :: List Text
 sceneNames = map (.name) scenes
@@ -72,7 +66,7 @@ tweak :: (Frame -> Frame) -> Scene -> Scene
 tweak change scene = scene {frame = change scene.frame}
 
 play :: List Message -> Model
-play msgs = foldl (\model msg -> fst (update msg model)) (initialModel at LightPalette) msgs
+play msgs = foldl (\model msg -> fst (update msg model)) (initialModel at LightPalette Blue) msgs
 
 offered :: Job -> (JobSpec -> JobPlan) -> List Message
 offered job toPlan = [RequestPlan job, PlanComputed spec (Right (toPlan spec))]

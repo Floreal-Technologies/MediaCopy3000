@@ -106,13 +106,6 @@ install_file() {
   install -m "$mode" "$src" "$dst"
 }
 
-install_themes() {
-  local data_dir="$1" file
-  while IFS= read -r file; do
-    install_file 644 "$file" "${data_dir}/${file}"
-  done < <(find assets/themes -type f | sort)
-}
-
 install_plugins() {
   local root="$1"
   install_file 644 plugins/credits/plugin.json "${root}/tech.floreal.credits/plugin.json"
@@ -137,7 +130,8 @@ macos_bundle() {
 
   install_file 644 assets/styles.css \
     "${contents}/Resources/share/mediacopy3000/assets/styles.css"
-  install_themes "${contents}/Resources/share/mediacopy3000"
+  install_file 644 assets/dark.css \
+    "${contents}/Resources/share/mediacopy3000/assets/dark.css"
 
   mkdir -p "${contents}/Resources/share/glib-2.0/schemas"
   "${brew_prefix}/bin/glib-compile-schemas" \
@@ -189,7 +183,7 @@ else
   install_file 755 "$BIN" "${STAGING}${PREFIX}/bin/mediacopy3000"
   strip "${STAGING}${PREFIX}/bin/mediacopy3000"
   install_file 644 assets/styles.css "${STAGING}${PREFIX}/share/mediacopy3000/assets/styles.css"
-  install_themes "${STAGING}${PREFIX}/share/mediacopy3000"
+  install_file 644 assets/dark.css "${STAGING}${PREFIX}/share/mediacopy3000/assets/dark.css"
   install_plugins "${STAGING}${PREFIX}/lib/mediacopy3000/plugins"
   install_file 644 assets/tech.floreal.MediaCopy3000.desktop \
     "${STAGING}${PREFIX}/share/applications/tech.floreal.MediaCopy3000.desktop"

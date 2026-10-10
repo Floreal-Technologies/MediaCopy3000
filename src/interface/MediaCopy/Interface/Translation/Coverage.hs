@@ -10,7 +10,6 @@ import Data.List qualified as List
 import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Vector qualified as V
 import System.OsPath (unsafeEncodeUtf)
 
 import MediaCopy.Domain.Job
@@ -48,8 +47,7 @@ expectedWording wording =
     <> [pluginToastText wording "A001" PluginFinding {plugin = PluginRef {id = "tech.floreal.probe", name = "Probe"}, severity = Warning, about = Faulted (BadOutput "x")}]
     <> [fst (pluginFindingTexts wording PluginFinding {plugin = PluginRef {id = "tech.floreal.probe", name = "Probe"}, severity = Warning, about = Said PluginSays {key = "k", title = "t", detail = "d"}})]
     <> map (displayBase wording) [minBound ..]
-    <> map (themeRowLabel wording . SystemTheme) [minBound ..]
-    <> map (.heading) (V.toList (themeSections wording minBound V.empty))
+    <> map (displayAccent wording) (Nothing : map Just [minBound ..])
     <> map (commandLabel wording) commands
     <> map (sectionLabel wording) [minBound ..]
     <> [mainMenuLabel wording, palettePlaceholder wording, paletteNoMatch wording]

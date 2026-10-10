@@ -9,9 +9,8 @@ maintainer: feriel@choutri.eu
 category: Distribution
 build-type: Simple
 data-files:
+  assets/dark.css
   assets/styles.css
-  assets/themes/**/*.css
-  assets/themes/**/*.json
 
 extra-source-files:
   assets/tech.floreal.MediaCopy3000-symbolic.svg
@@ -353,7 +352,6 @@ test-suite core-test
     MediaCopy.Domain.PlanTest
     MediaCopy.Effects.FileSystemTest
     MediaCopy.EngineTest
-    MediaCopy.Interface.ThemeTest
     MediaCopy.Interface.WordingTest
     MediaCopy.ModelTest
     MediaCopy.Test.InMemoryFS

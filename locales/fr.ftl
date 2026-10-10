@@ -78,12 +78,19 @@ finding-already-sealed = le dossier est déjà scellé
 
 ## Theme
 
-theme-section-system = Système
-theme-system-light = Système clair
-theme-system-dark = Système sombre
 theme-base-follow-desktop = Suivre le bureau
 theme-base-always-light = Toujours clair
 theme-base-always-dark = Toujours sombre
+theme-accent-desktop = Suivre l’accent du bureau
+theme-accent-blue = Bleu
+theme-accent-teal = Sarcelle
+theme-accent-green = Vert
+theme-accent-yellow = Jaune
+theme-accent-orange = Orange
+theme-accent-red = Rouge
+theme-accent-pink = Rose
+theme-accent-purple = Violet
+theme-accent-slate = Ardoise
 
 ## Job toasts & dialogs
 

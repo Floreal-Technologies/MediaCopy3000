@@ -53,7 +53,7 @@ refused.
 | One hash format per job | A job cannot write two formats at once. |
 | One job at a time | Jobs queue. They do not run beside each other. |
 | No creator contact fields | The manifest records the computer, the tool and its version, and nothing about a person. |
-| The theme is not saved | Every start is back on `Follow desktop`, `System light` and `System dark`. |
+| The theme is not saved | Every start is back on `Follow desktop` and `Follow desktop accent`. |
 | Top-up is not resume | A destination that holds a finished generation of its own is refused. Offload to a fresh folder, or verify the destination. |
 
 ## A partial copy from another card

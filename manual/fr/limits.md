@@ -51,7 +51,7 @@ Le schéma ASC MHL rend l'attribut `action` facultatif. Un manifeste qui omet ce
 | Un seul format de hachage par tâche | Une tâche ne peut pas générer deux formats simultanément. |
 | Une seule tâche à la fois | Les tâches sont mises en file d'attente ; elles ne s'exécutent pas en parallèle. |
 | Absence de champs pour l'auteur | Le manifeste enregistre l'ordinateur, l'outil et sa version, mais aucune information sur une personne. |
-| Thème non mémorisé | À chaque lancement, le logiciel revient aux paramètres « Suivre le bureau », « Système (clair) » ou « Système (sombre) ». |
+| Thème non mémorisé | À chaque lancement, le logiciel revient aux paramètres « Suivre le bureau » et « Suivre l’accent du bureau ». |
 | Ajout de données ≠ Reprise | Une destination contenant déjà une génération terminée est refusée. Transférez les données vers un nouveau dossier ou vérifiez la destination. |
 
 ## Copie partielle depuis une autre carte
