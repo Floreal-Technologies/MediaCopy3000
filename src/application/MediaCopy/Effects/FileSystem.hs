@@ -18,9 +18,8 @@ module MediaCopy.Effects.FileSystem
 
 import Ascmhl.Layout (ascmhlDir)
 import Ascmhl.Path (RelPath, pathText)
-import Control.Exception hiding (displayException)
+import Control.Exception
 import Control.Monad (forM, unless, when)
-import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Foldable (forM_, traverse_)
@@ -35,7 +34,7 @@ import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Effectful
 import Effectful.Dispatch.Dynamic (interpret, localSeqUnliftIO, send)
-import Effectful.Exception (displayException, trySync)
+import Effectful.Exception (trySync)
 import System.Directory.OsPath qualified as Dir
 import System.DiskSpace (getAvailSpace)
 import System.File.OsPath qualified as FileIO
@@ -54,7 +53,7 @@ data ReadCache = FromCache | FromDevice
 
 data FileSystem :: Effect where
   Walk :: OsPath -> FileSystem m (Maybe Tree)
-  FreeSpaceOf :: OsPath -> FileSystem m (Either Text Int64)
+  FreeSpaceOf :: OsPath -> FileSystem m (Maybe Int64)
   StreamFile :: ReadCache -> OsPath -> (ByteString -> m ()) -> FileSystem m UTCTime
   WriteTemps :: OsPath -> Vector PlannedWrite -> m () -> (ByteString -> m ()) -> FileSystem m UTCTime
   Publish :: Vector PlannedWrite -> UTCTime -> FileSystem m ()
@@ -70,7 +69,7 @@ type instance DispatchOf FileSystem = Dynamic
 walk :: (FileSystem :> es) => OsPath -> Eff es (Maybe Tree)
 walk root = send (Walk root)
 
-freeSpaceOf :: (FileSystem :> es) => OsPath -> Eff es (Either Text Int64)
+freeSpaceOf :: (FileSystem :> es) => OsPath -> Eff es (Maybe Int64)
 freeSpaceOf p = send (FreeSpaceOf p)
 
 streamFile :: (FileSystem :> es) => ReadCache -> OsPath -> (ByteString -> Eff es ()) -> Eff es UTCTime
@@ -104,7 +103,7 @@ runFileSystemIO :: (IOE :> es) => Int -> Eff (FileSystem : es) a -> Eff es a
 runFileSystemIO chunkSize =
   interpret $ \env -> \case
     Walk root -> liftIO (walkIO root)
-    FreeSpaceOf p -> trySync (liftIO (freeSpaceIO p)) <&> first (T.pack . displayException)
+    FreeSpaceOf p -> trySync (liftIO (freeSpaceIO p)) <&> either (const Nothing) Just
     StreamFile mode path onChunk ->
       localSeqUnliftIO env (\unlift -> streamFileIO mode chunkSize path (unlift . onChunk))
     WriteTemps source writes onFlush onChunk ->
