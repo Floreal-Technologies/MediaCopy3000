@@ -21,7 +21,7 @@ import System.OsPath (OsPath)
 import MediaCopy.Domain.Job
 import MediaCopy.Domain.Plan (JobPlan (..), planBlocked, planEquivalent)
 import MediaCopy.Domain.Plugin (PluginFinding (..), PluginRef (..), PluginReport (..))
-import MediaCopy.Domain.PluginCatalog (CatalogChange (..), PluginCatalog, Setting (..), emptyCatalog)
+import MediaCopy.Domain.PluginCatalog (CatalogChange (..), Edit (..), PluginCatalog, Setting (..), emptyCatalog)
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Theme
 import MediaCopy.Interface.Translation
@@ -268,7 +268,7 @@ updateUi msg model = case msg of
   CancelClose -> (model {closeConfirm = False}, [])
   DismissToast -> (model {toast = Nothing}, [])
   ChangePlugin change -> (model, [ApplyChange change])
-  PickPluginPath pluginId key -> (model, [OpenFileDialog (Ui . ChangePlugin . SetSetting pluginId key . SettingText . pathText)])
+  PickPluginPath pluginId key -> (model, [OpenFileDialog (Ui . ChangePlugin . CatalogChange pluginId . SetSetting key . SettingText . pathText)])
   OpenPluginFolder folder -> (model, [ShowFolder folder])
   ReloadPlugins -> (model, [LoadCatalog])
   SetJobField pluginId key value -> setJobField pluginId key value model

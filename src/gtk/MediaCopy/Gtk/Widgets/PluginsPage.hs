@@ -147,7 +147,7 @@ entryRows groups dispatch entry = do
   row <- new Adw.ActionRow [#useMarkup := False, #activatable := True]
   set row [#title := entry.plugin.name, #subtitle := entrySubtitle entry]
   enabledSwitch <- new Gtk.Switch [#valign := Gtk.AlignCenter, #active := entry.enabled]
-  paintEnabled <- bind (switch enabledSwitch) (dispatch . ChangePlugin . SetEnabled pluginId)
+  paintEnabled <- bind (switch enabledSwitch) (dispatch . ChangePlugin . CatalogChange pluginId . SetEnabled)
   chevron <- new Gtk.Image [#iconName := "go-next-symbolic"]
   Adw.actionRowAddSuffix row enabledSwitch
   Adw.actionRowAddSuffix row chevron
@@ -187,7 +187,7 @@ fillDetail dispatch body entry = do
 detailRows :: (UiMessage -> IO ()) -> PluginEntry -> IO DetailRows
 detailRows dispatch entry = do
   let pluginId = entry.plugin.id
-      change = dispatch . ChangePlugin
+      change = dispatch . ChangePlugin . CatalogChange pluginId
   general <- new Adw.PreferencesGroup [#description := entry.description]
   folderRow <- new Adw.ActionRow [#useMarkup := False, #subtitleSelectable := True]
   set folderRow [#title := "Folder", #subtitle := entry.folder]
@@ -197,7 +197,7 @@ detailRows dispatch entry = do
   Adw.preferencesGroupAdd general folderRow
   traceRow <- new Adw.SwitchRow [#useMarkup := False, #active := entry.trace]
   set traceRow [#title := "Trace Messages", #subtitle := "Writes each message to and from the plug-in to a file, for its developer"]
-  paintTrace <- bind (switchRow traceRow) (change . SetTrace pluginId)
+  paintTrace <- bind (switchRow traceRow) (change . SetTrace)
   Adw.preferencesGroupAdd general traceRow
   permissions <-
     new
@@ -206,12 +206,12 @@ detailRows dispatch entry = do
       , #description := "Each capability that the plug-in asks for is granted or declined"
       ]
   capabilityRows <- forM (V.toList entry.capabilities) $ \capability -> do
-    shown <- capabilityRow change pluginId capability
+    shown <- capabilityRow change capability
     Adw.preferencesGroupAdd permissions (fst shown)
     pure shown
   settings <- new Adw.PreferencesGroup [#title := "Settings", #visible := not (V.null entry.settings)]
   settingRows <- forM (V.toList entry.settings) $ \field -> do
-    row <- settingRow (dispatch . ChangePlugin) dispatch pluginId field
+    row <- settingRow change dispatch pluginId field
     forM_ row.rows (Adw.preferencesGroupAdd settings)
     pure row
   pure DetailRows {groups = [general, permissions, settings], paintTrace, capabilityRows, settingRows}
@@ -228,8 +228,8 @@ refreshDetail rows entry = do
     (V.toList entry.capabilities)
   zipWithM_ (\row field -> row.refresh field.value) rows.settingRows (V.toList entry.settings)
 
-capabilityRow :: (CatalogChange -> IO ()) -> Text -> CapabilityView -> IO (Adw.ComboRow, Answer -> IO ())
-capabilityRow change pluginId view = do
+capabilityRow :: (Edit -> IO ()) -> CapabilityView -> IO (Adw.ComboRow, Answer -> IO ())
+capabilityRow change view = do
   choices <- Gtk.stringListNew (Just ["Not answered", "Granted", "Declined"])
   row <-
     new
@@ -239,19 +239,19 @@ capabilityRow change pluginId view = do
       , #selected := answerIndex view.answer
       ]
   set row [#title := capabilityName view.capability, #subtitle := capabilitySubtitle view]
-  paintIndex <- bind (comboRow row) (mapM_ (change . SetAnswer pluginId view.capability) . answerAt)
+  paintIndex <- bind (comboRow row) (mapM_ (change . SetAnswer view.capability) . answerAt)
   pure (row, paintIndex . answerIndex)
 
-settingRow :: (CatalogChange -> IO ()) -> (UiMessage -> IO ()) -> Text -> FieldView -> IO FieldRow
+settingRow :: (Edit -> IO ()) -> (UiMessage -> IO ()) -> Text -> FieldView -> IO FieldRow
 settingRow send dispatch pluginId field
   | field.shape == AuthorsShape =
-      authorsRow (\slots -> if V.null slots then send (ClearSetting pluginId field.key) else send (SetSetting pluginId field.key (SettingAuthors slots))) "" field
+      authorsRow (\slots -> if V.null slots then send (ClearSetting field.key) else send (SetSetting field.key (SettingAuthors slots))) "" field
   | otherwise =
       fieldRow
         FieldActions
-          { setText = send . SetSetting pluginId field.key . SettingText
-          , setBool = send . SetSetting pluginId field.key . SettingBool
-          , clear = send (ClearSetting pluginId field.key)
+          { setText = send . SetSetting field.key . SettingText
+          , setBool = send . SetSetting field.key . SettingBool
+          , clear = send (ClearSetting field.key)
           , pickPath = dispatch (PickPluginPath pluginId field.key)
           }
         ""

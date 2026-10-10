@@ -10,6 +10,7 @@ module MediaCopy.Domain.PluginCatalog
   , emptyCatalog
   , Setting (..)
   , CatalogChange (..)
+  , Edit (..)
   , enabledJobFields
   , authorJobFields
   , authorSlots
@@ -79,12 +80,10 @@ emptyCatalog = PluginCatalog {entries = V.empty, rejected = V.empty, problem = N
 data Setting = SettingText Text | SettingBool Bool | SettingAuthors (Vector AuthorSlot)
   deriving stock (Eq, Show)
 
-data CatalogChange
-  = SetEnabled Text Bool
-  | SetTrace Text Bool
-  | SetAnswer Text Capability Answer
-  | SetSetting Text Text Setting
-  | ClearSetting Text Text
+data CatalogChange = CatalogChange Text Edit
+  deriving stock (Eq, Show)
+
+data Edit = SetEnabled Bool | SetTrace Bool | SetAnswer Capability Answer | SetSetting Text Setting | ClearSetting Text
   deriving stock (Eq, Show)
 
 -- |

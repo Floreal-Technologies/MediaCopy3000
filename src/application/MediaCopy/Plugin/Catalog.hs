@@ -117,23 +117,22 @@ applyChange change = do
       pure (either (\e -> Left ("plugins.json cannot be written: " <> T.show e)) Right written)
 
 -- |
--- >>> editGrants (SetAnswer "tech.floreal.probe" Block Granted) (object [])
+-- >>> editGrants (CatalogChange "tech.floreal.probe" (SetAnswer Block Granted)) (object [])
 -- Right (Object (fromList [("plugins",Object (fromList [("tech.floreal.probe",Object (fromList [("declined",Array []),("grants",Array [String "block"])]))]))]))
--- >>> editGrants (SetAnswer "tech.floreal.probe" Block Declined) (object ["plugins" .= object ["tech.floreal.probe" .= object ["grants" .= ["block" :: Text], "note" .= ("kept" :: Text)]]])
+-- >>> editGrants (CatalogChange "tech.floreal.probe" (SetAnswer Block Declined)) (object ["plugins" .= object ["tech.floreal.probe" .= object ["grants" .= ["block" :: Text], "note" .= ("kept" :: Text)]]])
 -- Right (Object (fromList [("plugins",Object (fromList [("tech.floreal.probe",Object (fromList [("declined",Array [String "block"]),("grants",Array []),("note",String "kept")]))]))]))
--- >>> editGrants (ClearSetting "tech.floreal.probe" "camera") (object ["plugins" .= object ["tech.floreal.probe" .= object ["settings" .= object ["camera" .= ("B" :: Text), "dit" .= ("Jane" :: Text)]]]])
+-- >>> editGrants (CatalogChange "tech.floreal.probe" (ClearSetting "camera")) (object ["plugins" .= object ["tech.floreal.probe" .= object ["settings" .= object ["camera" .= ("B" :: Text), "dit" .= ("Jane" :: Text)]]]])
 -- Right (Object (fromList [("plugins",Object (fromList [("tech.floreal.probe",Object (fromList [("settings",Object (fromList [("dit",String "Jane")]))]))]))]))
--- >>> editGrants (SetTrace "tech.floreal.probe" True) (object ["plugins" .= object ["tech.floreal.probe" .= object ["enabled" .= True]]])
+-- >>> editGrants (CatalogChange "tech.floreal.probe" (SetTrace True)) (object ["plugins" .= object ["tech.floreal.probe" .= object ["enabled" .= True]]])
 -- Right (Object (fromList [("plugins",Object (fromList [("tech.floreal.probe",Object (fromList [("enabled",Bool True),("trace",Bool True)]))]))]))
--- >>> editGrants (SetSetting "tech.floreal.probe" "offline" (SettingBool True)) (Array mempty)
+-- >>> editGrants (CatalogChange "tech.floreal.probe" (SetSetting "offline" (SettingBool True))) (Array mempty)
 -- Left "is not a JSON object"
--- >>> editGrants (SetSetting "tech.floreal.credits" "authors" (SettingAuthors (V.singleton (AuthorSlot "DIT" "Jane Doe" "" "")))) (object [])
+-- >>> editGrants (CatalogChange "tech.floreal.credits" (SetSetting "authors" (SettingAuthors (V.singleton (AuthorSlot "DIT" "Jane Doe" "" ""))))) (object [])
 -- Right (Object (fromList [("plugins",Object (fromList [("tech.floreal.credits",Object (fromList [("settings",Object (fromList [("authors",Array [Object (fromList [("email",String ""),("name",String "Jane Doe"),("phone",String ""),("role",String "DIT")])])]))]))]))]))
 editGrants :: CatalogChange -> Value -> Either Text Value
-editGrants change = \case
+editGrants (CatalogChange pluginId edit) = \case
   Object root -> do
     plugins <- objectAt "plugins" root
-    let pluginId = changedPlugin change
     entry <- objectAt pluginId plugins
     let edited = editEntry entry
     Right (Object (KeyMap.insert "plugins" (Object (KeyMap.insert (Key.fromText pluginId) (Object edited) plugins)) root))
@@ -147,10 +146,10 @@ editGrants change = \case
       Just (Array values) -> [text | String text <- V.toList values]
       _ -> []
     setTexts name values entry = KeyMap.insert name (toJSON (Set.toList (Set.fromList values))) entry
-    editEntry entry = case change of
-      SetEnabled _ on -> KeyMap.insert "enabled" (Bool on) entry
-      SetTrace _ on -> KeyMap.insert "trace" (Bool on) entry
-      SetAnswer _ capability answer ->
+    editEntry entry = case edit of
+      SetEnabled on -> KeyMap.insert "enabled" (Bool on) entry
+      SetTrace on -> KeyMap.insert "trace" (Bool on) entry
+      SetAnswer capability answer ->
         let name = capabilityName capability
             grants = filter (/= name) (texts "grants" entry)
             declined = filter (/= name) (texts "declined" entry)
@@ -158,21 +157,13 @@ editGrants change = \case
              Granted -> setTexts "grants" (name : grants) (setTexts "declined" declined entry)
              Declined -> setTexts "grants" grants (setTexts "declined" (name : declined) entry)
              Unanswered -> setTexts "grants" grants (setTexts "declined" declined entry)
-      SetSetting _ key setting ->
+      SetSetting key setting ->
         let settings = fromRight KeyMap.empty (objectAt "settings" entry)
             json = case setting of
               SettingText text -> String text
               SettingBool flag -> Bool flag
               SettingAuthors slots -> toJSON slots
         in KeyMap.insert "settings" (Object (KeyMap.insert (Key.fromText key) json settings)) entry
-      ClearSetting _ key ->
+      ClearSetting key ->
         let settings = fromRight KeyMap.empty (objectAt "settings" entry)
         in KeyMap.insert "settings" (Object (KeyMap.delete (Key.fromText key) settings)) entry
-
-changedPlugin :: CatalogChange -> Text
-changedPlugin = \case
-  SetEnabled pluginId _ -> pluginId
-  SetTrace pluginId _ -> pluginId
-  SetAnswer pluginId _ _ -> pluginId
-  SetSetting pluginId _ _ -> pluginId
-  ClearSetting pluginId _ -> pluginId
