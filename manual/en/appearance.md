@@ -26,16 +26,25 @@ The light theme is the standard GNOME theme. The dark theme is
 
 ## Accent
 
-`Accent` shows one round button for each colour. The first button, with the
-computer icon, follows the accent colour of the desktop. Then come `Blue`,
-`Teal`, `Green`, `Yellow`, `Orange`, `Red`, `Pink`, `Purple` and `Slate`.
+The first button follows the desktop accent. The other buttons set one of these
+colours.
 
-Under the light theme, each colour is the GNOME colour of the same name. Under
-the dark theme, each colour is the Catppuccin Frappé colour that is nearest to
-it: `Orange` is Peach, `Purple` is Mauve and `Slate` is Overlay 2.
-
-If the desktop gives no accent colour, `Follow desktop accent` uses `Blue`.
+| Colour | Light theme | Dark theme |
+|---|:---:|:---:|
+| Blue | <span class="swatch" style="background: #3584e4"></span> | <span class="swatch" style="background: #8caaee"></span> |
+| Teal | <span class="swatch" style="background: #2190a4"></span> | <span class="swatch" style="background: #81c8be"></span> |
+| Green | <span class="swatch" style="background: #3a944a"></span> | <span class="swatch" style="background: #a6d189"></span> |
+| Yellow | <span class="swatch" style="background: #c88800"></span> | <span class="swatch" style="background: #e5c890"></span> |
+| Orange | <span class="swatch" style="background: #ed5b00"></span> | <span class="swatch" style="background: #ef9f76"></span> |
+| Red | <span class="swatch" style="background: #e62d42"></span> | <span class="swatch" style="background: #e78284"></span> |
+| Pink | <span class="swatch" style="background: #d56199"></span> | <span class="swatch" style="background: #f4b8e4"></span> |
+| Purple | <span class="swatch" style="background: #9141ac"></span> | <span class="swatch" style="background: #ca9ee6"></span> |
+| Slate | <span class="swatch" style="background: #6f8396"></span> | <span class="swatch" style="background: #949cbb"></span> |
 
 ![The window under the light theme](images/themes/queue-light.png)
 
 ![The window under the dark theme](images/themes/queue-dark.png)
+
+<style scoped>
+.swatch { display: inline-block; width: 20px; height: 20px; border-radius: 50%; vertical-align: middle; }
+</style>

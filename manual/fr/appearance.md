@@ -26,17 +26,25 @@ Le thème clair est le thème standard de GNOME. Le thème sombre est
 
 ## Accent
 
-`Accent` affiche un bouton rond par couleur. Le premier bouton, avec l'icône
-d'ordinateur, suit la couleur d'accent du bureau. Viennent ensuite `Bleu`,
-`Sarcelle`, `Vert`, `Jaune`, `Orange`, `Rouge`, `Rose`, `Violet` et `Ardoise`.
+Le premier bouton suit l'accent du bureau. Les autres boutons choisissent une de
+ces couleurs.
 
-Avec le thème clair, chaque couleur est la couleur GNOME du même nom. Avec le
-thème sombre, chaque couleur est la couleur Catppuccin Frappé la plus proche :
-`Orange` est Peach, `Violet` est Mauve et `Ardoise` est Overlay 2.
-
-Si le bureau ne donne pas de couleur d'accent, `Suivre l’accent du bureau`
-utilise `Bleu`.
+| Couleur | Thème clair | Thème sombre |
+|---|:---:|:---:|
+| Bleu | <span class="swatch" style="background: #3584e4"></span> | <span class="swatch" style="background: #8caaee"></span> |
+| Sarcelle | <span class="swatch" style="background: #2190a4"></span> | <span class="swatch" style="background: #81c8be"></span> |
+| Vert | <span class="swatch" style="background: #3a944a"></span> | <span class="swatch" style="background: #a6d189"></span> |
+| Jaune | <span class="swatch" style="background: #c88800"></span> | <span class="swatch" style="background: #e5c890"></span> |
+| Orange | <span class="swatch" style="background: #ed5b00"></span> | <span class="swatch" style="background: #ef9f76"></span> |
+| Rouge | <span class="swatch" style="background: #e62d42"></span> | <span class="swatch" style="background: #e78284"></span> |
+| Rose | <span class="swatch" style="background: #d56199"></span> | <span class="swatch" style="background: #f4b8e4"></span> |
+| Violet | <span class="swatch" style="background: #9141ac"></span> | <span class="swatch" style="background: #ca9ee6"></span> |
+| Ardoise | <span class="swatch" style="background: #6f8396"></span> | <span class="swatch" style="background: #949cbb"></span> |
 
 ![La fenêtre avec le thème clair](../en/images/themes/queue-light.png)
 
 ![La fenêtre avec le thème sombre](../en/images/themes/queue-dark.png)
+
+<style scoped>
+.swatch { display: inline-block; width: 20px; height: 20px; border-radius: 50%; vertical-align: middle; }
+</style>
