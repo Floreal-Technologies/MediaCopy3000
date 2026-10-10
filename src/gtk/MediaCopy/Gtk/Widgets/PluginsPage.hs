@@ -11,7 +11,7 @@ import Data.Vector (Vector)
 import Data.Vector qualified as V
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
-import MediaCopy.Plugin.Manifest (Capability, capabilityName)
+import MediaCopy.Plugin.Manifest (Capability, FieldKind (..), capabilityName)
 
 import MediaCopy.Domain.Plugin (PluginRef (..))
 import MediaCopy.Domain.PluginCatalog
@@ -37,7 +37,7 @@ data Groups = Groups
   , current :: IORef (Maybe PluginCatalog)
   }
 
-type Layout = (Maybe Text, [(Text, [Capability], [(Text, Text, FieldShape, Bool, Int)])])
+type Layout = (Maybe Text, [(Text, [Capability], [(Text, Text, FieldKind, Bool, Int)])])
 
 data EntryRows = EntryRows
   { row :: Adw.ActionRow
@@ -79,7 +79,7 @@ newPluginsPage dialog dispatch = do
 layoutOf :: PluginCatalog -> Layout
 layoutOf catalog =
   ( catalog.problem
-  , [ (entry.plugin.id, [view.capability | view <- V.toList entry.capabilities], [(field.key, field.label, field.shape, field.required, V.length (authorSlots field.value)) | field <- V.toList entry.settings])
+  , [ (entry.plugin.id, [view.capability | view <- V.toList entry.capabilities], [(field.key, field.label, field.kind, field.required, V.length (authorSlots field.value)) | field <- V.toList entry.settings])
     | entry <- V.toList catalog.entries
     ]
   )
@@ -244,7 +244,7 @@ capabilityRow change view = do
 
 settingRow :: (Edit -> IO ()) -> (UiMessage -> IO ()) -> Text -> FieldView -> IO FieldRow
 settingRow send dispatch pluginId field
-  | field.shape == AuthorsShape =
+  | field.kind == AuthorsField =
       authorsRow (\slots -> if V.null slots then send (ClearSetting field.key) else send (SetSetting field.key (SettingAuthors slots))) "" field
   | otherwise =
       fieldRow

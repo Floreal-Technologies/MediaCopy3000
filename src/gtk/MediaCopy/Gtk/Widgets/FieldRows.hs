@@ -13,9 +13,10 @@ import Data.Vector (Vector)
 import Data.Vector qualified as V
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
+import MediaCopy.Plugin.Manifest (FieldKind (..))
 
 import MediaCopy.Domain.Job (plural)
-import MediaCopy.Domain.PluginCatalog (AuthorSlot (..), FieldShape (..), FieldValue (..), FieldView (..), authorSlots, emailAccepted)
+import MediaCopy.Domain.PluginCatalog (AuthorSlot (..), FieldValue (..), FieldView (..), authorSlots, emailAccepted)
 import MediaCopy.Gtk.Widgets.Bind (Control (..), accepting, bind, comboRow, entryApply, switchRow)
 import MediaCopy.Gtk.Widgets.Common (paintEditable)
 
@@ -34,14 +35,14 @@ data FieldRow = FieldRow
 fieldRow :: FieldActions -> Text -> FieldView -> IO FieldRow
 fieldRow actions prefix field = do
   let title = fieldTitle prefix field
-  case field.shape of
-    BoolShape -> do
+  case field.kind of
+    BoolField -> do
       row <- new Adw.SwitchRow [#useMarkup := False, #active := isTrue field.value]
       set row [#title := title]
       paintActive <- bind (switchRow row) actions.setBool
       shown <- Adw.toPreferencesRow row
       pure FieldRow {rows = [shown], refresh = paintActive . isTrue}
-    ChoiceShape choices -> do
+    ChoiceField choices -> do
       let indexOf = \case
             Value text -> maybe 0 (fromIntegral . succ) (V.elemIndex text choices)
             _ -> 0
@@ -51,16 +52,16 @@ fieldRow actions prefix field = do
       paintSelected <- bind (comboRow row) (\index -> maybe actions.clear actions.setText (choices V.!? (fromIntegral index - 1)))
       shown <- Adw.toPreferencesRow row
       pure FieldRow {rows = [shown], refresh = paintSelected . indexOf}
-    AuthorsShape -> do
+    AuthorsField -> do
       header <- authorsHeader title (authorSlots field.value)
       shown <- Adw.toPreferencesRow header
       pure FieldRow {rows = [shown], refresh = Adw.actionRowSetSubtitle header . countText . authorSlots}
     _ -> do
-      row <- newEntryRow title (textOf field.value)
-      let apply = if field.shape == EmailShape then accepting emailAccepted (entryApply row) else entryApply row
+      row <- (if field.kind == SecretField then newPasswordRow else newEntryRow) title (textOf field.value)
+      let apply = if field.kind == EmailField then accepting emailAccepted (entryApply row) else entryApply row
       paintText <- bind apply (\text -> if T.null text then actions.clear else actions.setText text)
-      when (field.shape == EmailShape) (emailRow row)
-      when (field.shape == PathShape) $ do
+      when (field.kind == EmailField) (emailRow row)
+      when (field.kind == PathField) $ do
         choose <- new Gtk.Button [#label := "Choose…", #valign := Gtk.AlignCenter, On #clicked actions.pickPath]
         Gtk.widgetAddCssClass choose "flat"
         Adw.entryRowAddSuffix row choose
@@ -122,6 +123,12 @@ newEntryRow title text = do
   row <- new Adw.EntryRow [#useMarkup := False, #text := text, #showApplyButton := True]
   set row [#title := title]
   pure row
+
+newPasswordRow :: Text -> Text -> IO Adw.EntryRow
+newPasswordRow title text = do
+  row <- new Adw.PasswordEntryRow [#useMarkup := False, #text := text, #showApplyButton := True]
+  set row [#title := title]
+  Adw.toEntryRow row
 
 emailRow :: Adw.EntryRow -> IO ()
 emailRow row = do

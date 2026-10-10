@@ -69,7 +69,7 @@ named what nameOf found = case lookup found [(nameOf value, value) | value <- [m
   Just value -> pure value
   Nothing -> fail ("unknown " <> what <> " " <> show found)
 
-data FieldKind = TextField | SecretField | BoolField | ChoiceField (Vector Text) | PathField | AuthorsField
+data FieldKind = TextField | SecretField | EmailField | BoolField | ChoiceField (Vector Text) | PathField | AuthorsField
   deriving stock (Eq, Show)
 
 data Field = Field
@@ -85,6 +85,7 @@ kindName :: FieldKind -> Text
 kindName = \case
   TextField -> "text"
   SecretField -> "secret"
+  EmailField -> "email"
   BoolField -> "bool"
   ChoiceField _ -> "choice"
   PathField -> "path"

@@ -86,16 +86,7 @@ settingView stored field = viewOf field $ case field.kind of
   _ -> maybe NoValue (Value . valueText) (Map.lookup field.key stored <|> field.defaultValue)
 
 viewOf :: Field -> FieldValue -> FieldView
-viewOf field value = FieldView {key = field.key, label = field.label, shape = shapeOf field.kind, required = field.required, value}
-
-shapeOf :: FieldKind -> FieldShape
-shapeOf = \case
-  TextField -> TextShape
-  SecretField -> TextShape
-  BoolField -> BoolShape
-  ChoiceField choices -> ChoiceShape choices
-  PathField -> PathShape
-  AuthorsField -> AuthorsShape
+viewOf field value = FieldView {key = field.key, label = field.label, kind = field.kind, required = field.required, value}
 
 valueText :: Value -> Text
 valueText = \case

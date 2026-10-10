@@ -1,7 +1,6 @@
 module MediaCopy.Domain.PluginCatalog
   ( Answer (..)
   , AuthorSlot (..)
-  , FieldShape (..)
   , FieldValue (..)
   , FieldView (..)
   , CapabilityView (..)
@@ -24,15 +23,12 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Vector (Vector)
 import Data.Vector qualified as V
-import MediaCopy.Plugin.Manifest (AuthorSlot (..), Capability)
+import MediaCopy.Plugin.Manifest (AuthorSlot (..), Capability, FieldKind (..))
 
 import MediaCopy.Domain.Plugin (PluginRef (..))
 
 data Answer = Granted | Declined | Unanswered
   deriving stock (Bounded, Enum, Eq, Show)
-
-data FieldShape = TextShape | EmailShape | BoolShape | ChoiceShape (Vector Text) | PathShape | AuthorsShape
-  deriving stock (Eq, Show)
 
 data FieldValue = NoValue | Value Text | AuthorList (Vector AuthorSlot)
   deriving stock (Eq, Show)
@@ -40,7 +36,7 @@ data FieldValue = NoValue | Value Text | AuthorList (Vector AuthorSlot)
 data FieldView = FieldView
   { key :: Text
   , label :: Text
-  , shape :: FieldShape
+  , kind :: FieldKind
   , required :: Bool
   , value :: FieldValue
   }
@@ -87,7 +83,7 @@ data Edit = SetEnabled Bool | SetTrace Bool | SetAnswer Capability Answer | SetS
   deriving stock (Eq, Show)
 
 -- |
--- >>> let field key = FieldView {key, label = key, shape = TextShape, required = True, value = NoValue}
+-- >>> let field key = FieldView {key, label = key, kind = TextField, required = True, value = NoValue}
 -- >>> let entry ident on running = PluginEntry {plugin = PluginRef {id = ident, name = ident}, version = "1", description = "", folder = "", enabled = on, trace = False, capabilities = V.empty, settings = V.empty, jobFields = V.singleton (field "operator"), active = running, problem = Nothing}
 -- >>> map (\(ref, fields) -> (ref.id, V.length fields)) (V.toList (enabledJobFields PluginCatalog {entries = V.fromList [entry "a" True True, entry "b" False True, entry "c" True False], rejected = V.empty, problem = Nothing}))
 -- [("a",1)]
@@ -106,7 +102,7 @@ authorJobFields key slots =
     [ FieldView
         { key = slotKey key index part
         , label = slot.role <> ": " <> label
-        , shape = if part == "email" then EmailShape else TextShape
+        , kind = if part == "email" then EmailField else TextField
         , required = False
         , value = if T.null text then NoValue else Value text
         }
