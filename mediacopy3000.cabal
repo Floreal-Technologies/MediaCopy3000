@@ -225,14 +225,12 @@ library
     MediaCopy.Gtk.Environment
     MediaCopy.Gtk.Interpret
     MediaCopy.Gtk.Reload
-    MediaCopy.Gtk.Resources
     MediaCopy.Gtk.Resources.Splice
     MediaCopy.Gtk.Runtime
     MediaCopy.Gtk.Screenshot
     MediaCopy.Gtk.Theme
     MediaCopy.Gtk.View
     MediaCopy.Gtk.Widgets.Bind
-    MediaCopy.Gtk.Widgets.CloseConfirm
     MediaCopy.Gtk.Widgets.CommandPalette
     MediaCopy.Gtk.Widgets.Common
     MediaCopy.Gtk.Widgets.FieldRows

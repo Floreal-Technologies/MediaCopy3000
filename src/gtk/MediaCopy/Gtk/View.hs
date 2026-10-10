@@ -7,7 +7,7 @@ import Control.Monad (forM_, void)
 import Data.Foldable (traverse_)
 import Data.Function ((&))
 import Data.Functor ((<&>))
-import Data.GI.Base (AttrOp ((:=)), new, on, set)
+import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -20,8 +20,7 @@ import GI.Gtk qualified as Gtk
 
 import MediaCopy.Domain.Job (JobId)
 import MediaCopy.Gtk.Actions (Actions (..), installActions, presentAbout)
-import MediaCopy.Gtk.Widgets.Bind (bindQuietly, listSelection)
-import MediaCopy.Gtk.Widgets.CloseConfirm (newCloseConfirm)
+import MediaCopy.Gtk.Widgets.Bind (bind, bindQuietly, dialog, listSelection)
 import MediaCopy.Gtk.Widgets.CommandPalette (newCommandPalette)
 import MediaCopy.Gtk.Widgets.Common (Cell, flatNamed, newCell, renderCell)
 import MediaCopy.Gtk.Widgets.JobDetail (JobDetail (..), newJobDetail)
@@ -153,6 +152,28 @@ newToastCell toastOverlay dispatch =
           Adw.toastOverlayAddToast toastOverlay toast
           void (GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE (dispatch DismissToast >> pure False))
       )
+
+newCloseConfirm
+  :: Adw.ApplicationWindow
+  -> (UiMessage -> IO ())
+  -> IO (Bool -> IO ())
+newCloseConfirm window dispatch = do
+  alert <-
+    new
+      Adw.AlertDialog
+      [ #heading := "Stop the running job?"
+      , #body := "A job is still running. Closing the window stops it. The files already copied stay where they are."
+      , On #response $ \answer ->
+          if answer == "stop" then dispatch ConfirmClose else dispatch CancelClose
+      ]
+  Adw.alertDialogAddResponse alert "keep" "_Keep Running"
+  Adw.alertDialogAddResponse alert "stop" "_Stop and Close"
+  Adw.alertDialogSetResponseAppearance alert "stop" Adw.ResponseAppearanceDestructive
+  Adw.alertDialogSetDefaultResponse alert (Just "keep")
+  Adw.alertDialogSetCloseResponse alert "keep"
+  asDialog <- Adw.toDialog alert
+  openControl <- dialog asDialog window (pure ())
+  bind openControl (\_ -> pure ())
 
 data Sidebar = Sidebar
   { list :: Gtk.ListBox
