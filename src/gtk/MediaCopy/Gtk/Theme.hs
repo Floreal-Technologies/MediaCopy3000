@@ -13,6 +13,8 @@ import Control.Monad.Extra
 import Data.ByteString qualified as ByteString
 import Data.Functor ((<&>))
 import Data.GI.Base (AttrOp ((:=)), on, set)
+import Data.GI.Base.Properties (getObjectPropertyInt32)
+import Data.GI.Base.Signals (SignalProxy ((:::)))
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -108,18 +110,22 @@ report adapter observed =
 
 readDesktopAccent :: ThemeAdapter -> IO Accent
 readDesktopAccent adapter =
-  Adw.styleManagerGetAccentColor adapter.manager <&> \case
-    Adw.AccentColorTeal -> Teal
-    Adw.AccentColorGreen -> Green
-    Adw.AccentColorYellow -> Yellow
-    Adw.AccentColorOrange -> Orange
-    Adw.AccentColorRed -> Red
-    Adw.AccentColorPink -> Pink
-    Adw.AccentColorPurple -> Purple
-    Adw.AccentColorSlate -> Slate
-    _ -> Blue
+  ifM
+    hasAccentColor
+    (getObjectPropertyInt32 adapter.manager "accent-color" <&> accentAt)
+    (pure Blue)
+  where
+    accentAt index = fromMaybe Blue (lookup index (zip [0 ..] [minBound .. maxBound]))
 
 onDesktopAccent :: ThemeAdapter -> (Accent -> IO ()) -> IO ()
 onDesktopAccent adapter notify =
-  void $ on adapter.manager (Adw.PropertyNotify #accentColor) $ \_ ->
-    readDesktopAccent adapter >>= notify
+  whenM hasAccentColor $
+    void $
+      on adapter.manager (#notify ::: "accent-color") $ \_ ->
+        readDesktopAccent adapter >>= notify
+
+hasAccentColor :: IO Bool
+hasAccentColor = do
+  major <- Adw.getMajorVersion
+  minor <- Adw.getMinorVersion
+  pure ((major, minor) >= (1, 6))
