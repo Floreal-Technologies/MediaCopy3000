@@ -243,7 +243,6 @@ library
     MediaCopy.Gtk.Widgets.OffloadDialog
     MediaCopy.Gtk.Widgets.PlanSheet
     MediaCopy.Gtk.Widgets.PluginsPage
-    MediaCopy.Gtk.Widgets.PluginStatus
     MediaCopy.Gtk.Widgets.Preferences
 
   other-modules: Paths_mediacopy3000

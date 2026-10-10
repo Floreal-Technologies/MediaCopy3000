@@ -6,11 +6,9 @@ module MediaCopy.Gtk.Widgets.History
 
 import Ascmhl.Types (MhlHistory (..))
 import Data.GI.Base (AttrOp ((:=)), new, set)
-import Data.IORef (newIORef)
 import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import Data.Vector (Vector)
-import Data.Vector qualified as V
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
@@ -31,11 +29,11 @@ newHistoryView = do
   root <- new Gtk.ListBox [#selectionMode := Gtk.SelectionModeNone]
   Gtk.widgetAddCssClass root "boxed-list"
   Gtk.listBoxAppend root expander
-  rows <- newIORef V.empty
+  rows <- newRowsCell (InExpander expander)
   cell <- newCell $ \wanted -> do
-    let (subtitle, generations) = fromMaybe (plural "generation" 0, V.empty) wanted
+    let (subtitle, generations) = fromMaybe (plural "generation" 0, mempty) wanted
     set expander [#subtitle := subtitle]
-    renderActionRows rows (InExpander expander) (V.map fromView generations)
+    renderCell rows generations
   pure HistoryView {root, cell}
 
 renderHistory :: HistoryView -> Wording -> Maybe MhlHistory -> IO ()

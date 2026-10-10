@@ -156,6 +156,11 @@ renderActionRows rowsRef host wanted = do
   V.mapM_ (addTo host) fresh
   writeIORef rowsRef fresh
 
+newRowsCell :: RowHost -> IO (Cell (Vector RowView))
+newRowsCell host = do
+  rows <- newIORef V.empty
+  newCell (renderActionRows rows host . V.map fromView)
+
 removeFrom :: RowHost -> Adw.ActionRow -> IO ()
 removeFrom host row = case host of
   InGroup group -> Adw.preferencesGroupRemove group row

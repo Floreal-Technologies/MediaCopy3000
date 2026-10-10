@@ -16,15 +16,15 @@ import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
+import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
 import MediaCopy.Domain.Job hiding (Progress)
 import MediaCopy.Gtk.Widgets.Bind (bind, toggleRadio)
-import MediaCopy.Gtk.Widgets.Common (nameAccessible, newCell, newLabel, paddedBox, renderCell, toggleClass)
+import MediaCopy.Gtk.Widgets.Common (RowHost (..), nameAccessible, newCell, newLabel, newRowsCell, paddedBox, renderCell, toggleClass)
 import MediaCopy.Gtk.Widgets.FileRow (FileRow (..), newFileRow)
 import MediaCopy.Gtk.Widgets.History (HistoryView (..), newHistoryView, renderHistory)
-import MediaCopy.Gtk.Widgets.PluginStatus (PluginStatus (..), newPluginStatus)
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.View.JobDetail (DetailView (..), detailView, historyFor, pluginStatusRows)
@@ -41,7 +41,8 @@ newJobDetail button dispatch = do
   progress <- newProgress
   counters <- newCounters
   history <- newHistoryView
-  plugins <- newPluginStatus
+  pluginGroup <- new Adw.PreferencesGroup [#title := "Plug-ins", #visible := False]
+  pluginRows <- newRowsCell (InGroup pluginGroup)
   (filterBox, paintFilter) <- newFilterButtons dispatch
   files <- newFileListPane
   actions <- newActionBar button
@@ -52,7 +53,7 @@ newJobDetail button dispatch = do
   Gtk.boxAppend root progress.bar
   Gtk.boxAppend root progress.line
   Gtk.boxAppend root counters.box
-  Gtk.boxAppend root plugins.group
+  Gtk.boxAppend root pluginGroup
   Gtk.boxAppend root history.root
   Gtk.boxAppend root filterBox
   Gtk.boxAppend root files.header
@@ -79,7 +80,9 @@ newJobDetail button dispatch = do
           let state = entry.state
               loaded = entry.history
           renderCell detailCell (detailView model.wording model.now loaded state)
-          renderCell plugins.cell (pluginStatusRows model.wording state.plugins)
+          let statusRows = pluginStatusRows model.wording state.plugins
+          renderCell pluginRows statusRows
+          Gtk.widgetSetVisible pluginGroup (not (V.null statusRows))
           renderHistory history model.wording (historyFor loaded state)
           paintFilter (Just model.fileFilter)
           diffFileList files model state
