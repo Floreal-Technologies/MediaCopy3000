@@ -14,8 +14,6 @@ import Control.Concurrent.STM
 import Control.Exception (displayException, finally, mask_, throwTo, uninterruptibleMask_)
 import Control.Monad (forM_, unless, void, when)
 import Data.Aeson (FromJSON, ToJSON, Value (Null, String), toJSON)
-import Data.Aeson.Types (parseEither, parseJSON)
-import Data.Bifunctor (first)
 import Data.Either (lefts, partitionEithers)
 import Data.Foldable (traverse_)
 import Data.Function ((&))
@@ -306,8 +304,7 @@ request member method params = do
   box <- newEmptyTMVarIO
   atomically (writeTQueue member.mailbox (Request method (toJSON params) box))
   answer <- atomically (takeTMVar box)
-  pure $
-    answer >>= \value -> first (\problem -> Malformed ("the answer to " <> method <> " does not follow the protocol: " <> T.pack problem)) (parseEither parseJSON value)
+  pure (answer >>= decodeAnswer method)
 
 stopMember :: Member -> IO ()
 stopMember member = do

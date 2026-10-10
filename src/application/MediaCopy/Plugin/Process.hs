@@ -5,6 +5,7 @@ module MediaCopy.Plugin.Process
   , Connection
   , withConnection
   , call
+  , decodeAnswer
   , stopSoftly
   ) where
 
@@ -177,6 +178,10 @@ tooLong conn stream = do
 endWith :: Connection -> Text -> IO ()
 endWith conn reason = atomically (readTVar conn.ended >>= maybe (writeTVar conn.ended (Just reason)) (const (pure ())))
 
+decodeAnswer :: (FromJSON r) => Text -> Value -> Either CallFault r
+decodeAnswer method value =
+  first (\problem -> Malformed ("the answer to " <> method <> " does not follow the protocol: " <> T.pack problem)) (parseEither parseJSON value)
+
 call :: (ToJSON p, FromJSON r) => Connection -> Limit -> Text -> p -> IO (Either CallFault r)
 call conn limit method params =
   readTVarIO conn.ended >>= \case
@@ -202,14 +207,11 @@ call conn limit method params =
         Just (Left e) -> pure (Left ("cannot write to the plug-in: " <> T.pack (displayException e)))
         Just (Right ()) -> wait started box
       atomically (modifyTVar' conn.pending (Map.delete requestId))
-      pure (first Unreachable answer >>= decoded)
+      pure (first Unreachable answer >>= decodeAnswer method)
   where
     limitSeconds = case limit of
       Fixed seconds -> seconds
       Silence seconds -> seconds
-    decoded value = case parseEither parseJSON value of
-      Left problem -> Left (Malformed ("the answer to " <> method <> " does not follow the protocol: " <> T.pack problem))
-      Right result -> Right result
     wait started box = do
       answer <-
         timeout 1_000_000 . atomically $
