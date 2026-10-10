@@ -13,10 +13,10 @@ import Data.Vector (Vector)
 import Data.Vector qualified as V
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
+import MediaCopy.Plugin.Manifest (FieldKind (..))
 
 import MediaCopy.Domain.Job (plural)
 import MediaCopy.Domain.PluginCatalog (AuthorSlot (..), FieldValue (..), FieldView (..), authorSlots, emailAccepted)
-import MediaCopy.Plugin.Manifest (FieldKind (..))
 import MediaCopy.Gtk.Widgets.Bind (Control (..), accepting, bind, comboRow, entryApply, switchRow)
 import MediaCopy.Gtk.Widgets.Common (paintEditable)
 
