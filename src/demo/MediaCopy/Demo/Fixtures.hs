@@ -41,7 +41,7 @@ import Data.Text.Display (display)
 import Data.Time (UTCTime (..), addUTCTime, fromGregorian, secondsToDiffTime)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
-import MediaCopy.Plugin.Manifest (Capability (..))
+import MediaCopy.Plugin.Manifest (Capability (..), FieldKind (..))
 import System.OsPath (OsPath, unsafeEncodeUtf, (</>))
 
 import MediaCopy.Domain.FileSystem (Tree (..), ignorePatterns, partSuffix)
@@ -227,7 +227,7 @@ pluginCatalog =
               , enabled = True
               , trace = False
               , capabilities = V.singleton (CapabilityView ManifestWrite Granted)
-              , settings = V.singleton (FieldView "authors" "Authors" AuthorsShape True (AuthorList demoSlots))
+              , settings = V.singleton (FieldView "authors" "Authors" AuthorsField True (AuthorList demoSlots))
               , jobFields = authorJobFields "authors" demoSlots
               , active = True
               , problem = Nothing

@@ -235,7 +235,7 @@ renderJobFields body dispatch (wanted, given) = do
       writeIORef body.fieldRows (Just (layout, rows))
       Gtk.widgetSetVisible body.fieldGroup (not (null rows))
   where
-    withValue field value = FieldView {key = field.key, label = field.label, shape = field.shape, required = field.required, value}
+    withValue field value = FieldView {key = field.key, label = field.label, kind = field.kind, required = field.required, value}
     current ref field = maybe field.value Value (Map.lookup ref.id given >>= Map.lookup field.key)
     jobFieldRow ref field =
       let send value = dispatch (SetJobField ref.id field.key value)
