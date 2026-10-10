@@ -1,6 +1,7 @@
 module MediaCopy.Domain.FileSystem
   ( Tree (..)
   , ignorePatterns
+  , isIgnoredName
   , relPathOf
   , partSuffix
   , partPath
@@ -46,6 +47,14 @@ stripPart (RelPath t) = T.stripSuffix partSuffix t >>= mkRelPath
 -- [".DS_Store","ascmhl"]
 ignorePatterns :: Vector Text
 ignorePatterns = V.fromList [".DS_Store", "ascmhl"]
+
+-- |
+-- >>> map (isIgnoredName . unsafeEncodeUtf) [".DS_Store", "ascmhl", "A001.mxf"]
+-- [True,True,False]
+isIgnoredName :: OsPath -> Bool
+isIgnoredName name = case decodeUtf name of
+  Nothing -> False
+  Just s -> T.pack s `V.elem` ignorePatterns
 
 -- |
 -- >>> relPathOf (unsafeEncodeUtf "/media/card") (unsafeEncodeUtf "/media/card/day1/a.mxf")

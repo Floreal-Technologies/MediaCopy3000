@@ -53,12 +53,12 @@ import Data.Vector qualified as V
 import Effectful
 import Effectful.Dispatch.Dynamic (interpret, localSeqUnlift)
 import Effectful.Exception (onException)
-import System.OsPath (OsPath, decodeUtf, dropTrailingPathSeparator, makeRelative, splitDirectories)
+import System.OsPath (OsPath, dropTrailingPathSeparator, makeRelative, splitDirectories)
 import splice System.OsPath (osp)
 import System.OsString (OsChar, isPrefixOf, isSuffixOf, unsafeFromChar)
 import System.OsString qualified as OsString
 
-import MediaCopy.Domain.FileSystem (ignorePatterns, relPathOf)
+import MediaCopy.Domain.FileSystem (isIgnoredName, relPathOf)
 import MediaCopy.Domain.FileSystem qualified as FS
 import MediaCopy.Domain.Job (FileOutcome (..), FileSize, FileStatus (..), Job (..), JobEvent (..), JobId (..), JobSpec (..), OffloadJob (..), SealFirst (..))
 import MediaCopy.Domain.Plan (PlannedWrite (..))
@@ -224,14 +224,6 @@ hasChildren p fs = any (\k -> withTrailingSlash p `isPrefixOf` k) (Map.keys fs.f
 dirExists :: OsPath -> MemFS -> Bool
 dirExists p fs = dropTrailingPathSeparator p `Set.member` fs.dirs || hasChildren p fs
 
-ignoreNames :: Set Text
-ignoreNames = Set.fromList (V.toList ignorePatterns)
-
-isIgnoredComponent :: OsPath -> Bool
-isIgnoredComponent component = case decodeUtf component of
-  Nothing -> False
-  Just s -> T.pack s `Set.member` ignoreNames
-
 walkMem :: IORef MemFS -> OsPath -> IO (Maybe FS.Tree)
 walkMem fsRef root = do
   fs <- readIORef fsRef
@@ -244,7 +236,7 @@ walkMem fsRef root = do
   where
     prefix = withTrailingSlash root
     underRoot (p, _) =
-      prefix `isPrefixOf` p && not (any isIgnoredComponent (splitDirectories (makeRelative root p)))
+      prefix `isPrefixOf` p && not (any isIgnoredName (splitDirectories (makeRelative root p)))
     toEntry (p, (bs, _)) = do
       rel <- either (\message -> ioError (userError (T.unpack message))) pure (relPathOf root p)
       pure (rel, fromIntegral (BS.length bs) :: FileSize)

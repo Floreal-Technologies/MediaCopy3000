@@ -7,7 +7,7 @@ module MediaCopy.Domain.DirectoryHash
   ) where
 
 import Ascmhl.Hash
-import Ascmhl.Path (RelPath (..))
+import Ascmhl.Path (RelPath (..), baseName, parentOf)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Function ((&))
@@ -15,8 +15,7 @@ import Data.List (List, sort, sortOn)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
-import Data.Text qualified as T
-import Data.Text.Display (Display (..), display)
+import Data.Text.Display (Display (..))
 import Data.Text.Encoding qualified as TE
 import Data.Vector (Vector)
 import Data.Vector qualified as V
@@ -47,41 +46,37 @@ data DirHashes = DirHashes
 buildTree :: Vector (RelPath, Hash) -> Vector RelPath -> DirNode
 buildTree files dirs = nodeFor (RelPath "") ""
   where
-    groupByParent :: List (Text, b) -> Map Text (List b)
+    groupByParent :: List (RelPath, b) -> Map RelPath (List b)
     groupByParent keyed =
       keyed
         & map (\pair -> (parentOf (fst pair), [snd pair]))
         & Map.fromListWith (flip (<>))
-    filesByParent :: Map Text (List (Text, Hash))
+    filesByParent :: Map RelPath (List (Text, Hash))
     filesByParent =
       files
         & V.toList
-        & map (\entry -> let full = display (fst entry) in (full, (baseOf full, snd entry)))
+        & map (\entry -> (fst entry, (baseName (fst entry), snd entry)))
         & groupByParent
-    dirsByParent :: Map Text (List Text)
+    dirsByParent :: Map RelPath (List RelPath)
     dirsByParent =
       dirs
         & V.toList
-        & map (\dir -> let full = display dir in (full, full))
+        & map (\dir -> (dir, dir))
         & groupByParent
     nodeFor rp nm =
       DirNode
         { path = rp
         , name = nm
         , files =
-            Map.findWithDefault [] (display rp) filesByParent
+            Map.findWithDefault [] rp filesByParent
               & sortOn fst
               & V.fromList
         , subdirs =
-            Map.findWithDefault [] (display rp) dirsByParent
+            Map.findWithDefault [] rp dirsByParent
               & sort
-              & map (\child -> nodeFor (RelPath child) (baseOf child))
+              & map (\child -> nodeFor child (baseName child))
               & V.fromList
         }
-    parentOf p = case T.breakOnEnd "/" p of
-      (before, _) -> T.dropEnd 1 before
-    baseOf p = case T.breakOnEnd "/" p of
-      (_, after) -> after
 
 hashOfHashList :: (Error DirectoryHashError :> es) => (ByteString -> Eff es Hash) -> Vector Hash -> Eff es Hash
 hashOfHashList hashWith hashes = do

@@ -3,6 +3,8 @@ module Ascmhl.Path
   , mkRelPath
   , relToOsPath
   , pathText
+  , parentOf
+  , baseName
   ) where
 
 import Data.Char (isAsciiLower, isAsciiUpper)
@@ -53,6 +55,24 @@ mkRelPath t
     hasDriveLetter = case T.unpack (T.take 2 t) of
       [letter, ':'] -> isAsciiUpper letter || isAsciiLower letter
       _ -> False
+
+-- |
+-- >>> parentOf (RelPath "card/clips/a.mxf")
+-- RelPath "card/clips"
+-- >>> parentOf (RelPath "a.mxf")
+-- RelPath ""
+parentOf :: RelPath -> RelPath
+parentOf (RelPath t) = case T.breakOnEnd "/" t of
+  (before, _) -> RelPath (T.dropEnd 1 before)
+
+-- |
+-- >>> baseName (RelPath "card/clips/a.mxf")
+-- "a.mxf"
+-- >>> baseName (RelPath "a.mxf")
+-- "a.mxf"
+baseName :: RelPath -> Text
+baseName (RelPath t) = case T.breakOnEnd "/" t of
+  (_, after) -> after
 
 relToOsPath :: OsPath -> RelPath -> OsPath
 relToOsPath root (RelPath t) = root </> unsafeEncodeUtf (T.unpack t)

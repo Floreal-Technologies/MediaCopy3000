@@ -141,16 +141,16 @@ data Message
   | CatalogLoaded PluginCatalog
   deriving stock (Eq, Show)
 
+data DialogKind = PickFolder | PickFile | SaveAs Text Text
+
 data AppEffect
-  = OpenFolderDialog (OsPath -> Message)
-  | OpenSaveDialog Text Text (OsPath -> Message)
+  = OpenDialog DialogKind (OsPath -> Message)
   | StartJob JobPlan
   | ComputePlan JobSpec
   | CancelRunning JobId
   | LoadHistory JobId OsPath
   | WriteFile OsPath Text
   | DestroyWindow
-  | OpenFileDialog (OsPath -> Message)
   | LoadCatalog
   | ApplyChange CatalogChange
   | ShowFolder Text
@@ -243,8 +243,8 @@ update msg model = case msg of
 
 updateUi :: UiMessage -> Model -> (Model, List AppEffect)
 updateUi msg model = case msg of
-  PickSource -> (model, [OpenFolderDialog SourcePicked])
-  AddDestination -> (model, [OpenFolderDialog DestinationPicked])
+  PickSource -> (model, [OpenDialog PickFolder SourcePicked])
+  AddDestination -> (model, [OpenDialog PickFolder DestinationPicked])
   RemoveDestination i -> (model & #draft % _Just % #destinations %~ deleteAt i, [])
   CloseOffloadDialog -> (model {draft = Nothing}, [])
   SetBase wanted -> (model {appearance = model.appearance {base = wanted}}, [])
@@ -257,7 +257,7 @@ updateUi msg model = case msg of
     _ -> (model, [])
   DiscardPlan -> (model {planPhase = Idle}, [])
   SavePlan -> case model.planPhase of
-    Ready plan -> (model, [OpenSaveDialog (savePlanTitle model.wording) (jobLabel plan.spec.job <> "-plan.txt") (PlanTargetPicked plan)])
+    Ready plan -> (model, [OpenDialog (SaveAs (savePlanTitle model.wording) (jobLabel plan.spec.job <> "-plan.txt")) (PlanTargetPicked plan)])
     _ -> (model, [])
   SelectJob mjid -> (model {selected = mjid}, [])
   SetFileFilter f -> (model {fileFilter = f}, [])
@@ -268,11 +268,11 @@ updateUi msg model = case msg of
   CancelClose -> (model {closeConfirm = False}, [])
   DismissToast -> (model {toast = Nothing}, [])
   ChangePlugin change -> (model, [ApplyChange change])
-  PickPluginPath pluginId key -> (model, [OpenFileDialog (\path -> pathText path & SettingText & SetSetting key & CatalogChange pluginId & ChangePlugin & Ui)])
+  PickPluginPath pluginId key -> (model, [OpenDialog PickFile (\path -> pathText path & SettingText & SetSetting key & CatalogChange pluginId & ChangePlugin & Ui)])
   OpenPluginFolder folder -> (model, [ShowFolder folder])
   ReloadPlugins -> (model, [LoadCatalog])
   SetJobField pluginId key value -> setJobField pluginId key value model
-  PickJobFieldPath pluginId key -> (model, [OpenFileDialog (Ui . SetJobField pluginId key . pathText)])
+  PickJobFieldPath pluginId key -> (model, [OpenDialog PickFile (\path -> pathText path & SetJobField pluginId key & Ui)])
   ClosePalette -> (model {palette = Nothing}, [])
   SetPaletteQuery query -> (model {palette = query <$ model.palette}, [])
   RunCommand command
@@ -282,8 +282,8 @@ updateUi msg model = case msg of
 runCommand :: Command.Command -> Model -> (Model, List AppEffect)
 runCommand command model = case command of
   Command.NewOffload -> (model {draft = Just OffloadDraft {mediaSource = Nothing, destinations = []}}, [])
-  Command.VerifyFolder -> (model, [OpenFolderDialog (\folder -> RequestPlan (VerifyFolder VerifyJob {folder}))])
-  Command.SealMedia -> (model, [OpenFolderDialog (\folder -> RequestPlan (SealMediaSource SealJob {folder}))])
+  Command.VerifyFolder -> (model, [OpenDialog PickFolder (\folder -> RequestPlan (VerifyFolder VerifyJob {folder}))])
+  Command.SealMedia -> (model, [OpenDialog PickFolder (\folder -> RequestPlan (SealMediaSource SealJob {folder}))])
   Command.SaveReport -> saveSelectedReport model
   Command.CancelJob -> case model.selected of
     Nothing -> (model, [])
@@ -317,9 +317,8 @@ saveSelectedReport model = case selectedEntry model of
   Just entry ->
     ( model
     ,
-      [ OpenSaveDialog
-          (saveReportTitle model.wording)
-          (jobLabel entry.state.spec.job <> "-report.txt")
+      [ OpenDialog
+          (SaveAs (saveReportTitle model.wording) (jobLabel entry.state.spec.job <> "-report.txt"))
           (ReportTargetPicked entry.state.spec.jobId)
       ]
     )
