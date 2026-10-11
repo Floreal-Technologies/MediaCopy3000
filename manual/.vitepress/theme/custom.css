@@ -1,5 +1,95 @@
+:root {
+  --vp-c-brand-1: #0461be;
+  --vp-c-brand-2: #1c71d8;
+  --vp-c-brand-3: #3584e4;
+  --vp-c-brand-soft: rgb(53 132 228 / 14%);
+
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-alt: #fafafb;
+  --vp-c-bg-elv: #ffffff;
+  --vp-c-bg-soft: #f3f3f5;
+
+  --vp-c-text-1: rgb(0 0 6 / 80%);
+  --vp-c-text-2: rgb(0 0 6 / 60%);
+  --vp-c-text-3: rgb(0 0 6 / 44%);
+
+  --vp-c-border: rgb(0 0 6 / 20%);
+  --vp-c-divider: rgb(0 0 6 / 12%);
+  --vp-c-gutter: rgb(0 0 6 / 12%);
+
+  --vp-c-green-1: #007c3d;
+  --vp-c-green-2: #26a269;
+  --vp-c-green-3: #2ec27e;
+  --vp-c-green-soft: rgb(46 194 126 / 14%);
+
+  --vp-c-yellow-1: #905400;
+  --vp-c-yellow-2: #b06000;
+  --vp-c-yellow-3: #e5a50a;
+  --vp-c-yellow-soft: rgb(229 165 10 / 14%);
+
+  --vp-c-red-1: #c30000;
+  --vp-c-red-2: #e01b24;
+  --vp-c-red-3: #ed333b;
+  --vp-c-red-soft: rgb(224 27 36 / 14%);
+
+  --vp-c-purple-1: #8939a4;
+  --vp-c-purple-2: #9141ac;
+  --vp-c-purple-3: #a347ba;
+  --vp-c-purple-soft: rgb(145 65 172 / 14%);
+}
+
+.dark {
+  --vp-c-brand-1: #8caaee;
+  --vp-c-brand-2: #babbf1;
+  --vp-c-brand-3: #8caaee;
+  --vp-c-brand-soft: rgb(140 170 238 / 16%);
+
+  --vp-c-bg: #303446;
+  --vp-c-bg-alt: #292c3c;
+  --vp-c-bg-elv: #414559;
+  --vp-c-bg-soft: #414559;
+
+  --vp-c-text-1: #c6d0f5;
+  --vp-c-text-2: #a5adce;
+  --vp-c-text-3: #838ba7;
+
+  --vp-c-border: #626880;
+  --vp-c-divider: #51576d;
+  --vp-c-gutter: #232634;
+
+  --vp-c-gray-1: #626880;
+  --vp-c-gray-2: #51576d;
+  --vp-c-gray-3: #414559;
+  --vp-c-gray-soft: rgb(115 121 148 / 16%);
+
+  --vp-c-green-1: #a6d189;
+  --vp-c-green-2: #a6d189;
+  --vp-c-green-3: #a6d189;
+  --vp-c-green-soft: rgb(166 209 137 / 16%);
+
+  --vp-c-yellow-1: #e5c890;
+  --vp-c-yellow-2: #e5c890;
+  --vp-c-yellow-3: #e5c890;
+  --vp-c-yellow-soft: rgb(229 200 144 / 16%);
+
+  --vp-c-red-1: #e78284;
+  --vp-c-red-2: #e78284;
+  --vp-c-red-3: #e78284;
+  --vp-c-red-soft: rgb(231 130 132 / 16%);
+
+  --vp-c-purple-1: #ca9ee6;
+  --vp-c-purple-2: #ca9ee6;
+  --vp-c-purple-3: #ca9ee6;
+  --vp-c-purple-soft: rgb(202 158 230 / 16%);
+
+  --vp-button-brand-text: #232634;
+  --vp-button-brand-hover-text: #232634;
+  --vp-button-brand-active-text: #232634;
+}
+
 kbd {
-  border: 1px solid gray;
+  border: 1px solid var(--vp-c-border);
   border-radius: 5px;
   padding: 3px;
+  background-color: var(--vp-c-bg-soft);
 }
