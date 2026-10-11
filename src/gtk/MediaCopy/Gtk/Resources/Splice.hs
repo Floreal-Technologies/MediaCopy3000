@@ -1,12 +1,9 @@
-{-# LANGUAGE TemplateHaskellQuotes #-}
-
 module MediaCopy.Gtk.Resources.Splice (compiledResources) where
 
 import Control.Monad (forM_)
 import Data.ByteString qualified as BS
-import Data.ByteString.Internal (unsafePackLenLiteral)
-import Language.Haskell.TH (Exp, Q, integerL, litE, stringPrimL)
-import Language.Haskell.TH.Syntax (addDependentFile, makeRelativeToProject, runIO)
+import Language.Haskell.TH (Exp, Q)
+import Language.Haskell.TH.Syntax (addDependentFile, lift, makeRelativeToProject, runIO)
 import System.Directory (getTemporaryDirectory, removeFile)
 import System.FilePath (takeDirectory)
 import System.IO (hClose, openBinaryTempFile)
@@ -25,4 +22,4 @@ compiledResources relative = do
     hClose handle
     callProcess "glib-compile-resources" ["--sourcedir", sourceDir, "--target", target, manifest]
     BS.readFile target <* removeFile target
-  [|unsafePackLenLiteral $(litE (integerL (fromIntegral (BS.length bundle)))) $(litE (stringPrimL (BS.unpack bundle)))|]
+  lift bundle
