@@ -214,6 +214,22 @@ library demo
     time,
     vector,
 
+library resources
+  import: options
+  hs-source-dirs: src/resources
+  -- cabal-gild: discover src/resources
+  exposed-modules:
+    MediaCopy.Resources
+    MediaCopy.Resources.Splice
+
+  build-depends:
+    base,
+    bytestring,
+    directory,
+    filepath,
+    process,
+    template-haskell,
+
 library
   import: options
   hs-source-dirs: src/gtk
@@ -224,7 +240,6 @@ library
     MediaCopy.Gtk.Environment
     MediaCopy.Gtk.Interpret
     MediaCopy.Gtk.Reload
-    MediaCopy.Gtk.Resources.Splice
     MediaCopy.Gtk.Runtime
     MediaCopy.Gtk.Screenshot
     MediaCopy.Gtk.Theme
@@ -271,10 +286,9 @@ library
     mediacopy3000:application,
     mediacopy3000:domain,
     mediacopy3000:interface,
+    mediacopy3000:resources,
     monad-time-effectful,
     plugin-protocol,
-    process,
-    template-haskell,
     text,
     text-display,
     time,

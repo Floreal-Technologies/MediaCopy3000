@@ -1,4 +1,4 @@
-module MediaCopy.Gtk.Resources.Splice (compiledResources) where
+module MediaCopy.Resources.Splice (compiledResources) where
 
 import Control.Monad (forM_)
 import Data.ByteString qualified as BS

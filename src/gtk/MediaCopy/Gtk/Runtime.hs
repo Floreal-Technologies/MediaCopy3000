@@ -1,5 +1,4 @@
 {-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module MediaCopy.Gtk.Runtime
   ( start
@@ -8,7 +7,6 @@ module MediaCopy.Gtk.Runtime
 
 import Control.Exception (finally)
 import Control.Monad (forM_, unless, void, when)
-import Data.ByteString (ByteString)
 import Data.GI.Base (AttrOp (On, (:=)), new, on)
 import Data.IORef
 import Data.Maybe (isNothing)
@@ -24,13 +22,13 @@ import System.Exit (ExitCode (ExitFailure), exitWith)
 import MediaCopy.Gtk.Environment (Environment, withEnvironment)
 import MediaCopy.Gtk.Interpret (Production, newProduction, runEffect, stopWorkers)
 import MediaCopy.Gtk.Reload (loadCss, loadWording)
-import MediaCopy.Gtk.Resources.Splice (compiledResources)
 import MediaCopy.Gtk.Screenshot (Startup (..), seeded)
 import MediaCopy.Gtk.Theme
 import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Translation.Embedded
 import MediaCopy.Model
+import MediaCopy.Resources (bundle)
 import MediaCopy.Signals (onStopSignal)
 
 data Loop = Loop
@@ -145,6 +143,3 @@ installTicker startup dispatchNow =
 
 registerResources :: IO ()
 registerResources = GLib.bytesNew (Just bundle) >>= Gio.resourceNewFromData >>= Gio.resourcesRegister
-
-bundle :: ByteString
-bundle = $(compiledResources "assets/tech.floreal.MediaCopy3000.gresource.xml")
