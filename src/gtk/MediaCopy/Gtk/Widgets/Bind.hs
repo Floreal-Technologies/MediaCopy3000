@@ -84,14 +84,6 @@ comboRow row =
     , current = Adw.comboRowGetSelected row
     }
 
-dropDown :: Gtk.DropDown -> Control Word32
-dropDown widget =
-  Control
-    { paint = Gtk.dropDownSetSelected widget
-    , connect = \callback -> blocking widget <$> on widget (Gtk.PropertyNotify #selected) (const callback)
-    , current = Gtk.dropDownGetSelected widget
-    }
-
 toggleRadio :: (Eq a) => List (a, Gtk.ToggleButton) -> Control (Maybe a)
 toggleRadio =
   radio Gtk.toggleButtonGetActive Gtk.toggleButtonSetActive (\button callback -> on button #toggled callback)

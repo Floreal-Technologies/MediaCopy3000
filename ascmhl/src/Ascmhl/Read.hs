@@ -139,6 +139,20 @@ parseManifest txt = do
       , unknown = childrenExcept (\local -> local `elem` [Schema.creatorinfo, Schema.processinfo, Schema.hashes]) root
       }
 
+-- |
+-- >>> processFromName "transfer"
+-- Just ProcessTransfer
+-- >>> processFromName "verify"
+-- Just ProcessInPlace
+-- >>> processFromName "copy"
+-- Nothing
+processFromName :: Text -> Maybe ProcessKind
+processFromName = \case
+  "transfer" -> Just ProcessTransfer
+  ("in-place"; "verify") -> Just ProcessInPlace
+  "flatten" -> Just ProcessFlatten
+  _ -> Nothing
+
 pathElement :: Text -> Cursor -> Either Text (Cursor, RelPath)
 pathElement what c = do
   pathC <- require (angled Schema.path) (listToMaybe (c $/ laxElement Schema.path))
@@ -191,6 +205,20 @@ manifestHashOf hc = do
       , hashDate
       , extraAttrs = attributesExcept [Schema.action, Schema.hashdate] hc
       }
+
+-- |
+-- >>> actionFromName "original"
+-- Just Original
+-- >>> actionFromName "new"
+-- Just Verified
+-- >>> actionFromName "renamed"
+-- Nothing
+actionFromName :: Text -> Maybe HashAction
+actionFromName = \case
+  "original" -> Just Original
+  ("verified"; "new") -> Just Verified
+  "failed" -> Just FailedAction
+  _ -> Nothing
 
 parseDirEntry :: Cursor -> Either Text DirectoryEntry
 parseDirEntry c = do

@@ -11,7 +11,6 @@ module MediaCopy.Interface.Wording
   , noHistoryText
   , quietText
   , quietLine
-  , doingText
   , fileStatusText
   , KindUi (..)
   , kindUi
@@ -32,6 +31,7 @@ import Data.Int (Int64)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Time (NominalDiffTime, UTCTime, diffUTCTime)
+import Language.Fluent (value)
 import System.OsPath (OsPath)
 
 import MediaCopy.Domain.Job
@@ -100,9 +100,9 @@ humanRate wording bytesPerSecond
 -- "0 s"
 humanEta :: Wording -> Double -> Text
 humanEta wording seconds
-  | total < 60 = getTranslation' wording durationSeconds [("seconds", str (count total))]
-  | total < 3_600 = getTranslation' wording durationMinutes [("minutes", str (count (total `div` 60))), ("seconds", str (pad2 (total `mod` 60)))]
-  | otherwise = getTranslation' wording durationHours [("hours", str (count (total `div` 3_600))), ("minutes", str (pad2 (total `mod` 3_600 `div` 60)))]
+  | total < 60 = getTranslation wording durationSeconds [("seconds", str (count total))]
+  | total < 3_600 = getTranslation wording durationMinutes [("minutes", str (count (total `div` 60))), ("seconds", str (pad2 (total `mod` 60)))]
+  | otherwise = getTranslation wording durationHours [("hours", str (count (total `div` 3_600))), ("minutes", str (pad2 (total `mod` 3_600 `div` 60)))]
   where
     total
       | isNormalPositive seconds = round seconds :: Int
@@ -129,7 +129,7 @@ quietText wording now state
 
 quietLine :: Wording -> Doing -> NominalDiffTime -> Text
 quietLine wording doing quiet =
-  getTranslation'
+  getTranslation
     wording
     quietDoing
     [ ("doing", str (doingText wording doing))
@@ -139,7 +139,7 @@ quietLine wording doing quiet =
 doingText :: Wording -> Doing -> Text
 doingText wording = \case
   OnFile status -> fileStatusText wording status
-  WritingManifest -> getTranslation' wording doingWritingManifest []
+  WritingManifest -> getTranslation wording doingWritingManifest []
 
 -- |
 -- >>> fileStatusText (embeddedWording English) Flushing
@@ -158,10 +158,10 @@ fileStatusText wording = \case
   Done (HashMismatch _) -> plain fileStatusHashMismatch
   Done Missing -> plain fileStatusMissing
   Done New -> plain fileStatusNew
-  Done (IoError message) -> getTranslation' wording fileStatusIoError [("message", str message)]
+  Done (IoError message) -> getTranslation wording fileStatusIoError [("message", str message)]
   Done (Replaced _) -> plain fileStatusReplaced
   where
-    plain reference = getTranslation' wording reference []
+    plain reference = getTranslation wording reference []
 
 decimal :: Wording -> Double -> Text
 decimal wording = case wording.language of
@@ -179,30 +179,30 @@ pad2 n = T.justifyRight 2 '0' (count n)
 resultText :: Wording -> JobKind -> JobResult -> Text
 resultText wording kind = \case
   AllOk -> case kind of
-    (OffloadKind; VerifyKind) -> getTranslation' wording resultAllVerified []
-    SealKind -> getTranslation' wording resultAllSealed []
-  WithFailures n -> getTranslation' wording resultWithFailures [("count", int n)]
+    (OffloadKind; VerifyKind) -> getTranslation wording resultAllVerified []
+    SealKind -> getTranslation wording resultAllSealed []
+  WithFailures n -> getTranslation wording resultWithFailures [("count", value n)]
 
 -- >>> jobFinishedToast (embeddedWording English) "A001" OffloadKind AllOk
 -- "A001: finished, all files verified"
 jobFinishedToast :: Wording -> Text -> JobKind -> JobResult -> Text
 jobFinishedToast wording label kind result =
-  getTranslation' wording toastJobFinished [("label", str label), ("result", str (resultText wording kind result))]
+  getTranslation wording toastJobFinished [("label", str label), ("result", str (resultText wording kind result))]
 
 jobFailedToast :: Wording -> Text -> Text -> Text
-jobFailedToast wording label message = getTranslation' wording toastJobFailed [("label", str label), ("message", str message)]
+jobFailedToast wording label message = getTranslation wording toastJobFailed [("label", str label), ("message", str message)]
 
 savePlanTitle :: Wording -> Text
-savePlanTitle wording = getTranslation' wording dialogSavePlan []
+savePlanTitle wording = getTranslation wording dialogSavePlan []
 
 saveReportTitle :: Wording -> Text
-saveReportTitle wording = getTranslation' wording dialogSaveReport []
+saveReportTitle wording = getTranslation wording dialogSaveReport []
 
 -- |
 -- >>> noHistoryText (embeddedWording English) (unsafeEncodeUtf "card")
 -- "no ASC Media Hash List history (ascmhl/) in card"
 noHistoryText :: Wording -> OsPath -> Text
-noHistoryText wording folder = getTranslation' wording toastNoHistory [("folder", str (pathText folder))]
+noHistoryText wording folder = getTranslation wording toastNoHistory [("folder", str (pathText folder))]
 
 data KindUi = KindUi
   { icon :: Text
@@ -225,40 +225,40 @@ kindUi = \case
 -- "Copying"
 runningVerbText :: Wording -> JobKind -> Text
 runningVerbText wording = \case
-  OffloadKind -> getTranslation' wording runningCopying []
-  VerifyKind -> getTranslation' wording runningVerifying []
-  SealKind -> getTranslation' wording runningSealing []
+  OffloadKind -> getTranslation wording runningCopying []
+  VerifyKind -> getTranslation wording runningVerifying []
+  SealKind -> getTranslation wording runningSealing []
 
 jobKindText :: Wording -> JobKind -> Text
 jobKindText wording = \case
-  OffloadKind -> getTranslation' wording jobKindOffload []
-  VerifyKind -> getTranslation' wording jobKindVerify []
-  SealKind -> getTranslation' wording jobKindSeal []
+  OffloadKind -> getTranslation wording jobKindOffload []
+  VerifyKind -> getTranslation wording jobKindVerify []
+  SealKind -> getTranslation wording jobKindSeal []
 
 writeModeText :: Wording -> WriteMode -> Text
 writeModeText wording = \case
-  WriteNew -> getTranslation' wording writeModeCopy []
-  Overwrite -> getTranslation' wording writeModeOverwrite []
-  Reuse -> getTranslation' wording writeModeReuse []
+  WriteNew -> getTranslation wording writeModeCopy []
+  Overwrite -> getTranslation wording writeModeOverwrite []
+  Reuse -> getTranslation wording writeModeReuse []
 
 processKindText :: Wording -> ProcessKind -> Text
 processKindText wording = \case
-  ProcessTransfer -> getTranslation' wording processTransfer []
-  ProcessInPlace -> getTranslation' wording processInPlace []
-  ProcessFlatten -> getTranslation' wording processFlatten []
+  ProcessTransfer -> getTranslation wording processTransfer []
+  ProcessInPlace -> getTranslation wording processInPlace []
+  ProcessFlatten -> getTranslation wording processFlatten []
 
 targetStateText :: Wording -> TargetState -> Text
 targetStateText wording = \case
-  Fresh -> getTranslation' wording targetEmpty []
-  NotEmpty -> getTranslation' wording targetNotEmpty []
-  Absent -> getTranslation' wording targetAbsent []
-  Partial -> getTranslation' wording targetPartial []
+  Fresh -> getTranslation wording targetEmpty []
+  NotEmpty -> getTranslation wording targetNotEmpty []
+  Absent -> getTranslation wording targetAbsent []
+  Partial -> getTranslation wording targetPartial []
 
 -- |
 -- >>> findingText (embeddedWording English) DestinationForeign
 -- "destination holds files that are not on the media source"
 findingText :: Wording -> FindingCode -> Text
-findingText wording code = getTranslation' wording reference []
+findingText wording code = getTranslation wording reference []
   where
     reference = case code of
       SourceMissing -> findingSourceMissing
@@ -283,9 +283,9 @@ findingText wording code = getTranslation' wording reference []
 -- "extension indisponible"
 pluginFaultText :: Wording -> PluginFault -> Text
 pluginFaultText wording = \case
-  Unavailable _ -> getTranslation' wording pluginUnavailable []
-  FieldMissing field -> getTranslation' wording pluginFieldMissing [("field", str field)]
-  BadOutput _ -> getTranslation' wording pluginBadOutput []
+  Unavailable _ -> getTranslation wording pluginUnavailable []
+  FieldMissing field -> getTranslation wording pluginFieldMissing [("field", str field)]
+  BadOutput _ -> getTranslation wording pluginBadOutput []
 
 -- |
 -- >>> let probe = PluginRef {id = "tech.floreal.probe", name = "Probe"}
@@ -294,7 +294,7 @@ pluginFaultText wording = \case
 pluginFindingTexts :: Wording -> PluginFinding -> (Text, Text)
 pluginFindingTexts wording finding = (titled title, detail)
   where
-    titled text = getTranslation' wording pluginFinding [("plugin", str finding.plugin.name), ("title", str text)]
+    titled text = getTranslation wording pluginFinding [("plugin", str finding.plugin.name), ("title", str text)]
     (title, detail) = case finding.about of
       Said says -> (says.title, says.detail)
       Faulted fault -> (pluginFaultText wording fault, faultReason fault)
@@ -308,4 +308,4 @@ pluginFindingTexts wording finding = (titled title, detail)
 -- >>> pluginToastText (embeddedWording English) "A001" PluginFinding {plugin = probe, severity = Warning, about = Faulted (Unavailable "exit code 4")}
 -- "A001: Probe: plug-in unavailable"
 pluginToastText :: Wording -> Text -> PluginFinding -> Text
-pluginToastText wording label finding = getTranslation' wording toastPlugin [("label", str label), ("message", str (fst (pluginFindingTexts wording finding)))]
+pluginToastText wording label finding = getTranslation wording toastPlugin [("label", str label), ("message", str (fst (pluginFindingTexts wording finding)))]

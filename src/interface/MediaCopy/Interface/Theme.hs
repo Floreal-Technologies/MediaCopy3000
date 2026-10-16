@@ -67,26 +67,26 @@ resolveMode base desktop = fromMaybe desktop (forcedBase base)
 
 displayBase :: Wording -> Base -> Text
 displayBase wording = \case
-  FollowDesktop -> getTranslation' wording themeBaseFollowDesktop []
-  AlwaysLight -> getTranslation' wording themeBaseAlwaysLight []
-  AlwaysDark -> getTranslation' wording themeBaseAlwaysDark []
+  FollowDesktop -> getTranslation wording themeBaseFollowDesktop []
+  AlwaysLight -> getTranslation wording themeBaseAlwaysLight []
+  AlwaysDark -> getTranslation wording themeBaseAlwaysDark []
 
 displayAccent :: Wording -> Maybe Accent -> Text
 displayAccent wording = \case
-  Nothing -> getTranslation' wording themeAccentDesktop []
+  Nothing -> getTranslation wording themeAccentDesktop []
   Just accent -> accentLabel wording accent
 
 accentLabel :: Wording -> Accent -> Text
 accentLabel wording = \case
-  Blue -> getTranslation' wording themeAccentBlue []
-  Teal -> getTranslation' wording themeAccentTeal []
-  Green -> getTranslation' wording themeAccentGreen []
-  Yellow -> getTranslation' wording themeAccentYellow []
-  Orange -> getTranslation' wording themeAccentOrange []
-  Red -> getTranslation' wording themeAccentRed []
-  Pink -> getTranslation' wording themeAccentPink []
-  Purple -> getTranslation' wording themeAccentPurple []
-  Slate -> getTranslation' wording themeAccentSlate []
+  Blue -> getTranslation wording themeAccentBlue []
+  Teal -> getTranslation wording themeAccentTeal []
+  Green -> getTranslation wording themeAccentGreen []
+  Yellow -> getTranslation wording themeAccentYellow []
+  Orange -> getTranslation wording themeAccentOrange []
+  Red -> getTranslation wording themeAccentRed []
+  Pink -> getTranslation wording themeAccentPink []
+  Purple -> getTranslation wording themeAccentPurple []
+  Slate -> getTranslation wording themeAccentSlate []
 
 -- |
 -- >>> accentName Purple

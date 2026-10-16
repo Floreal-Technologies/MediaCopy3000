@@ -1,6 +1,5 @@
 module MediaCopy.Interface.View.PlanSheet
   ( SealView (..)
-  , sealView
   , sealChoice
   , SheetPage (..)
   , BodyView (..)

@@ -81,7 +81,7 @@ runEffect site model effect = toasting site $ case effect of
   LoadHistory jobId folder -> loadHistory site wording jobId folder
   WriteFile path text -> writeFile' path (encodeUtf8 text)
   DestroyWindow -> Gtk.windowDestroy site.window
-  LoadCatalog -> catalogWorker site
+  LoadCatalog -> void $ async (withMVar site.catalogLock (const (reloadCatalog site)))
   ApplyChange change -> changeWorker site change
   ShowFolder folder -> showFolder site folder
   ShowChrome chrome -> site.present chrome
@@ -127,9 +127,6 @@ showFolder site folder = do
   launcher <- Gtk.fileLauncherNew (Just file)
   Gtk.fileLauncherLaunch launcher (Just site.window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
     toasting site (Gtk.fileLauncherLaunchFinish launcher result)
-
-catalogWorker :: Production -> IO ()
-catalogWorker site = void $ async (withMVar site.catalogLock (const (reloadCatalog site)))
 
 changeWorker :: Production -> CatalogChange -> IO ()
 changeWorker site change =

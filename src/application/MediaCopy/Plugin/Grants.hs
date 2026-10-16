@@ -89,8 +89,9 @@ loadGrants path = do
   json <- readGrantsJson path
   pure $ do
     value <- json
-    GrantFile entries <- first (\problem -> "plugins.json: " <> T.pack problem) (parseEither parseJSON value)
-    Right entries
+    first
+      (\problem -> "plugins.json: " <> T.pack problem)
+      (parseEither (withObject "plugins.json" (\o -> fromMaybe Map.empty <$> o .:? "plugins")) value)
 
 data PluginSetup = PluginSetup
   { installed :: Vector Installed
@@ -116,11 +117,6 @@ loadPluginSetup = do
       , rejected = found.rejected
       , grantsProblem = either Just (const Nothing) grantFile
       }
-
-newtype GrantFile = GrantFile (Map PluginId Grant)
-
-instance FromJSON GrantFile where
-  parseJSON = withObject "plugins.json" $ \o -> GrantFile . fromMaybe Map.empty <$> o .:? "plugins"
 
 data Ready = Ready
   { installed :: Installed

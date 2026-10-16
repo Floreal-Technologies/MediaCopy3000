@@ -15,16 +15,11 @@ module MediaCopy.Plugin.JsonSchema
   , describe
   , property
   , describeProperty
-
-    -- * Output
-  , render
   ) where
 
 import Data.Aeson
-import Data.Aeson.Encode.Pretty (Config (..), Indent (Spaces), defConfig, encodePretty', keyOrder)
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
-import Data.ByteString.Lazy (ByteString)
 import Data.Int (Int64)
 import Data.Kind (Type)
 import Data.Map.Strict (Map)
@@ -140,38 +135,3 @@ adjust :: Key -> (Value -> Value) -> Value -> Value
 adjust key f = \case
   Object o | Just value <- KeyMap.lookup key o -> Object (KeyMap.insert key (f value) o)
   other -> error ("the schema has no " <> show key <> ": " <> show other)
-
-render :: Value -> ByteString
-render = encodePretty' defConfig {confIndent = Spaces 2, confCompare = keyOrder keywords <> compare, confTrailingNewline = True}
-
-keywords :: [Text]
-keywords =
-  [ "$schema"
-  , "$id"
-  , "title"
-  , "description"
-  , "$ref"
-  , "x-methods"
-  , "x-notifications"
-  , "$defs"
-  , "params"
-  , "result"
-  , "type"
-  , "const"
-  , "enum"
-  , "pattern"
-  , "minimum"
-  , "maximum"
-  , "required"
-  , "properties"
-  , "items"
-  , "additionalProperties"
-  , "contains"
-  , "minContains"
-  , "maxContains"
-  , "not"
-  , "allOf"
-  , "if"
-  , "then"
-  , "default"
-  ]

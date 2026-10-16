@@ -41,7 +41,7 @@ data Loop = Loop
 
 start :: Maybe Startup -> IO ()
 start startup = withEnvironment $ \environment -> do
-  registerResources
+  GLib.bytesNew (Just bundle) >>= Gio.resourceNewFromData >>= Gio.resourcesRegister
   loopRef <- newIORef Nothing
   app <-
     new
@@ -140,6 +140,3 @@ installTicker startup dispatchNow =
               dispatchNow (Tick t) >> pure True
           )
       )
-
-registerResources :: IO ()
-registerResources = GLib.bytesNew (Just bundle) >>= Gio.resourceNewFromData >>= Gio.resourcesRegister

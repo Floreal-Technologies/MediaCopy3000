@@ -63,6 +63,15 @@ deps-xref:
 xref:
     xreferee -I manual/en/cross-references.md
 
+# Install the dead code finder for `just weeder`
+deps-weeder:
+    ./scripts/install-weeder.sh
+
+# Find dead code (Weeder)
+weeder:
+    cabal build all --builddir=dist-newstyle/weeder
+    weeder --require-hs-files --hie-directory dist-newstyle/weeder
+
 # Take the screenshots for the manual (closes a running instance first)
 screenshots:
     ./scripts/screenshots.sh

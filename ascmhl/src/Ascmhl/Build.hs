@@ -22,6 +22,8 @@ import Data.Maybe (mapMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
+import Data.Text.Display (display)
+import Data.Text.Read qualified as TR
 import Data.Time (UTCTime)
 import Data.Vector (Vector)
 import Data.Vector qualified as V
@@ -29,7 +31,6 @@ import System.OsPath (OsPath)
 import Text.XML (Element (..), Name (..), Node (..))
 
 import Ascmhl.Hash (Hash)
-import Ascmhl.Layout (sequenceOf)
 import Ascmhl.Path (RelPath (..), mkRelPath, parentOf, pathText)
 import Ascmhl.Schema qualified as Schema
 import Ascmhl.Types
@@ -98,6 +99,16 @@ chainFromListing names =
     & Chain
   where
     entryFor index p = chainEntry (sequenceOf index p) p Nothing
+
+-- |
+-- >>> sequenceOf 7 (RelPath "0003_card_a.mhl")
+-- 3
+-- >>> sequenceOf 7 (RelPath "legacy.mhl")
+-- 7
+sequenceOf :: Int -> RelPath -> Int
+sequenceOf index p = case TR.decimal (display p) of
+  Right (parsed, _rest) -> parsed
+  Left _notANumber -> index
 
 orderedEntries :: Vector HashEntry -> Vector DirectoryEntry -> Vector ManifestEntry
 orderedEntries files dirs = V.fromList (below root)

@@ -14,9 +14,7 @@ module Ascmhl.Types
   , Chain (..)
   , Generation (..)
   , MhlHistory (..)
-  , actionFromName
   , algosText
-  , processFromName
   , fileEntries
   , latestHashes
   , historyOf
@@ -53,20 +51,6 @@ instance Display HashAction where
     Original -> "original"
     Verified -> "verified"
     FailedAction -> "failed"
-
--- |
--- >>> actionFromName "original"
--- Just Original
--- >>> actionFromName "new"
--- Just Verified
--- >>> actionFromName "renamed"
--- Nothing
-actionFromName :: Text -> Maybe HashAction
-actionFromName = \case
-  "original" -> Just Original
-  ("verified"; "new") -> Just Verified
-  "failed" -> Just FailedAction
-  _ -> Nothing
 
 data ManifestHash = ManifestHash
   { hash :: Hash
@@ -138,20 +122,6 @@ instance Display ProcessKind where
     ProcessTransfer -> "transfer"
     ProcessInPlace -> "in-place"
     ProcessFlatten -> "flatten"
-
--- |
--- >>> processFromName "transfer"
--- Just ProcessTransfer
--- >>> processFromName "verify"
--- Just ProcessInPlace
--- >>> processFromName "copy"
--- Nothing
-processFromName :: Text -> Maybe ProcessKind
-processFromName = \case
-  "transfer" -> Just ProcessTransfer
-  ("in-place"; "verify") -> Just ProcessInPlace
-  "flatten" -> Just ProcessFlatten
-  _ -> Nothing
 
 data Manifest = Manifest
   { creator :: CreatorInfo

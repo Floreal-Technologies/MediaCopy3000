@@ -72,7 +72,7 @@ newAppearanceRows wording dispatch = do
   box <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #spacing := 6, #valign := Gtk.AlignCenter]
   forM_ swatches (\(_, button) -> Gtk.boxAppend box button)
   Adw.actionRowAddSuffix accentRow box
-  paintBase <- bind (comboRow baseRow) (chooseFrom dispatch baseValues SetBase)
+  paintBase <- bind (comboRow baseRow) (\index -> forM_ (baseValues V.!? fromIntegral index) (dispatch . SetBase))
   paintAccent <- bind (toggleRadio swatches) (mapM_ (dispatch . SetAccent))
   pure AppearanceRows {baseRow, accentRow, paintBase, paintAccent}
 
@@ -96,9 +96,6 @@ newSwatch wording accent = do
       [#tooltipText := label, #cssClasses := ["accent-swatch", maybe "desktop" accentName accent], #valign := Gtk.AlignCenter]
   nameAccessible button label
   pure button
-
-chooseFrom :: (UiMessage -> IO ()) -> Vector a -> (a -> UiMessage) -> Word32 -> IO ()
-chooseFrom dispatch values report index = forM_ (values V.!? fromIntegral index) (dispatch . report)
 
 paintAppearance :: AppearanceRows -> Appearance -> IO ()
 paintAppearance rows appearance = do

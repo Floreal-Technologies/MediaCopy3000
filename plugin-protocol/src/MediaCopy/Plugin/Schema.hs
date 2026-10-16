@@ -6,9 +6,11 @@ module MediaCopy.Plugin.Schema
   ) where
 
 import Data.Aeson
+import Data.Aeson.Encode.Pretty (Config (..), Indent (Spaces), defConfig, encodePretty', keyOrder)
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString.Lazy (ByteString)
+import Data.Function ((&))
 import Data.List (nub, (\\))
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -72,7 +74,14 @@ protocolSchema
         , def @Progress
         , def @LogLine
         , def @AuthorSlot
-        , [("jobKind", jobKindSchema), ("hashAlgo", hashAlgoSchema)]
+        ,
+          [ ("jobKind", object ["enum" .= (["offload", "verify", "seal"] :: [Text])])
+          ,
+            ( "hashAlgo"
+            , object ["enum" .= (["xxh64", "md5", "sha1", "c4"] :: [Text])]
+                & describe "The name of a hash format, as the element name in an ASC MHL manifest."
+            )
+          ]
         ]
 
 def :: forall a. (JsonSchema a) => [(Text, Value)]
@@ -89,4 +98,37 @@ dangling defined = \case
   _ -> []
 
 renderSchema :: ByteString
-renderSchema = render protocolSchema
+renderSchema =
+  encodePretty' defConfig {confIndent = Spaces 2, confCompare = keyOrder keywords <> compare, confTrailingNewline = True} protocolSchema
+
+keywords :: [Text]
+keywords =
+  [ "$schema"
+  , "$id"
+  , "title"
+  , "description"
+  , "$ref"
+  , "x-methods"
+  , "x-notifications"
+  , "$defs"
+  , "params"
+  , "result"
+  , "type"
+  , "const"
+  , "enum"
+  , "pattern"
+  , "minimum"
+  , "maximum"
+  , "required"
+  , "properties"
+  , "items"
+  , "additionalProperties"
+  , "contains"
+  , "minContains"
+  , "maxContains"
+  , "not"
+  , "allOf"
+  , "if"
+  , "then"
+  , "default"
+  ]

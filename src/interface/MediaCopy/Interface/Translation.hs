@@ -1,15 +1,12 @@
 module MediaCopy.Interface.Translation
-  ( getTranslation
-  , SupportedLanguage (..)
+  ( SupportedLanguage (..)
   , parseFtl
   , Wording (..)
   , mkWording
-  , parseWording
   , WordingFault (..)
-  , getTranslation'
+  , getTranslation
   , localeFile
   , languageCode
-  , int
   , str
   ) where
 
@@ -99,30 +96,16 @@ mkWording language revision resource =
        , strict = False
        }
 
-parseWording :: SupportedLanguage -> Word -> Text -> Either (NonEmpty Text) Wording
-parseWording language revision source =
-  mkWording language revision <$> parseFtl source
-
 getTranslation
   :: Wording
   -> Reference
   -> List (Text, SomeValue)
-  -> Either Text Text
+  -> Text
 getTranslation wording reference arguments =
   case translate reference arguments wording.bundle of
-    Left message -> Left $ referenceName reference <> ": " <> T.pack message
-    Right translation -> Right translation
-
-getTranslation'
-  :: Wording
-  -> Reference
-  -> List (Text, SomeValue)
-  -> Text
-getTranslation' wording reference arguments =
-  case getTranslation wording reference arguments of
     Right translation -> translation
-    Left fault
-      | wording.strict -> throw (WordingFault fault)
+    Left message
+      | wording.strict -> throw (WordingFault (referenceName reference <> ": " <> T.pack message))
       | otherwise -> "{" <> referenceName reference <> "}"
 
 referenceName :: Reference -> Text
@@ -133,9 +116,6 @@ referenceName reference =
 
 str :: Text -> SomeValue
 str = StringValue
-
-int :: Int -> SomeValue
-int = value
 
 -- * Helpers
 

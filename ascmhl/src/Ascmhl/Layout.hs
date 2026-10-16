@@ -7,13 +7,10 @@ module Ascmhl.Layout
   , chainPath
   , manifestPathOf
   , mhlFileNames
-  , sequenceOf
   ) where
 
 import Data.Function ((&))
 import Data.List (sort)
-import Data.Text.Display (display)
-import Data.Text.Read qualified as TR
 import Data.Vector (Vector)
 import Data.Vector qualified as V
 import System.OsPath (OsPath, (</>))
@@ -43,13 +40,3 @@ manifestPathOf folder path = relToOsPath (ascmhlDir folder) path
 -- ["0001_a.mhl","0002_b.mhl"]
 mhlFileNames :: Vector OsPath -> Vector OsPath
 mhlFileNames names = names & V.filter (\name -> [osp|.mhl|] `isSuffixOf` name) & V.toList & sort & V.fromList
-
--- |
--- >>> sequenceOf 7 (RelPath "0003_card_a.mhl")
--- 3
--- >>> sequenceOf 7 (RelPath "legacy.mhl")
--- 7
-sequenceOf :: Int -> RelPath -> Int
-sequenceOf index p = case TR.decimal (display p) of
-  Right (parsed, _rest) -> parsed
-  Left _notANumber -> index

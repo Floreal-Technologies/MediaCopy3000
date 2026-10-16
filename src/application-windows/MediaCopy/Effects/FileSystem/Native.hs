@@ -1,6 +1,5 @@
 module MediaCopy.Effects.FileSystem.Native
-  ( Entry (..)
-  , statEntry
+  ( statEntry
   , syncAndClose
   , syncDirectory
   , readCold

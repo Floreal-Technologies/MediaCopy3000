@@ -62,12 +62,9 @@ hooks :: List Capability
 hooks = [PlanInspect, FilesInspect, ManifestWrite]
 
 instance FromJSON Capability where
-  parseJSON = withText "capability" (named "capability" capabilityName)
-
-named :: (Bounded a, Enum a) => String -> (a -> Text) -> Text -> Parser a
-named what nameOf found = case lookup found [(nameOf value, value) | value <- [minBound ..]] of
-  Just value -> pure value
-  Nothing -> fail ("unknown " <> what <> " " <> show found)
+  parseJSON = withText "capability" $ \found -> case lookup found [(capabilityName value, value) | value <- [minBound ..]] of
+    Just value -> pure value
+    Nothing -> fail ("unknown capability " <> show found)
 
 data FieldKind = TextField | SecretField | EmailField | BoolField | ChoiceField (Vector Text) | PathField | AuthorsField
   deriving stock (Eq, Show)

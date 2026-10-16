@@ -214,7 +214,7 @@ renderSealChoice seal view = do
 renderPlanSheet :: PlanSheet -> Model -> IO ()
 renderPlanSheet widgets current = do
   renderCell widgets.phaseCell (phaseView current.wording current.planPhase)
-  widgets.paintOpen (isOpen current.planPhase)
+  widgets.paintOpen (current.planPhase /= Idle)
   let given = case current.planPhase of
         Planning spec -> spec.pluginFields
         Refreshing _ spec -> spec.pluginFields
@@ -248,11 +248,6 @@ renderJobFields body dispatch (wanted, given) = do
              }
            (ref.name <> ": ")
            (withValue field (current ref field))
-
-isOpen :: PlanPhase -> Bool
-isOpen phase = case phase of
-  Idle -> False
-  _ -> True
 
 renderRows :: Adw.PreferencesGroup -> IORef (Vector Adw.ActionRow) -> Vector RowView -> IO ()
 renderRows group rowsRef wanted = do

@@ -76,12 +76,6 @@ data FileStepResult = FileStepResult
   , manifestEntry :: Maybe HashEntry
   }
 
-data SealCheck = SealCheck
-  { outcome :: FileOutcome
-  , action :: HashAction
-  , hash :: Hash
-  }
-
 executePlan
   :: (FileSystem :> es, Hasher :> es, Time :> es, Emit :> es, Plugins :> es)
   => Text
@@ -162,13 +156,6 @@ hashOf
   -> (ByteString -> Eff es ())
   -> Eff es (Hash, UTCTime)
 hashOf mode path = hashVia (streamFile mode path)
-
-checkAgainstSeal :: Maybe Hash -> Hash -> SealCheck
-checkAgainstSeal sealed actual = case sealed of
-  Nothing -> SealCheck {outcome = Ok, action = Original, hash = actual}
-  Just expected
-    | expected == actual -> SealCheck {outcome = Ok, action = Verified, hash = actual}
-    | otherwise -> SealCheck {outcome = HashMismatch (Mismatch expected actual), action = FailedAction, hash = expected}
 
 copyAndVerify
   :: (Copying es)
@@ -260,15 +247,19 @@ publishCopy
 publishCopy writes sealed rel size mtime srcHash = do
   destOutcome <- publishAndVerify rel writes mtime srcHash
   t <- asks @CreatorInfo (.creationDate)
-  let sourceCheck = checkAgainstSeal sealed srcHash
+  let (sourceOutcome, sourceAction, entryHash) = case sealed of
+        Nothing -> (Ok, Original, srcHash)
+        Just expected
+          | expected == srcHash -> (Ok, Verified, srcHash)
+          | otherwise -> (HashMismatch (Mismatch expected srcHash), FailedAction, expected)
       outcome = case destOutcome of
-        Ok -> sourceCheck.outcome
+        Ok -> sourceOutcome
         destFailure -> destFailure
       action = case outcome of
-        Ok -> Just sourceCheck.action
+        Ok -> Just sourceAction
         HashMismatch _ -> Just FailedAction
         _ -> Nothing
-  pure FileStepResult {outcome, manifestEntry = action <&> (\a -> fileEntry rel size mtime sourceCheck.hash a t)}
+  pure FileStepResult {outcome, manifestEntry = action <&> (\a -> fileEntry rel size mtime entryHash a t)}
 
 publishAndVerify :: (Hashing es) => RelPath -> Vector PlannedWrite -> UTCTime -> Hash -> Eff es FileOutcome
 publishAndVerify rel writes mtime srcHash = do

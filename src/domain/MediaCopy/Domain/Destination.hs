@@ -37,8 +37,6 @@ data TargetFacts = TargetFacts
   , existing :: Maybe Tree
   }
 
-data EntryKind = HeldFinal FileSize | PartOfSource | Foreign
-
 data Held = Held
   { finals :: Map RelPath FileSize
   , firstForeign :: Maybe RelPath
@@ -47,13 +45,10 @@ data Held = Held
 heldOf :: Set RelPath -> Set RelPath -> Tree -> Held
 heldOf sourceFiles sourceDirs tree = Held {finals, firstForeign}
   where
-    kindOf (p, size)
-      | Set.member p sourceFiles = HeldFinal size
-      | maybe False (\final -> Set.member final sourceFiles) (stripPart p) = PartOfSource
-      | otherwise = Foreign
-    kinds = tree.files & V.toList & map (\pair -> (fst pair, kindOf pair))
-    finals = kinds & mapMaybe (\(p, kind) -> case kind of HeldFinal size -> Just (p, size); _ -> Nothing) & Map.fromList
-    foreignFiles = kinds & mapMaybe (\(p, kind) -> case kind of Foreign -> Just p; _ -> Nothing)
+    files = V.toList tree.files
+    finals = files & filter (\pair -> Set.member (fst pair) sourceFiles) & Map.fromList
+    partOfSource p = maybe False (\final -> Set.member final sourceFiles) (stripPart p)
+    foreignFiles = files & map fst & filter (\p -> not (Set.member p sourceFiles || partOfSource p))
     foreignDirs = tree.dirs & V.toList & filter (\d -> not (Set.member d sourceDirs))
     firstForeign = case foreignFiles <> foreignDirs of
       [] -> Nothing

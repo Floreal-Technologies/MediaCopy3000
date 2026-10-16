@@ -246,7 +246,7 @@ capabilityRow change view = do
 settingRow :: (Edit -> IO ()) -> (UiMessage -> IO ()) -> Text -> FieldView -> IO FieldRow
 settingRow send dispatch pluginId field
   | field.kind == AuthorsField =
-      authorsRow (\slots -> if V.null slots then send (ClearSetting field.key) else send (SetSetting field.key (SettingAuthors slots))) "" field
+      authorsRow (\slots -> if V.null slots then send (ClearSetting field.key) else send (SetSetting field.key (SettingAuthors slots))) field
   | otherwise =
       fieldRow
         FieldActions

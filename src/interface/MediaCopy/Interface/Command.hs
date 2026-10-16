@@ -71,7 +71,7 @@ commandId = \case
 -- >>> commandLabel (embeddedWording French) NewOffload
 -- "Nouveau d\233chargement\8230"
 commandLabel :: Wording -> Command -> Text
-commandLabel wording command = getTranslation' wording (reference command) []
+commandLabel wording command = getTranslation wording (reference command) []
   where
     reference = \case
       NewOffload -> Messages.commandNewOffload
@@ -98,7 +98,7 @@ data Section = JobsSection | NavigationSection | GeneralSection
 -- >>> sectionLabel (embeddedWording French) JobsSection
 -- "T\226ches"
 sectionLabel :: Wording -> Section -> Text
-sectionLabel wording section = getTranslation' wording (reference section) []
+sectionLabel wording section = getTranslation wording (reference section) []
   where
     reference = \case
       JobsSection -> Messages.shortcutsSectionJobs
@@ -106,10 +106,10 @@ sectionLabel wording section = getTranslation' wording (reference section) []
       GeneralSection -> Messages.shortcutsSectionGeneral
 
 mainMenuLabel :: Wording -> Text
-mainMenuLabel wording = getTranslation' wording Messages.shortcutsMainMenu []
+mainMenuLabel wording = getTranslation wording Messages.shortcutsMainMenu []
 
 palettePlaceholder :: Wording -> Text
-palettePlaceholder wording = getTranslation' wording Messages.palettePlaceholder []
+palettePlaceholder wording = getTranslation wording Messages.palettePlaceholder []
 
 paletteNoMatch :: Wording -> Text
-paletteNoMatch wording = getTranslation' wording Messages.paletteNoMatch []
+paletteNoMatch wording = getTranslation wording Messages.paletteNoMatch []

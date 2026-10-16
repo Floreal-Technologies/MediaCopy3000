@@ -42,8 +42,6 @@ module MediaCopy.Plugin.Protocol
   , LogLine (..)
 
     -- * Schemas without a type
-  , jobKindSchema
-  , hashAlgoSchema
   ) where
 
 import Data.Aeson
@@ -232,14 +230,6 @@ data LogLine = LogLine
   }
   deriving stock (Eq, Show, Generic)
   deriving (FromJSON, ToJSON) via Wire LogLine
-
-jobKindSchema :: Value
-jobKindSchema = object ["enum" .= (["offload", "verify", "seal"] :: [Text])]
-
-hashAlgoSchema :: Value
-hashAlgoSchema =
-  object ["enum" .= (["xxh64", "md5", "sha1", "c4"] :: [Text])]
-    & describe "The name of a hash format, as the element name in an ASC MHL manifest."
 
 instance JsonSchema Severity where
   defName = Just "severity"

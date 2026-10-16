@@ -93,7 +93,7 @@ detailView wording now loaded state =
        , origins = originsLineText state
        , fraction = fractionOf state
        , progressLeft = progressLeftText wording state
-       , progressRight = progressRightText wording now state (rateOf state)
+       , progressRight = progressRightText wording now state
        , verified = count (counts.verified + counts.replaced)
        , failed = count counts.failed
        , missing = count counts.missing
@@ -162,14 +162,16 @@ progressLeftText wording state =
     <> " of "
     <> humanBytes wording state.bytesTotal
 
-progressRightText :: Wording -> UTCTime -> JobState -> Double -> Text
-progressRightText wording now state rate = case state.phase of
+progressRightText :: Wording -> UTCTime -> JobState -> Text
+progressRightText wording now state = case state.phase of
   Running
     | Just quiet <- quietText wording now state -> quiet
     | rate > 0 -> humanRate wording rate <> " · ETA " <> humanEta wording (remainingSeconds state rate)
     | otherwise -> humanRate wording rate <> " · ETA —"
   Finished _ -> "done"
   _ -> ""
+  where
+    rate = rateOf state
 
 remainingSeconds :: JobState -> Double -> Double
 remainingSeconds state rate = fromIntegral (state.bytesTotal - state.bytesDone) / rate

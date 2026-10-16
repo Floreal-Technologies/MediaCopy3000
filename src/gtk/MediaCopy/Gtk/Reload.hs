@@ -60,7 +60,7 @@ reloadWording environment language publish warn revision streak = do
     Left err -> fault wordingPath [T.show err]
     Right bytes -> case decodeUtf8' bytes of
       Left err -> fault wordingPath [T.show err]
-      Right source -> case parseWording language next source of
+      Right source -> case mkWording language next <$> parseFtl source of
         Left junk -> fault wordingPath (map (\entry -> "cannot parse: " <> T.strip entry) (NE.toList junk))
         Right wording ->
           wordingFaults wording >>= \case

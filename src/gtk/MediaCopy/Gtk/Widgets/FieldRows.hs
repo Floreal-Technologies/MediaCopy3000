@@ -73,10 +73,10 @@ fieldRow actions prefix field = do
       Value text -> text
       _ -> ""
 
-authorsRow :: (Vector AuthorSlot -> IO ()) -> Text -> FieldView -> IO FieldRow
-authorsRow setAuthors prefix field = do
+authorsRow :: (Vector AuthorSlot -> IO ()) -> FieldView -> IO FieldRow
+authorsRow setAuthors field = do
   let slots = authorSlots field.value
-  header <- authorsHeader (fieldTitle prefix field) slots
+  header <- authorsHeader (fieldTitle "" field) slots
   add <- new Gtk.Button [#label := "Add", #valign := Gtk.AlignCenter]
   Gtk.widgetAddCssClass add "flat"
   Adw.actionRowAddSuffix header add
