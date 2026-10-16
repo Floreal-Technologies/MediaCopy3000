@@ -28,6 +28,10 @@ import Ascmhl.Types
 formatMhlTime :: UTCTime -> Text
 formatMhlTime t = T.pack (formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S%Q%Ez" t)
 
+-- |
+-- >>> import Data.Time (UTCTime (..), fromGregorian)
+-- >>> manifestFileName 1 "A002R2EC" (UTCTime (fromGregorian 2026 5 9) 61320)
+-- "0001_A002R2EC_2026-05-09_170200.mhl"
 manifestFileName :: Int -> Text -> UTCTime -> Text
 manifestFileName n folder t =
   T.justifyRight 4 '0' (T.show n)

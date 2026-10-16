@@ -33,6 +33,8 @@ instance Display FormatError where
 -- Right MD5
 -- >>> settleFormat (Map.fromList [(RelPath "a.mxf", Hash {algo = SHA1, value = "ab"})]) (Set.fromList [RelPath "b.mxf"])
 -- Right SHA1
+-- >>> settleFormat (Map.fromList [(RelPath "gone.mxf", Hash {algo = MD5, value = "0f"}), (RelPath "here.mxf", Hash {algo = XXH64, value = "ab"})]) (Set.fromList [RelPath "here.mxf"])
+-- Right XXH64
 -- >>> settleFormat (Map.fromList [(RelPath "a.mxf", Hash {algo = MD5, value = "0f"}), (RelPath "b.mxf", Hash {algo = SHA1, value = "ab"})]) (Set.fromList [RelPath "a.mxf", RelPath "b.mxf"])
 -- Left (MixedFormats [MD5,SHA1])
 settleFormat :: Map RelPath Hash -> Set RelPath -> Either FormatError HashAlgo

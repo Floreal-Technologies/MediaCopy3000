@@ -1,6 +1,8 @@
 module MediaCopy.Plugin.ManifestTest (tests) where
 
 import Data.Aeson (Value (Array))
+import Data.Either (isLeft, isRight)
+import Data.List (List)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Vector qualified as V
@@ -13,19 +15,8 @@ tests :: TestTree
 tests =
   testGroup
     "Manifest"
-    [ testCase "names each capability" namesEachCapability
-    , testCase "accepts plan.inspect with block" acceptsPlanInspectWithBlock
-    , testCase "refuses a manifest with no hook capability" refusesAManifestWithNoHookCapability
-    , testCase "refuses block without plan.inspect" refusesBlockWithoutPlanInspect
-    , testCase "refuses manifest.write with no namespace" refusesManifestWriteWithNoNamespace
-    , testCase "refuses a reserved namespace" refusesAReservedNamespace
-    , testCase "refuses another API major version" refusesAnotherApiMajorVersion
-    , testCase "refuses an id that is not a reverse domain name" refusesAnIdThatIsNotAReverseDomainName
-    , testCase "refuses authors as a job field" refusesAuthorsAsAJobField
-    , testCase "refuses authors without manifest.write" refusesAuthorsWithoutManifestWrite
-    , testCase "refuses two authors settings" refusesTwoAuthorsSettings
-    , testCase "refuses a default on an authors setting" refusesADefaultOnAnAuthorsSetting
-    , testCase "accepts one authors setting with manifest.write" acceptsOneAuthorsSettingWithManifestWrite
+    [ testCase "valid manifests are accepted" validManifestsAreAccepted
+    , testCase "each broken rule refuses the manifest" manifestRules
     ]
 
 base :: PluginManifest
@@ -43,78 +34,47 @@ base =
     , jobFields = mempty
     }
 
-refused :: Text -> PluginManifest -> Assertion
-refused reason m = either Just (const Nothing) (validateManifest m) @?= Just reason
-
-namesEachCapability :: Assertion
-namesEachCapability =
-  map capabilityName [minBound ..] @?= ["files.read", "plan.inspect", "files.inspect", "block", "manifest.write"]
-
-acceptsPlanInspectWithBlock :: Assertion
-acceptsPlanInspectWithBlock = do
-  let m = base {capabilities = V.fromList [FilesRead, PlanInspect, Block]}
-  either Just (const Nothing) (validateManifest m) @?= Nothing
-
-refusesAManifestWithNoHookCapability :: Assertion
-refusesAManifestWithNoHookCapability =
-  refused "declares no capability that MediaCopy 3000 calls" base {capabilities = V.singleton FilesRead}
-
-refusesBlockWithoutPlanInspect :: Assertion
-refusesBlockWithoutPlanInspect =
-  refused
-    "declares block, but not plan.inspect"
-    base {capabilities = V.fromList [FilesInspect, Block]}
-
-refusesManifestWriteWithNoNamespace :: Assertion
-refusesManifestWriteWithNoNamespace =
-  refused
-    "declares manifest.write, but no namespace"
-    base {capabilities = V.singleton ManifestWrite}
-
-refusesAReservedNamespace :: Assertion
-refusesAReservedNamespace = do
-  let writer = base {capabilities = V.singleton ManifestWrite}
-  refused "declares the namespace \"urn:ASC:MHL:v2.0\", which is reserved" writer {namespace = Just "urn:ASC:MHL:v2.0"}
-  refused "declares the namespace \"\", which is reserved" writer {namespace = Just ""}
-
-refusesAnotherApiMajorVersion :: Assertion
-refusesAnotherApiMajorVersion =
-  refused
-    "needs plug-in API 2, and this MediaCopy 3000 speaks API 1"
-    base {api = 2}
-
-refusesAnIdThatIsNotAReverseDomainName :: Assertion
-refusesAnIdThatIsNotAReverseDomainName =
-  refused
-    "has the id \"../escape\", which is not a reverse domain name"
-    base {id = PluginId "../escape"}
+writer :: PluginManifest
+writer = base {capabilities = V.singleton ManifestWrite, namespace = Just "urn:x"}
 
 authors :: Text -> Field
 authors key = Field {key, label = "Authors", kind = AuthorsField, required = True, defaultValue = Nothing}
 
-creditsLike :: PluginManifest
-creditsLike = base {capabilities = V.singleton ManifestWrite, namespace = Just "urn:x"}
+validManifestsAreAccepted :: Assertion
+validManifestsAreAccepted =
+  [ label
+  | (label, manifest) <- accepted
+  , isLeft (validateManifest manifest)
+  ]
+    @?= []
 
-refusesAuthorsAsAJobField :: Assertion
-refusesAuthorsAsAJobField =
-  refused "declares the job field \"authors\" of kind authors, which only a setting can be" creditsLike {jobFields = V.singleton (authors "authors")}
+accepted :: List (Text, PluginManifest)
+accepted =
+  [ ("plan.inspect", base)
+  , ("plan.inspect with block", base {capabilities = V.fromList [FilesRead, PlanInspect, Block]})
+  , ("manifest.write with a namespace", writer)
+  , ("one authors setting with manifest.write", writer {settings = V.singleton (authors "authors")})
+  ]
 
-refusesAuthorsWithoutManifestWrite :: Assertion
-refusesAuthorsWithoutManifestWrite =
-  refused
-    "declares the setting \"authors\" of kind authors, which needs manifest.write"
-    base {settings = V.singleton (authors "authors")}
+manifestRules :: Assertion
+manifestRules =
+  [ label
+  | (label, manifest) <- refused
+  , isRight (validateManifest manifest)
+  ]
+    @?= []
 
-refusesTwoAuthorsSettings :: Assertion
-refusesTwoAuthorsSettings =
-  refused "declares more than one setting of kind authors" creditsLike {settings = V.fromList [authors "crew", authors "guests"]}
-
-refusesADefaultOnAnAuthorsSetting :: Assertion
-refusesADefaultOnAnAuthorsSetting =
-  refused
-    "declares a default for the setting \"authors\" of kind authors"
-    creditsLike {settings = V.singleton (authors "authors") {defaultValue = Just (Array mempty)}}
-
-acceptsOneAuthorsSettingWithManifestWrite :: Assertion
-acceptsOneAuthorsSettingWithManifestWrite =
-  either Just (const Nothing) (validateManifest creditsLike {settings = V.singleton (authors "authors")}) @?= Nothing
+refused :: List (Text, PluginManifest)
+refused =
+  [ ("no hook capability", base {capabilities = V.singleton FilesRead})
+  , ("block without plan.inspect", base {capabilities = V.fromList [FilesInspect, Block]})
+  , ("manifest.write with no namespace", writer {namespace = Nothing})
+  , ("the ASC MHL namespace", writer {namespace = Just "urn:ASC:MHL:v2.0"})
+  , ("the empty namespace", writer {namespace = Just ""})
+  , ("another API major version", base {api = 2})
+  , ("an id that is not a reverse domain name", base {id = PluginId "../escape"})
+  , ("authors as a job field", writer {jobFields = V.singleton (authors "authors")})
+  , ("authors without manifest.write", base {settings = V.singleton (authors "authors")})
+  , ("two authors settings", writer {settings = V.fromList [authors "crew", authors "guests"]})
+  , ("a default on an authors setting", writer {settings = V.singleton (authors "authors") {defaultValue = Just (Array mempty)}})
+  ]

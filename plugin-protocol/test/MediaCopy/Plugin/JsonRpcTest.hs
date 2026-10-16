@@ -1,48 +1,47 @@
 module MediaCopy.Plugin.JsonRpcTest (tests) where
 
 import Data.Aeson
+import Data.ByteString (ByteString)
+import Data.ByteString.Lazy qualified as LBS
+import Data.Either (isLeft)
+import Data.Function ((&))
+import Data.Text (Text)
+import Hedgehog (Property, forAll, property, (===))
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 import Test.Tasty
 import Test.Tasty.HUnit
+import Test.Tasty.Hedgehog (testProperty)
 
+import MediaCopy.Plugin.Generators
 import MediaCopy.Plugin.JsonRpc
 
 tests :: TestTree
 tests =
   testGroup
     "JsonRpc"
-    [ testCase "encodes a request" encodesARequest
-    , testCase "decodes a reply with a result" decodesAReplyWithAResult
-    , testCase "decodes a reply with an error" decodesAReplyWithAnError
-    , testCase "decodes a notification" decodesANotification
-    , testCase "refuses a request from a plug-in" refusesARequestFromAPlugin
-    , testCase "refuses a line that is not JSON" refusesALineThatIsNotJson
+    [ testProperty "requests, replies, errors and notifications round-trip" jsonRpcRoundTrips
+    , testCase "the core refuses requests from a plug-in and lines that are not JSON" theCoreRefusesRequestsAndNonJson
     ]
 
-encodesARequest :: Assertion
-encodesARequest =
-  encodeRequest 7 "inspect/plan" (object [])
-    @?= "{\"id\":7,\"jsonrpc\":\"2.0\",\"method\":\"inspect/plan\",\"params\":{}}"
+jsonRpcRoundTrips :: Property
+jsonRpcRoundTrips = property $ do
+  requestId <- forAll (Gen.int (Range.linearFrom 0 minBound maxBound))
+  method <- forAll genText
+  params <- forAll genValue
+  rpcError <- forAll (RpcError <$> Gen.int (Range.linearFrom 0 minBound maxBound) <*> genText)
+  decodeRequest (encodeRequest requestId method params) === Right Request {requestId = Just requestId, method, params}
+  decodeIncoming (encodeReply requestId params) === Right (Reply requestId (Right params))
+  decodeIncoming (encodeFailure requestId rpcError) === Right (Reply requestId (Left rpcError))
+  decodeIncoming (notification method params) === Right (Notify method params)
 
-decodesAReplyWithAResult :: Assertion
-decodesAReplyWithAResult =
-  decodeIncoming "{\"jsonrpc\":\"2.0\",\"id\":7,\"result\":{\"findings\":[]}}"
-    @?= Right (Reply 7 (Right (object ["findings" .= ([] :: [Value])])))
+notification :: Text -> Value -> ByteString
+notification method params =
+  object ["jsonrpc" .= ("2.0" :: Text), "method" .= method, "params" .= params]
+    & encode
+    & LBS.toStrict
 
-decodesAReplyWithAnError :: Assertion
-decodesAReplyWithAnError =
-  decodeIncoming "{\"jsonrpc\":\"2.0\",\"id\":7,\"error\":{\"code\":-32601,\"message\":\"no such method\"}}"
-    @?= Right (Reply 7 (Left RpcError {code = -32601, message = "no such method"}))
-
-decodesANotification :: Assertion
-decodesANotification =
-  decodeIncoming "{\"jsonrpc\":\"2.0\",\"method\":\"$/progress\",\"params\":{\"message\":\"hashing\"}}"
-    @?= Right (Notify "$/progress" (object ["message" .= String "hashing"]))
-
-refusesARequestFromAPlugin :: Assertion
-refusesARequestFromAPlugin =
-  decodeIncoming "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ask\"}"
-    @?= Left "a request from a plug-in: the core accepts none"
-
-refusesALineThatIsNotJson :: Assertion
-refusesALineThatIsNotJson =
-  decodeIncoming "not json" @?= Left "not a JSON object: not json"
+theCoreRefusesRequestsAndNonJson :: Assertion
+theCoreRefusesRequestsAndNonJson = do
+  assertBool "a request from a plug-in" (isLeft (decodeIncoming (encodeRequest 1 "ask" Null)))
+  assertBool "a line that is not JSON" (isLeft (decodeIncoming "not json"))

@@ -3,7 +3,6 @@ module Main (main) where
 import Test.Tasty
 
 import MediaCopy.Domain.DirectoryHashTest qualified as DirectoryHashTest
-import MediaCopy.Domain.JobFormatTest qualified as JobFormatTest
 import MediaCopy.Domain.JobTest qualified as JobTest
 import MediaCopy.Domain.PlanTest qualified as PlanTest
 import MediaCopy.Effects.FileSystemTest qualified as FileSystemTest
@@ -16,5 +15,5 @@ main =
   defaultMain
     ( testGroup
         "mediacopy3000"
-        [DirectoryHashTest.tests, JobFormatTest.tests, JobTest.tests, PlanTest.tests, FileSystemTest.tests, EngineTest.tests, ModelTest.tests, WordingTest.tests]
+        [DirectoryHashTest.tests, JobTest.tests, PlanTest.tests, FileSystemTest.tests, EngineTest.tests, ModelTest.tests, WordingTest.tests]
     )

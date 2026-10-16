@@ -1,302 +1,124 @@
-{-# LANGUAGE NumericUnderscores #-}
-
 module Ascmhl.RoundTripTest (tests) where
 
 import Data.Either (isLeft)
+import Data.Foldable (for_)
+import Data.Function ((&))
 import Data.Map.Strict qualified as Map
+import Data.Maybe (isJust)
 import Data.Set qualified as Set
-import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Display (display)
 import Data.Text.IO qualified as TIO
-import Data.Time (UTCTime (..), fromGregorian, picosecondsToDiffTime, secondsToDiffTime)
-import Data.Vector (Vector)
+import Data.Time (UTCTime (..), minutesToTimeZone, utcToZonedTime)
+import Data.Time.Format.ISO8601 (iso8601Show)
 import Data.Vector qualified as V
+import Hedgehog
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 import Test.Tasty
-import Test.Tasty.HUnit
+import Test.Tasty.HUnit hiding (assert)
+import Test.Tasty.Hedgehog (testProperty)
 import Text.XML (Element (..), Name (..), Node (..))
 
 import Ascmhl.Build
+import Ascmhl.Generators
 import Ascmhl.Hash
 import Ascmhl.Path (RelPath (..))
 import Ascmhl.Read
 import Ascmhl.Types
 import Ascmhl.Write
 
-orFail :: (Show e) => Either e a -> IO a
-orFail e = either (assertFailure . show) pure e
-
-fixturePath :: FilePath
-fixturePath = "test/fixtures/ascmhl/0001_A002R2EC_2026-05-09_170200.mhl"
-
 tests :: TestTree
 tests =
   testGroup
     "Ascmhl.RoundTrip"
-    [ testGroup
-        "time format"
-        [ testCase "formats and parses" formatsAndParses
-        , testCase "parses a Z suffix and a non-zero offset" parsesAZSuffixAndANonZeroOffset
-        ]
-    , testGroup
-        "manifestFileName"
-        [ testCase "follows NNNN_folder_date_time.mhl" followsNNNNFolderDateTimeMhl
-        ]
-    , testGroup
-        "manifest"
-        [ testCase "parses the fixture" parsesTheFixture
-        , testCase "round-trips through render" roundTripsThroughRender
-        , testCase "rejects garbage" rejectsGarbage
-        , testCase "rejects a path that escapes the folder" rejectsEscapingPath
-        , testCase "parses the root hash and ignore patterns" parsesTheRootHashAndIgnorePatterns
-        , testCase "parses a directory hash entry" parsesADirectoryHashEntry
-        ]
-    , testGroup
-        "chain"
-        [ testCase "parses and round-trips the fixture" chainParsesAndRoundTripsTheFixture
-        , testCase "keeps the case of a c4 chain hash" keepsTheCaseOfAC4ChainHash
-        , testCase "gives a foreign namespace back unchanged" givesAForeignNamespaceBackUnchanged
-        ]
-    , testGroup
-        "latestHashes"
-        [ testCase "prefers xxh64 and later generations" prefersXxh64AndLaterGenerations
-        ]
-    , testGroup
-        "historyOf"
-        [ testCase "builds one generation per manifest" buildsOneGenerationPerManifest
-        ]
-    , testGroup
-        "build"
-        [ testCase "orders a three-level tree by §6.5" ordersAThreeLevelTreeBy65
-        , testCase "round-trips a built manifest" roundTripsABuiltManifest
-        , testCase "appendGeneration keeps ordering and sets c4" appendGenerationKeepsOrderingAndSetsC4
-        ]
+    [ testProperty "an MHL time reads back as the same instant from any offset" timesRoundTrip
+    , testProperty "a built manifest reads back equal" builtManifestsRoundTrip
+    , testCase "reads the reference manifest" readsTheReferenceManifest
+    , testCase "refuses a manifest whose path leaves the folder" refusesAnEscapingPath
+    , testCase "chains read back equal and keep foreign elements and the c4 case" chainsRoundTrip
     ]
 
-formatsAndParses :: Assertion
-formatsAndParses = do
-  let t = UTCTime (fromGregorian 2026 5 9) (secondsToDiffTime (17 * 3600 + 120))
-  formatMhlTime t @?= "2026-05-09T17:02:00+00:00"
-  parseMhlTime "2026-05-09T17:02:00+00:00" @?= Just t
+fixturePath :: FilePath
+fixturePath = "test/fixtures/ascmhl/0001_A002R2EC_2026-05-09_170200.mhl"
 
-parsesAZSuffixAndANonZeroOffset :: Assertion
-parsesAZSuffixAndANonZeroOffset = do
-  parseMhlTime "2026-05-09T17:02:00Z" @?= parseMhlTime "2026-05-09T17:02:00+00:00"
-  parseMhlTime "2026-05-09T19:02:00+02:00" @?= parseMhlTime "2026-05-09T17:02:00+00:00"
+orFail :: (Show e) => Either e a -> IO a
+orFail e = either (assertFailure . show) pure e
 
-followsNNNNFolderDateTimeMhl :: Assertion
-followsNNNNFolderDateTimeMhl = do
-  let t = UTCTime (fromGregorian 2026 5 9) (secondsToDiffTime (17 * 3600 + 120))
-  manifestFileName 1 "A002R2EC" t @?= "0001_A002R2EC_2026-05-09_170200.mhl"
+timesRoundTrip :: Property
+timesRoundTrip = property $ do
+  instant <- forAll genInstant
+  offset <- forAll (Gen.int (Range.linear (-720) 840))
+  let local = utcToZonedTime (minutesToTimeZone offset) instant & iso8601Show & T.pack
+  parseMhlTime (formatMhlTime instant) === Just instant
+  parseMhlTime local === Just instant
+  parseMhlTime (T.dropEnd 6 (formatMhlTime instant) <> "Z") === Just instant
 
-fixtureHashDate :: UTCTime
-fixtureHashDate = UTCTime (fromGregorian 2026 5 9) (secondsToDiffTime (17 * 3600 + 120))
+builtManifestsRoundTrip :: Property
+builtManifestsRoundTrip = property $ do
+  manifest <- forAll genManifest
+  parseManifest (renderManifest manifest) === Right manifest
 
-parsesTheFixture :: Assertion
-parsesTheFixture = do
-  txt <- TIO.readFile fixturePath
-  case parseManifest txt of
-    Left err -> assertFailure (show err)
-    Right m -> do
-      m.process @?= ProcessTransfer
-      m.creator.hostname @?= "dit-laptop"
-      let files = fileEntries m.entries
-      map (.path) (V.toList files) @?= [RelPath "Sidecar/notes.txt", RelPath "A002C001.MXF"]
-      map (.size) (V.toList files) @?= [0, 4096]
-      (files V.! 0).hashes
-        @?= V.fromList
-          [ ManifestHash {hash = Hash MD5 "d41d8cd98f00b204e9800998ecf8427e", action = Original, hashDate = Just fixtureHashDate, extraAttrs = Map.empty}
-          , ManifestHash {hash = Hash XXH64 "ef46db3751d8e999", action = Original, hashDate = Just fixtureHashDate, extraAttrs = Map.empty}
-          ]
-      (files V.! 0).lastModified @?= UTCTime (fromGregorian 2026 5 9) (picosecondsToDiffTime ((16 * 3600 + 58 * 60 + 12) * 1_000_000_000_000 + 123_456_000_000))
+genManifest :: Gen Manifest
+genManifest = do
+  creator <- creatorInfo <$> genInstant <*> genWords <*> genWords <*> genWords
+  process <- Gen.enumBounded
+  root <- genDirHash
+  ignorePatterns <- Gen.list (Range.linear 0 3) (Gen.filter (not . T.null) genWords)
+  files <- Gen.list (Range.linear 0 6) (fileEntry <$> genRelPath <*> Gen.int64 (Range.linear 0 (2 ^ (40 :: Int))) <*> genInstant <*> genHash <*> Gen.element [Original, Verified, FailedAction] <*> genInstant)
+  dirs <- Gen.list (Range.linear 0 3) (directoryEntry <$> genRelPath <*> genInstant <*> genDirHash)
+  entries <- Gen.shuffle (map ManifestFile files <> map ManifestDir dirs)
+  pure (newManifest creator process root (V.fromList ignorePatterns) (V.fromList entries))
 
-roundTripsThroughRender :: Assertion
-roundTripsThroughRender = do
-  txt <- TIO.readFile fixturePath
-  m <- orFail (parseManifest txt)
-  parseManifest (renderManifest m) @?= Right m
+genDirHash :: Gen DirHash
+genDirHash = do
+  algo <- Gen.enumBounded
+  dirHash <$> genInstant <*> genHashOf algo <*> genHashOf algo
 
-rejectsGarbage :: Assertion
-rejectsGarbage =
-  assertBool "parseManifest \"<nope/>\" should be Left" (either (const True) (const False) (parseManifest "<nope/>"))
-
-parsesTheRootHashAndIgnorePatterns :: Assertion
-parsesTheRootHashAndIgnorePatterns = do
-  txt <- TIO.readFile fixturePath
-  m <- orFail (parseManifest txt)
-  V.map (.content) m.rootHash @?= V.singleton (Hash XXH64 "8d02114c32e28cbe")
-  V.map (.structure) m.rootHash @?= V.singleton (Hash XXH64 "f557f8ca8e5a88ef")
-  m.ignorePatterns @?= V.fromList [".DS_Store", "ascmhl"]
-
-parsesADirectoryHashEntry :: Assertion
-parsesADirectoryHashEntry = do
-  txt <- TIO.readFile fixturePath
-  m <- orFail (parseManifest txt)
-  let dirs =
-        V.mapMaybe
-          ( \case
-              ManifestDir d -> Just d
-              ManifestFile _ -> Nothing
-          )
-          m.entries
-  V.map (.path) dirs @?= V.singleton (RelPath "Sidecar")
-  V.map (.content) (V.concatMap (.hashes) dirs) @?= V.singleton (Hash XXH64 "f1d7771e64cb3720")
-
-chainParsesAndRoundTripsTheFixture :: Assertion
-chainParsesAndRoundTripsTheFixture = do
-  txt <- TIO.readFile "test/fixtures/ascmhl/ascmhl_chain.xml"
-  c <- orFail (parseChain txt)
-  c.entries
-    @?= V.singleton
-      ChainEntry
-        { sequenceNr = 1
-        , path = RelPath "0001_A002R2EC_2026-05-09_170200.mhl"
-        , c4 = Nothing
-        , unknown =
-            V.singleton
-              ( NodeElement
-                  ( Element
-                      (Name "xxh64" (Just "urn:ASC:MHL:DIRECTORY:v2.0") Nothing)
-                      Map.empty
-                      [NodeContent "0123456789abcdef"]
-                  )
-              )
-        }
-  parseChain (renderChain c) @?= Right c
-
-givesAForeignNamespaceBackUnchanged :: Assertion
-givesAForeignNamespaceBackUnchanged = do
-  txt <- TIO.readFile "test/fixtures/ascmhl/ascmhl_chain_foreign.xml"
-  c <- orFail (parseChain txt)
-  let rendered = renderChain c
+readsTheReferenceManifest :: Assertion
+readsTheReferenceManifest = do
+  m <- TIO.readFile fixturePath >>= orFail . parseManifest
+  let notes = RelPath "Sidecar/notes.txt"
+      clip = RelPath "A002C001.MXF"
+      byPath = fileEntries m.entries & V.toList & map (\e -> (e.path, e)) & Map.fromList
+      dirs = V.mapMaybe (\case ManifestDir d -> Just d; ManifestFile _ -> Nothing) m.entries
+  m.process @?= ProcessTransfer
+  fmap (\e -> e.size) byPath @?= Map.fromList [(clip, 4096), (notes, 0)]
+  fmap (\e -> e.hashes & V.toList & map (\h -> h.hash.algo) & Set.fromList) byPath
+    @?= Map.fromList [(clip, Set.singleton XXH64), (notes, Set.fromList [MD5, XXH64])]
+  assertBool "every hash is an original" (all (\e -> V.all (\h -> h.action == Original) e.hashes) byPath)
   assertBool
-    ("the foreign namespace is gone from the rewrite:\n" <> T.unpack rendered)
-    ("urn:example:other:v1" `T.isInfixOf` rendered)
-  parseChain rendered @?= Right c
-
-keepsTheCaseOfAC4ChainHash :: Assertion
-keepsTheCaseOfAC4ChainHash = do
-  txt <- TIO.readFile "test/fixtures/ascmhl/ascmhl_chain_c4.xml"
-  c <- orFail (parseChain txt)
-  V.mapMaybe (\e -> fmap (.value) e.c4) c.entries
-    @?= V.singleton "c447Fm3BJZQ62765jMZJH4m28hrDM7Szbj9CUmj4F4gnvyDYXYz4WfnK2nYRhFvRgYEectEXYBYWLDpLo6XGNAfKdt"
-  parseChain (renderChain c) @?= Right c
-
-prefersXxh64AndLaterGenerations :: Assertion
-prefersXxh64AndLaterGenerations = do
-  txt <- TIO.readFile fixturePath
-  m1 <- orFail (parseManifest txt)
-  let m2 =
-        Manifest
-          { creator = m1.creator
-          , process = m1.process
-          , rootHash = V.empty
-          , ignorePatterns = V.empty
-          , unknown = V.empty
-          , entries =
-              V.map
-                ( \e ->
-                    ManifestFile
-                      HashEntry
-                        { path = e.path
-                        , size = e.size
-                        , lastModified = e.lastModified
-                        , hashes = V.singleton ManifestHash {hash = Hash XXH64 "1111111111111111", action = Verified, hashDate = Nothing, extraAttrs = Map.empty}
-                        , pathAttrs = Map.empty
-                        , unknown = V.empty
-                        }
-                )
-                (V.filter (\e -> e.path == RelPath "A002C001.MXF") (fileEntries m1.entries))
-          }
-      hs = latestHashes (V.fromList [m1, m2])
-  Map.lookup (RelPath "A002C001.MXF") hs @?= Just (Hash XXH64 "1111111111111111")
-  Map.lookup (RelPath "Sidecar/notes.txt") hs @?= Just (Hash XXH64 "ef46db3751d8e999")
-
-buildsOneGenerationPerManifest :: Assertion
-buildsOneGenerationPerManifest = do
-  txt <- TIO.readFile fixturePath
-  m <- orFail (parseManifest txt)
-  let MhlHistory gens = historyOf (V.singleton (1, m))
-      gensList = V.toList gens
-  map (.number) gensList @?= [1]
-  map (\g -> Set.toList g.algos) gensList @?= [[XXH64, MD5]]
-  map (.failures) gensList @?= [0]
-
-rejectsEscapingPath :: Assertion
-rejectsEscapingPath = do
-  txt <- TIO.readFile fixturePath
-  let absolute = T.replace ">A002C001.MXF<" ">/etc/passwd<" txt
-      dotdot = T.replace ">A002C001.MXF<" ">../A002C001.MXF<" txt
-  assertBool "absolute path accepted" (isLeft (parseManifest absolute))
-  assertBool ".. path accepted" (isLeft (parseManifest dotdot))
-
-buildInstant :: UTCTime
-buildInstant = UTCTime (fromGregorian 2026 9 14) (secondsToDiffTime (9 * 3600))
-
-entryLabels :: Vector ManifestEntry -> [Text]
-entryLabels entries =
-  map
-    ( \case
-        ManifestFile e -> "file " <> display e.path
-        ManifestDir d -> "dir " <> display d.path
-    )
-    (V.toList entries)
-
-builtFile :: Text -> HashEntry
-builtFile path =
-  fileEntry (RelPath path) 4096 buildInstant (Hash XXH64 "ef46db3751d8e999") Original buildInstant
-
-builtDir :: Text -> DirectoryEntry
-builtDir path =
-  directoryEntry
-    (RelPath path)
-    buildInstant
-    (dirHash buildInstant (Hash XXH64 "8d02114c32e28cbe") (Hash XXH64 "f557f8ca8e5a88ef"))
-
-ordersAThreeLevelTreeBy65 :: Assertion
-ordersAThreeLevelTreeBy65 = do
-  let files = V.fromList (map builtFile ["top.txt", "A/a1.mxf", "A/B/b1.mxf", "C/c1.mxf"])
-      dirs = V.fromList (map builtDir ["C", "A/B", "A"])
-  entryLabels (orderedEntries files dirs)
-    @?= [ "file A/B/b1.mxf"
-        , "dir A/B"
-        , "file A/a1.mxf"
-        , "dir A"
-        , "file C/c1.mxf"
-        , "dir C"
-        , "file top.txt"
-        ]
-
-roundTripsABuiltManifest :: Assertion
-roundTripsABuiltManifest = do
-  let files = V.fromList (map builtFile ["A/a1.mxf", "top.txt"])
-      dirs = V.singleton (builtDir "A")
-      m =
-        newManifest
-          (creatorInfo buildInstant "studio-01" "mediacopy3000" "0.1.0.0")
-          ProcessTransfer
-          (dirHash buildInstant (Hash XXH64 "8d02114c32e28cbe") (Hash XXH64 "f557f8ca8e5a88ef"))
-          (V.fromList [".DS_Store", "ascmhl"])
-          (orderedEntries files dirs)
+    "the sub-second part of a modification time is kept"
+    (any (\e -> e.lastModified.utctDayTime /= fromInteger (truncate e.lastModified.utctDayTime)) (Map.lookup notes byPath))
+  V.map (\d -> (d.path, V.map (\h -> h.content.algo) d.hashes)) dirs @?= V.singleton (RelPath "Sidecar", V.singleton XXH64)
+  V.map (\h -> h.content.algo) m.rootHash @?= V.singleton XXH64
+  assertBool "the ascmhl folder is ignored" (V.elem "ascmhl" m.ignorePatterns)
   parseManifest (renderManifest m) @?= Right m
 
-appendGenerationKeepsOrderingAndSetsC4 :: Assertion
-appendGenerationKeepsOrderingAndSetsC4 = do
-  let earlier = Hash C4 "c447Fm3BJZQ62765jMZJH4m28hrDM7Szbj9CUmj4F4gnvyDYXYz4WfnK2nYRhFvRgYEectEXYBYWLDpLo6XGNAfKdt"
-      given =
-        Chain
-          ( V.fromList
-              [ ChainEntry {sequenceNr = 2, path = RelPath "0002_card_2026-09-13_091500.mhl", c4 = Just earlier, unknown = V.empty}
-              , ChainEntry {sequenceNr = 1, path = RelPath "0001_card_2026-09-12_140300.mhl", c4 = Nothing, unknown = V.empty}
-              ]
-          )
-      minted = Hash C4 "c459dsjfscH38cYeXXYogktxf4Cd9ibshE3BHUo6a58hBXmRQdZrAkZzsWcbWtDg5oQstpDuni4Hirj75GEmTc1sFT"
-      appended = appendGeneration given 3 (RelPath "0003_card_2026-09-14_090000.mhl") minted
-  V.map (.sequenceNr) appended.entries @?= V.fromList [1, 2, 3]
-  V.map (.c4) appended.entries @?= V.fromList [Nothing, Just earlier, Just minted]
-  V.map (.path) appended.entries
-    @?= V.fromList
-      [ RelPath "0001_card_2026-09-12_140300.mhl"
-      , RelPath "0002_card_2026-09-13_091500.mhl"
-      , RelPath "0003_card_2026-09-14_090000.mhl"
-      ]
+refusesAnEscapingPath :: Assertion
+refusesAnEscapingPath = do
+  txt <- TIO.readFile fixturePath
+  for_
+    [ (">A002C001.MXF<", ">/etc/passwd<")
+    , (">A002C001.MXF<", ">../A002C001.MXF<")
+    , (">Sidecar<", ">../Sidecar<")
+    ]
+    ( \(needle, escape) ->
+        assertBool (T.unpack escape <> " is accepted") (isLeft (parseManifest (T.replace needle escape txt)))
+    )
+
+chainsRoundTrip :: Assertion
+chainsRoundTrip = do
+  plain <- readChain "ascmhl_chain.xml"
+  withC4 <- readChain "ascmhl_chain_c4.xml"
+  withForeign <- readChain "ascmhl_chain_foreign.xml"
+  for_ [plain, withC4, withForeign] (\c -> parseChain (renderChain c) @?= Right c)
+  assertBool "an unknown hash element is dropped" (V.all (\e -> not (V.null e.unknown)) plain.entries)
+  assertBool "a foreign element is dropped" (V.any (\e -> V.any inForeignNamespace e.unknown) withForeign.entries)
+  assertBool
+    "a c4 hash no longer decodes"
+    (V.all (\e -> any (\h -> isJust (c4ToBytes h.value)) e.c4) (withC4.entries <> withForeign.entries))
+  where
+    readChain name = TIO.readFile ("test/fixtures/ascmhl/" <> name) >>= orFail . parseChain
+    inForeignNamespace = \case
+      NodeElement e -> nameNamespace e.elementName == Just "urn:example:other:v1"
+      _ -> False

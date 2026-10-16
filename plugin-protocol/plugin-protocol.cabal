@@ -66,6 +66,7 @@ test-suite plugin-protocol-test
   hs-source-dirs: test
   main-is: Main.hs
   other-modules:
+    MediaCopy.Plugin.Generators
     MediaCopy.Plugin.JsonRpcTest
     MediaCopy.Plugin.ManifestTest
     MediaCopy.Plugin.ProtocolTest
@@ -76,8 +77,10 @@ test-suite plugin-protocol-test
     base,
     bytestring,
     containers,
+    hedgehog,
     plugin-protocol,
     tasty,
+    tasty-hedgehog,
     tasty-hunit,
     text,
     vector,

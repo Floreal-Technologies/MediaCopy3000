@@ -1,7 +1,6 @@
 module MediaCopy.Conformance.OursToReferenceTest (tests) where
 
-import Control.Monad (forM_, void)
-import Data.Text qualified as T
+import Control.Monad (void)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
 import Test.Tasty
@@ -15,82 +14,43 @@ tests :: Tools -> TestTree
 tests tools =
   testGroup
     "ours to reference"
-    [ testCase "a fresh offload is schema-valid and verifies" (aFreshOffloadIsSchemaValidAndVerifies tools)
-    , testCase "a second generation still verifies" (aSecondGenerationStillVerifies tools)
-    , testCase "a corrupted file fails the reference verify" (aCorruptedFileFailsTheReferenceVerify tools)
-    , testCase "a seal-first offload leaves a media source the reference verifies" (aSealFirstOffloadSealsTheMediaSource tools)
+    [ testCase "our offloads conform" (ourOffloadsConform tools)
+    , testCase "the reference catches corruption" (theReferenceCatchesCorruption tools)
+    , testCase "seal-first conforms" (sealFirstConforms tools)
     ]
 
-buildSampleTree :: FilePath -> IO ()
-buildSampleTree root = do
-  writeTreeFile (root </> "A" </> "B" </> "f2.txt") "yy"
-  writeTreeFile (root </> "A" </> "f1.txt") "x"
-  writeTreeFile (root </> "top.txt") "zzz"
-  createDirectoryIfMissing True (root </> "Empty")
-
-aFreshOffloadIsSchemaValidAndVerifies :: Tools -> Assertion
-aFreshOffloadIsSchemaValidAndVerifies tools =
+withOffloadTree :: (FilePath -> FilePath -> FilePath -> IO a) -> IO a
+withOffloadTree use =
   withTempTree "mc3k-conformance" $ \work -> do
     let source = work </> "media-source"
     let parent = work </> "dest"
-    let dest = parent </> "media-source"
-    buildSampleTree source
+    writeTreeFile (source </> "A" </> "B" </> "f2.txt") "yy"
+    writeTreeFile (source </> "A" </> "f1.txt") "x"
+    writeTreeFile (source </> "top.txt") "zzz"
+    createDirectoryIfMissing True (source </> "Empty")
     createDirectoryIfMissing True parent
-    spec <- offloadSpec source parent
-    _events <- runEngineIO spec
-    manifests <- mhlFilesIn dest
-    assertBool "no manifest was written" (not (null manifests))
-    forM_ manifests (assertSchemaValidManifest tools)
-    schemaCheckChain tools (chainFileIn dest) >>= assertOk "xsd-schema-check -df"
-    verifyFolder tools dest >>= assertOk "ascmhl-debug verify"
-    verifyDirectoryHashes tools dest >>= assertOk "ascmhl-debug verify -dh"
-    info <- infoFolder tools dest
-    assertOk "ascmhl info" info
-    assertBool "info does not mention the tool" (T.isInfixOf "mediacopy3000" info.out)
+    use source parent (parent </> "media-source")
 
-aSecondGenerationStillVerifies :: Tools -> Assertion
-aSecondGenerationStillVerifies tools =
-  withTempTree "mc3k-conformance" $ \work -> do
-    let source = work </> "media-source"
-    let parent = work </> "dest"
-    let dest = parent </> "media-source"
-    buildSampleTree source
-    createDirectoryIfMissing True parent
+ourOffloadsConform :: Tools -> Assertion
+ourOffloadsConform tools =
+  withOffloadTree $ \source parent dest -> do
     offloadSpec source parent >>= \spec -> void (runEngineIO spec)
+    assertConforms tools dest
     verifySpec dest >>= \spec -> void (runEngineIO spec)
     manifests <- mhlFilesIn dest
     length manifests @?= 2
-    forM_ manifests (assertSchemaValidManifest tools)
-    schemaCheckChain tools (chainFileIn dest) >>= assertOk "xsd-schema-check -df"
-    verifyFolder tools dest >>= assertOk "ascmhl-debug verify"
-    verifyDirectoryHashes tools dest >>= assertOk "ascmhl-debug verify -dh"
+    assertConforms tools dest
 
-aCorruptedFileFailsTheReferenceVerify :: Tools -> Assertion
-aCorruptedFileFailsTheReferenceVerify tools =
-  withTempTree "mc3k-conformance" $ \work -> do
-    let source = work </> "media-source"
-    let parent = work </> "dest"
-    let dest = parent </> "media-source"
-    buildSampleTree source
-    createDirectoryIfMissing True parent
+theReferenceCatchesCorruption :: Tools -> Assertion
+theReferenceCatchesCorruption tools =
+  withOffloadTree $ \source parent dest -> do
     offloadSpec source parent >>= \spec -> void (runEngineIO spec)
     writeTreeFile (dest </> "top.txt") "ZZZ"
     verifyFolder tools dest >>= assertFails "ascmhl-debug verify on a corrupted file"
 
-aSealFirstOffloadSealsTheMediaSource :: Tools -> Assertion
-aSealFirstOffloadSealsTheMediaSource tools =
-  withTempTree "mc3k-conformance" $ \work -> do
-    let source = work </> "media-source"
-    let parent = work </> "dest"
-    let dest = parent </> "media-source"
-    buildSampleTree source
-    createDirectoryIfMissing True parent
-    spec <- offloadSpecWith (SealBeforeCopy StopBeforeCopy) source parent
-    _events <- runEngineIO spec
-    sealed <- mhlFilesIn source
-    assertBool "the seal wrote no manifest on the media source" (not (null sealed))
-    forM_ sealed (assertSchemaValidManifest tools)
-    schemaCheckChain tools (chainFileIn source) >>= assertOk "xsd-schema-check -df on the media source"
-    verifyFolder tools source >>= assertOk "ascmhl-debug verify on the media source"
-    verifyDirectoryHashes tools source >>= assertOk "ascmhl-debug verify -dh on the media source"
-    verifyFolder tools dest >>= assertOk "ascmhl-debug verify on the destination"
+sealFirstConforms :: Tools -> Assertion
+sealFirstConforms tools =
+  withOffloadTree $ \source parent dest -> do
+    offloadSpecWith (SealBeforeCopy StopBeforeCopy) source parent >>= \spec -> void (runEngineIO spec)
+    assertConforms tools source
+    assertConforms tools dest

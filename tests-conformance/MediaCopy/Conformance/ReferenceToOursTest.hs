@@ -1,16 +1,22 @@
 module MediaCopy.Conformance.ReferenceToOursTest (tests) where
 
-import Ascmhl.Hash (Hash (..), HashAlgo (..))
+import Ascmhl.Hash (Hash, HashAlgo (..))
 import Ascmhl.Path (RelPath (..))
 import Ascmhl.Read (parseManifest)
 import Ascmhl.Types (DirectoryEntry (..), Manifest (..), ManifestEntry (..), latestHashes)
+import Control.Monad (forM_)
+import Data.ByteString (ByteString)
+import Data.Function ((&))
+import Data.Functor ((<&>))
+import Data.List (List)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Display (Display, display)
+import Data.Text.Display (display)
 import Data.Text.IO qualified as TIO
 import Data.Vector (Vector)
 import Data.Vector qualified as V
+import Effectful (runEff)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
 import Test.Tasty
@@ -19,50 +25,50 @@ import Test.Tasty.HUnit
 import MediaCopy.Conformance.Ascmhl
 import MediaCopy.Conformance.Harness
 import MediaCopy.Domain.Job (JobEvent (..), JobResult (..))
+import MediaCopy.Effects.Hasher (hashBytes, runHasher)
 
 tests :: Tools -> TestTree
 tests tools =
   testGroup
     "reference to ours"
-    [ testCase "reads an xxh64 history" (readsAnXxh64History tools)
-    , testCase "reads an md5 history" (readsAnMd5History tools)
-    , testCase "verifies a folder the reference created" (verifiesAFolderTheReferenceCreated tools)
+    [ testCase "we read and extend reference histories" (forM_ [XXH64, MD5] (weReadAndExtendAReferenceHistory tools))
     ]
 
-readsAnXxh64History :: Tools -> Assertion
-readsAnXxh64History tools = readsAHistoryIn tools "xxh64" (Hash XXH64 "26c7827d889f6da3")
+mediaFiles :: List (Text, ByteString)
+mediaFiles = [("A002C001.MXF", "hello"), ("Sidecar/notes.txt", "")]
 
-readsAnMd5History :: Tools -> Assertion
-readsAnMd5History tools = readsAHistoryIn tools "md5" (Hash MD5 "5d41402abc4b2a76b9719d911017c592")
-
-readsAHistoryIn :: Tools -> Text -> Hash -> Assertion
-readsAHistoryIn tools format expected =
+weReadAndExtendAReferenceHistory :: Tools -> HashAlgo -> Assertion
+weReadAndExtendAReferenceHistory tools algo =
   withTempTree "mc3k-conformance" $ \work -> do
     let mediaSource = work </> "media-source"
-    writeTreeFile (mediaSource </> "A002C001.MXF") "hello"
-    writeTreeFile (mediaSource </> "Sidecar" </> "notes.txt") ""
+    let format = display algo
+    forM_ mediaFiles (\file -> writeTreeFile (mediaSource </> T.unpack (fst file)) (snd file))
     createDirectoryIfMissing True (mediaSource </> "Empty")
     createHistory tools format mediaSource >>= assertOk ("ascmhl create -h " <> T.unpack format)
     manifests <- readManifestsOf mediaSource
-    let hashes = latestHashes manifests
-    Map.lookup (RelPath "A002C001.MXF") hashes @?= Just expected
-    Map.lookup (RelPath "Sidecar/notes.txt") hashes @?= Just (zeroByteHashFor format)
+    forM_ mediaFiles $ \file -> do
+      ours <- ourHash algo (snd file)
+      Map.lookup (RelPath (fst file)) (latestHashes manifests) @?= Just ours
     assertBool "no directory entry was parsed" (hasDirEntry (RelPath "Empty") manifests)
-    history <- readHistoryIO mediaSource
-    assertRightHistory ("readHistory over an ascmhl create -h " <> T.unpack format <> " folder") history
+    readHistoryIO mediaSource >>= \case
+      Right (Just _) -> pure ()
+      Right Nothing -> assertFailure "readHistory found no history"
+      Left err -> assertFailure ("readHistory failed: " <> T.unpack (display err))
+    referenceC4 <- TIO.readFile (chainFileIn mediaSource) <&> firstC4Of
+    assertBool "the reference chain carries no <c4>" (T.isPrefixOf "c4" referenceC4)
+    events <- verifySpec mediaSource >>= runEngineIO
+    assertBool ("verify reported a failure: " <> show (V.toList events)) (not (V.any isFailureEvent events))
+    manifestsAfter <- mhlFilesIn mediaSource
+    length manifestsAfter @?= 2
+    rewritten <- TIO.readFile (chainFileIn mediaSource)
+    assertBool "the reference's c4 chain entry was lost" (T.isInfixOf referenceC4 rewritten)
+    assertConforms tools mediaSource
 
-verifiesAFolderTheReferenceCreated :: Tools -> Assertion
-verifiesAFolderTheReferenceCreated tools =
-  withTempTree "mc3k-conformance" $ \work -> do
-    let mediaSource = work </> "media-source"
-    writeTreeFile (mediaSource </> "A002C001.MXF") "hello"
-    writeTreeFile (mediaSource </> "Sidecar" </> "notes.txt") ""
-    createHistory tools "xxh64" mediaSource >>= assertOk "ascmhl create -h xxh64"
-    spec <- verifySpec mediaSource
-    events <- runEngineIO spec
-    assertBool
-      ("verify reported a failure: " <> show (V.toList events))
-      (not (any isFailureEvent (V.toList events)))
+ourHash :: HashAlgo -> ByteString -> IO Hash
+ourHash algo bytes =
+  hashBytes algo bytes
+    & runHasher
+    & runEff
 
 readManifestsOf :: FilePath -> IO (Vector Manifest)
 readManifestsOf folder = do
@@ -77,16 +83,10 @@ parseManifestFile file = do
     Left err -> assertFailure (file <> ": " <> T.unpack err)
     Right manifest -> pure manifest
 
-assertRightHistory :: (Display e) => String -> Either e (Maybe a) -> Assertion
-assertRightHistory what result = case result of
-  Left err -> assertFailure (what <> " failed: " <> T.unpack (display err))
-  Right Nothing -> assertFailure (what <> " found no history at all")
-  Right (Just _) -> pure ()
-
-zeroByteHashFor :: Text -> Hash
-zeroByteHashFor format = case format of
-  "md5" -> Hash MD5 "d41d8cd98f00b204e9800998ecf8427e"
-  _ -> Hash XXH64 "ef46db3751d8e999"
+firstC4Of :: Text -> Text
+firstC4Of chainText = case T.splitOn "<c4>" chainText of
+  (_ : rest : _) -> T.takeWhile (\c -> c /= '<') rest
+  _ -> ""
 
 hasDirEntry :: RelPath -> Vector Manifest -> Bool
 hasDirEntry wanted manifests =

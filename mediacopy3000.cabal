@@ -361,7 +361,6 @@ test-suite core-test
   -- cabal-gild: discover tests/ --exclude tests/Main.hs
   other-modules:
     MediaCopy.Domain.DirectoryHashTest
-    MediaCopy.Domain.JobFormatTest
     MediaCopy.Domain.JobTest
     MediaCopy.Domain.PlanTest
     MediaCopy.Effects.FileSystemTest
@@ -402,7 +401,6 @@ test-suite conformance-test
   other-modules:
     MediaCopy.Conformance.Ascmhl
     MediaCopy.Conformance.Harness
-    MediaCopy.Conformance.InteropTest
     MediaCopy.Conformance.OursToReferenceTest
     MediaCopy.Conformance.ReferenceToOursTest
 

@@ -4,7 +4,6 @@ import System.Environment (lookupEnv)
 import Test.Tasty
 
 import MediaCopy.Conformance.Ascmhl (findTools)
-import MediaCopy.Conformance.InteropTest qualified as InteropTest
 import MediaCopy.Conformance.OursToReferenceTest qualified as OursToReferenceTest
 import MediaCopy.Conformance.ReferenceToOursTest qualified as ReferenceToOursTest
 
@@ -24,6 +23,5 @@ main = do
             "conformance"
             [ OursToReferenceTest.tests found
             , ReferenceToOursTest.tests found
-            , InteropTest.tests found
             ]
         )

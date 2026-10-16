@@ -12,6 +12,7 @@ import Control.Monad (forM_, unless, void, when)
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
+import Data.Either (fromRight)
 import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.Int (Int64)
@@ -127,18 +128,20 @@ flushProgress = do
 runFileStep
   :: (Emit :> es, State JobProgress :> es)
   => PlanStep
+  -> Eff es (Maybe HashEntry)
   -> Eff es FileStepResult
   -> Eff es FileStepResult
-runFileStep step body = do
+runFileStep step onFailure body = do
   before <- get @JobProgress
   attempt <- trySync body
   case attempt of
     Left e -> do
       let outcome = IoError (T.pack (displayException e))
+      manifestEntry <- trySync onFailure <&> fromRight Nothing
       emit (FileStatusChanged step.path (Done outcome))
       modify (\st -> st {readSoFar = before.readSoFar + stepBytesToRead step})
       flushProgress
-      pure FileStepResult {outcome, manifestEntry = Nothing}
+      pure FileStepResult {outcome, manifestEntry}
     Right result -> do
       emit (FileStatusChanged step.path (Done result.outcome))
       pure result
@@ -182,18 +185,19 @@ copyAndVerify source writes sealed rel size = step `finally` void (trySync (remo
           (reusing, writing) = V.partition (\w -> w.mode == Reuse) writes
       (srcHash, mtime) <- sourceHashFor srcPath writing sealed (emit (FileStatusChanged rel Flushing))
       flushProgress
-      attempt <- trySync $ do
-        written <- publishCopy writing sealed rel size mtime srcHash
-        case written.outcome of
-          Ok -> reuseOrReplace srcPath reusing rel mtime srcHash written
-          _ -> pure written
-      case attempt of
-        Left e -> do
-          t <- asks @CreatorInfo (.creationDate)
-          let check = checkAgainstSeal sealed srcHash
-              outcome = IoError (T.pack (displayException e))
-          pure FileStepResult {outcome, manifestEntry = Just (fileEntry rel size mtime check.hash FailedAction t)}
-        Right result -> pure result
+      written <- publishCopy writing sealed rel size mtime srcHash
+      case written.outcome of
+        Ok -> reuseOrReplace srcPath reusing rel mtime srcHash written
+        _ -> pure written
+
+failedCopyEntry :: (Copying es) => OsPath -> Maybe Hash -> RelPath -> FileSize -> Eff es (Maybe HashEntry)
+failedCopyEntry source sealed rel size = do
+  let srcPath = relToOsPath source rel
+  (hash, mtime) <- case sealed of
+    Just h -> mtimeOf srcPath <&> \t -> (h, t)
+    Nothing -> hashOf FromCache srcPath (\_ -> pure ())
+  t <- asks @CreatorInfo (.creationDate)
+  pure (Just (fileEntry rel size mtime hash FailedAction t))
 
 sourceHashFor
   :: (Hashing es)
@@ -380,8 +384,9 @@ runStep
 runStep root recorded step = case step.op of
   Copy expected -> do
     emit (FileStatusChanged step.path Copying)
-    runFileStep step (copyAndVerify root step.writes (expectedHash recorded step.path expected) step.path step.size)
-  ReportMissing -> runFileStep step (pure FileStepResult {outcome = Missing, manifestEntry = Nothing})
+    let sealed = expectedHash recorded step.path expected
+    runFileStep step (failedCopyEntry root sealed step.path step.size) (copyAndVerify root step.writes sealed step.path step.size)
+  ReportMissing -> runFileStep step (pure Nothing) (pure FileStepResult {outcome = Missing, manifestEntry = Nothing})
   ReportNew -> do
     emit (FileStatusChanged step.path Hashing)
     hashStep reportNew
@@ -390,7 +395,7 @@ runStep root recorded step = case step.op of
     hashStep (reportVerified expected)
   where
     path = relToOsPath root step.path
-    hashStep report = runFileStep step $ do
+    hashStep report = runFileStep step (pure Nothing) $ do
       (actual, mtime) <- hashOf FromDevice path (advanceProgress . fromIntegral . BS.length)
       flushProgress
       t <- asks @CreatorInfo (.creationDate)

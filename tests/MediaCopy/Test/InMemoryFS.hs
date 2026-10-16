@@ -11,7 +11,6 @@ module MediaCopy.Test.InMemoryFS
   , withFailOnOpen
   , withFailOnRename
   , withFailOnManifestWrite
-  , epoch
   , runFileSystemMem
   , slashedPath
   , corruptFirstByte

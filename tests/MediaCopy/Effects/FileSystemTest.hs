@@ -1,28 +1,31 @@
 {-# LANGUAGE ExplicitLevelImports #-}
-{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE QuasiQuotes #-}
 
 module MediaCopy.Effects.FileSystemTest (tests) where
 
 import Control.Exception (finally)
 import Control.Monad (void, when)
+import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Either (isLeft)
 import Data.Function ((&))
 import Data.Functor ((<&>))
-import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
-import Data.List (List)
+import Data.IORef (modifyIORef', newIORef, readIORef)
 import Data.Map.Strict qualified as Map
 import Data.Vector (Vector)
 import Data.Vector qualified as V
-import Effectful (Eff, IOE, liftIO, runEff, (:>))
+import Effectful (Eff, IOE, liftIO, runEff)
 import Effectful.Exception (throwIO, trySync)
+import Hedgehog (Property, evalIO, forAll, property, withTests, (===))
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 import System.Directory.OsPath qualified as Dir
 import System.File.OsPath qualified as FileIO
-import System.OsPath (OsPath, decodeFS, takeDirectory, (</>))
+import System.OsPath (OsPath, takeDirectory, (</>))
 import splice System.OsPath (osp)
 import Test.Tasty
 import Test.Tasty.HUnit
+import Test.Tasty.Hedgehog (testProperty)
 
 import MediaCopy.Domain.Plan (PlannedWrite (..), WriteMode (..))
 import MediaCopy.Effects.FileSystem (FileSystem, ReadCache (..), removeTemps, runFileSystemIO, streamFile, writeTemps)
@@ -32,153 +35,127 @@ tests :: TestTree
 tests =
   testGroup
     "Effects.FileSystem"
-    [ testCase "a hook that fails leaves no temp behind in the double" doubleRemovesTempsOnFailure
-    , testCase "a hook that fails leaves no temp behind on the disk" diskRemovesTempsOnFailure
-    , testCase "the double runs the flush hook once, after the last chunk" doubleFlushesAfterTheLastChunk
-    , testCase "the disk runs the flush hook once, after the last chunk" diskFlushesAfterTheLastChunk
-    , testCase "the double streams a file past one chunk in pieces" doubleStreamsInPieces
-    , testCase "a cold read gives the same bytes as a warm read" coldReadMatchesWarmRead
-    , testCase "the double removes the temps and keeps every final" doubleRemovesTempsOnly
-    , testCase "the disk removes the temps and keeps every final" diskRemovesTempsOnly
+    [ contract "the double" withMemory
+    , contract "the disk" withDisk
+    , testProperty "streamed bytes equal the file, cold and warm, at chunk edges" streamedBytesEqualTheFile
     ]
 
-doubleRemovesTempsOnly :: Assertion
-doubleRemovesTempsOnly = do
-  let writes = writesUnder [osp|/d1|] [osp|/d2|]
-      seeded = foldr (\w fs -> fs & withFile w.final "copy" & withFile w.temp "part") emptyMemFS writes
-  ref <- newIORef seeded
-  runEff (runFileSystemMem ref (removeTemps writes))
-  fs <- readIORef ref
-  Map.keys fs.files @?= [[osp|/d1/a.mxf|], [osp|/d2/a.mxf|]]
+data Sandbox = Sandbox
+  { root :: OsPath
+  , seed :: OsPath -> ByteString -> IO ()
+  , exists :: OsPath -> IO Bool
+  , run :: forall a. Eff '[FileSystem, IOE] a -> IO a
+  }
 
-diskRemovesTempsOnly :: Assertion
-diskRemovesTempsOnly = do
-  tmp <- Dir.getTemporaryDirectory
-  let dir = tmp </> [osp|mediacopy3000-removetemps-test|]
-      writes = writesUnder (dir </> [osp|d1|]) (dir </> [osp|d2|])
-  present <- Dir.doesDirectoryExist dir
-  when present (Dir.removeDirectoryRecursive dir)
-  ( do
-      V.forM_ writes $ \w -> do
-        Dir.createDirectoryIfMissing True (takeDirectory w.final)
-      V.forM_ writes $ \w -> do
-        FileIO.writeFile w.final "copy"
-        FileIO.writeFile w.temp "part"
-      runEff (runFileSystemIO 4 (removeTemps writes))
-      finals <- traverse (\w -> Dir.doesFileExist w.final) writes
-      temps <- traverse (\w -> Dir.doesFileExist w.temp) writes
-      (finals, temps) @?= ([True, True], [False, False])
-    )
-    `finally` Dir.removeDirectoryRecursive dir
+runIn :: Sandbox -> Eff '[FileSystem, IOE] a -> IO a
+runIn Sandbox {run} = run
 
-failingWrite :: (FileSystem :> es) => OsPath -> Vector PlannedWrite -> Eff es Bool
-failingWrite source writes =
-  trySync (writeTemps source writes (pure ()) (\_chunk -> throwIO (userError "hook failed"))) <&> isLeft
+type WithSandbox = forall r. OsPath -> (Sandbox -> IO r) -> IO r
 
-doubleRemovesTempsOnFailure :: Assertion
-doubleRemovesTempsOnFailure = do
-  ref <- newIORef (emptyMemFS & withFile [osp|/src/a.mxf|] "payload")
-  let writes = writesUnder [osp|/d1|] [osp|/d2|]
-  failed <- runEff (runFileSystemMem ref (failingWrite [osp|/src/a.mxf|] writes))
+contract :: TestName -> WithSandbox -> TestTree
+contract name withSandbox =
+  testGroup
+    name
+    [ testCase "a write that fails leaves no temp behind" (withSandbox [osp|mediacopy3000-failedwrite-test|] aFailedWriteLeavesNoTemp)
+    , testCase "the flush hook runs once, after the last chunk" (withSandbox [osp|mediacopy3000-flush-test|] flushRunsOnceAfterTheLastChunk)
+    , testCase "removing the temps keeps every final" (withSandbox [osp|mediacopy3000-removetemps-test|] removingTempsKeepsFinals)
+    ]
+
+aFailedWriteLeavesNoTemp :: Sandbox -> Assertion
+aFailedWriteLeavesNoTemp box = do
+  let source = box.root </> [osp|a.mxf|]
+      writes = writesIn box.root
+  box.seed source "payload"
+  failed <- runIn box (trySync (writeTemps source writes (pure ()) (\_chunk -> throwIO (userError "hook failed"))) <&> isLeft)
   failed @?= True
-  fs <- readIORef ref
-  Map.keys fs.files @?= [[osp|/src/a.mxf|]]
+  leftovers <- traverse (\w -> box.exists w.temp) (V.toList writes)
+  leftovers @?= [False, False]
 
-diskRemovesTempsOnFailure :: Assertion
-diskRemovesTempsOnFailure = do
-  tmp <- Dir.getTemporaryDirectory
-  let dir = tmp </> [osp|mediacopy3000-writetemps-test|]
-      source = dir </> [osp|a.mxf|]
-      writes = writesUnder (dir </> [osp|d1|]) (dir </> [osp|d2|])
-  present <- Dir.doesDirectoryExist dir
-  when present (Dir.removeDirectoryRecursive dir)
-  Dir.createDirectoryIfMissing True dir
-  ( do
-      sourcePath <- decodeFS source
-      BS.writeFile sourcePath "payload"
-      failed <- runEff (runFileSystemIO 4 (failingWrite source writes))
-      failed @?= True
-      leftovers <- traverse (\w -> Dir.doesFileExist w.temp) (V.toList writes)
-      leftovers @?= [False, False]
-    )
-    `finally` Dir.removeDirectoryRecursive dir
-
-flushTrace :: (FileSystem :> es, IOE :> es) => IORef (List Bool) -> OsPath -> Vector PlannedWrite -> Eff es ()
-flushTrace seen source writes =
+flushRunsOnceAfterTheLastChunk :: Sandbox -> Assertion
+flushRunsOnceAfterTheLastChunk box = do
+  let source = box.root </> [osp|a.mxf|]
+  box.seed source (BS.replicate 9000 7)
+  seen <- newIORef []
   writeTemps
     source
-    writes
-    (liftIO (modifyIORef' seen (False :)))
-    (\_chunk -> liftIO (modifyIORef' seen (True :)))
+    (writesIn box.root)
+    (liftIO (modifyIORef' seen (\trace -> False : trace)))
+    (\_chunk -> liftIO (modifyIORef' seen (\trace -> True : trace)))
     & void
-
-flushCameLast :: List Bool -> Assertion
-flushCameLast trace = do
+    & runIn box
+  trace <- readIORef seen <&> reverse
   length (filter not trace) @?= 1
   assertBool "expected more than one chunk before the flush" (length (filter id trace) > 1)
   last trace @?= False
 
-doubleFlushesAfterTheLastChunk :: Assertion
-doubleFlushesAfterTheLastChunk = do
-  ref <- newIORef (emptyMemFS & withFile [osp|/src/a.mxf|] (BS.replicate 9000 7))
-  seen <- newIORef []
-  runEff (runFileSystemMem ref (flushTrace seen [osp|/src/a.mxf|] (writesUnder [osp|/d1|] [osp|/d2|])))
-  readIORef seen >>= flushCameLast . reverse
+removingTempsKeepsFinals :: Sandbox -> Assertion
+removingTempsKeepsFinals box = do
+  let writes = writesIn box.root
+  V.forM_ writes $ \w -> do
+    box.seed w.final "copy"
+    box.seed w.temp "part"
+  runIn box (removeTemps writes)
+  finals <- traverse (\w -> box.exists w.final) (V.toList writes)
+  temps <- traverse (\w -> box.exists w.temp) (V.toList writes)
+  (finals, temps) @?= ([True, True], [False, False])
 
-diskFlushesAfterTheLastChunk :: Assertion
-diskFlushesAfterTheLastChunk = do
-  tmp <- Dir.getTemporaryDirectory
-  let dir = tmp </> [osp|mediacopy3000-flushhook-test|]
-      source = dir </> [osp|a.mxf|]
-      writes = writesUnder (dir </> [osp|d1|]) (dir </> [osp|d2|])
-  present <- Dir.doesDirectoryExist dir
-  when present (Dir.removeDirectoryRecursive dir)
-  Dir.createDirectoryIfMissing True dir
-  ( do
-      sourcePath <- decodeFS source
-      BS.writeFile sourcePath "payload"
-      seen <- newIORef []
-      runEff (runFileSystemIO 4 (flushTrace seen source writes))
-      readIORef seen >>= flushCameLast . reverse
-    )
-    `finally` Dir.removeDirectoryRecursive dir
-
-writesUnder :: OsPath -> OsPath -> Vector PlannedWrite
-writesUnder d1 d2 =
+writesIn :: OsPath -> Vector PlannedWrite
+writesIn root =
   V.fromList
-    [ PlannedWrite {temp = d1 </> [osp|a.mxf.part|], final = d1 </> [osp|a.mxf|], mode = WriteNew}
-    , PlannedWrite {temp = d2 </> [osp|a.mxf.part|], final = d2 </> [osp|a.mxf|], mode = WriteNew}
+    [ PlannedWrite {temp = root </> [osp|d1/a.mxf.part|], final = root </> [osp|d1/a.mxf|], mode = WriteNew}
+    , PlannedWrite {temp = root </> [osp|d2/a.mxf.part|], final = root </> [osp|d2/a.mxf|], mode = WriteNew}
     ]
 
-doubleStreamsInPieces :: Assertion
-doubleStreamsInPieces = do
-  let content = BS.replicate 9000 7
-  ref <- newIORef (emptyMemFS & withFile [osp|/src/a.mxf|] content)
-  seen <- newIORef []
-  _ <- runEff (runFileSystemMem ref (streamFile FromCache [osp|/src/a.mxf|] (\chunk -> liftIO (modifyIORef' seen (\chunks -> chunk : chunks)))))
-  chunks <- readIORef seen <&> reverse
-  assertBool "expected more than one chunk" (length chunks > 1)
-  BS.concat chunks @?= content
+withMemory :: WithSandbox
+withMemory _ use = do
+  ref <- newIORef emptyMemFS
+  use
+    Sandbox
+      { root = [osp|/fs|]
+      , seed = \path content -> modifyIORef' ref (withFile path content)
+      , exists = \path -> readIORef ref <&> \fs -> Map.member (slashedPath path) fs.files
+      , run = \action -> runEff (runFileSystemMem ref action)
+      }
 
-coldReadMatchesWarmRead :: Assertion
-coldReadMatchesWarmRead = do
+withDisk :: WithSandbox
+withDisk name use = do
   tmp <- Dir.getTemporaryDirectory
-  let dir = tmp </> [osp|mediacopy3000-coldread-test|]
-      file = dir </> [osp|big.bin|]
-      payload = BS.concat (replicate 3 (BS.replicate (1024 * 1024) 7)) <> BS.replicate 1024 9
+  let dir = tmp </> name
   present <- Dir.doesDirectoryExist dir
   when present (Dir.removeDirectoryRecursive dir)
   Dir.createDirectoryIfMissing True dir
-  ( do
-      FileIO.writeFile' file payload
-      warm <- collect FromCache file
-      cold <- collect FromDevice file
-      BS.length warm @?= BS.length payload
-      cold @?= warm
-    )
+  use
+    Sandbox
+      { root = dir
+      , seed = \path content -> do
+          Dir.createDirectoryIfMissing True (takeDirectory path)
+          FileIO.writeFile' path content
+      , exists = Dir.doesFileExist
+      , run = \action -> runEff (runFileSystemIO chunkBytes action)
+      }
     `finally` Dir.removeDirectoryRecursive dir
+
+chunkBytes :: Int
+chunkBytes = 4096
+
+streamedBytesEqualTheFile :: Property
+streamedBytesEqualTheFile = withTests 30 $ property $ do
+  chunks <- forAll (Gen.int (Range.linear 0 3))
+  offset <- forAll (Gen.element [-1, 0, 1])
+  fill <- forAll (Gen.word8 Range.constantBounded)
+  let content = BS.replicate (max 0 (chunks * chunkBytes + offset)) fill
+  streamed <- evalIO $ withDisk [osp|mediacopy3000-stream-test|] $ \disk -> do
+    let file = disk.root </> [osp|a.mxf|]
+    disk.seed file content
+    cold <- collect disk FromDevice file
+    warm <- collect disk FromCache file
+    withMemory [osp|unused|] $ \memory -> do
+      memory.seed [osp|/a.mxf|] content
+      double <- collect memory FromCache [osp|/a.mxf|]
+      pure [cold, warm, double]
+  streamed === replicate 3 content
   where
-    collect mode path = do
-      chunks <- newIORef []
-      _ <- runEff (runFileSystemIO (4 * 1024 * 1024) (streamFile mode path (\bs -> liftIO (modifyIORef' chunks (bs :)))))
-      readIORef chunks <&> \pieces -> BS.concat (reverse pieces)
+    collect box mode path = do
+      seen <- newIORef []
+      _ <- runIn box (streamFile mode path (\chunk -> liftIO (modifyIORef' seen (\pieces -> chunk : pieces))))
+      readIORef seen <&> \pieces -> pieces & reverse & BS.concat

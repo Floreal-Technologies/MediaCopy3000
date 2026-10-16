@@ -13,7 +13,6 @@ import Data.Text qualified as T
 import System.OsPath (unsafeEncodeUtf)
 
 import MediaCopy.Domain.Job
-import MediaCopy.Domain.Plan (Severity (..))
 import MediaCopy.Domain.Plugin
 import MediaCopy.Interface.Command
 import MediaCopy.Interface.Theme

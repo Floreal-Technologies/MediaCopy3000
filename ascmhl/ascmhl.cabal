@@ -79,6 +79,8 @@ test-suite ascmhl-test
   hs-source-dirs: test
   main-is: Main.hs
   other-modules:
+    Ascmhl.BuildTest
+    Ascmhl.Generators
     Ascmhl.HashTest
     Ascmhl.PathTest
     Ascmhl.RoundTripTest
@@ -89,7 +91,9 @@ test-suite ascmhl-test
     bytestring,
     containers,
     cryptohash-sha512,
+    hedgehog,
     tasty,
+    tasty-hedgehog,
     tasty-hunit,
     text,
     text-display,

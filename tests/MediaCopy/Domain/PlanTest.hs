@@ -18,6 +18,7 @@ import Data.Int (Int64)
 import Data.List (List, sort)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
@@ -50,60 +51,126 @@ import MediaCopy.Test.InMemoryFS
 tests :: TestTree
 tests =
   testGroup
-    "Domain.Plan"
-    [ testCase "a warning alone does not block a plan" warningDoesNotBlock
-    , testCase "free space alone does not make two plans differ" freeSpaceIsNotAChange
-    , testCase "a missing source blocks an offload" sourceMissingBlocks
-    , testCase "a destination holding a foreign file blocks an offload" destinationWithForeignFileBlocks
-    , testCase "too little space blocks an offload" insufficientSpaceBlocks
-    , testCase "a chain that names no manifest blocks an offload" chainNamesNoManifestBlocks
-    , testCase "a chain file that names nothing blocks an offload, read through the store" chainNamesNoManifestBlocksThroughTheStore
-    , testCase "a folder with no history blocks a verify" verifyWithoutHistoryBlocks
-    , testCase "a seal of a sealed folder warns and does not block" sealOfSealedFolderWarns
-    , testCase "a seal of a sealed folder warns, read through the store" sealOfSealedFolderWarnsThroughTheStore
-    , testCase "a seal-first offload plans a seal pass and leaves the payload alone" sealFirstPlansASealPass
-    , testCase "two walks over one file system give one plan" twoWalksOverOneFileSystemAgree
-    , testCase "a destination's generation follows the media source's history" destinationGenerationFollowsTheSourceHistory
-    , testCase "a foreign file at the destination blocks an offload" foreignFileBlocks
-    , testCase "a foreign directory at the destination blocks an offload" foreignDirectoryBlocks
-    , testCase "a destination generation the source does not hold blocks an offload" extraGenerationBlocks
-    , testCase "a clean partial destination blocks until the operator chooses" partialDestinationAwaitsAChoice
-    , testCase "a shared generation with another c4 blocks an offload" otherSourceBlocks
-    , testCase "a destination chain that is a prefix of the source chain passes" prefixChainPasses
-    , testCase "write modes follow the choice and the size" writeModesFollowTheChoiceAndTheSize
-    , testCase "an all-reuse step with a recorded original reads no source byte" reuseWithRecordedOriginalReadsNoSource
-    , testGroup
-        "planVerify"
-        [ testCase "classifies manifest-only, disk-only, and shared paths" classifiesManifestOnlyDiskOnlyAndSharedPaths
-        ]
-    , testGroup
-        "properties"
-        [ testProperty "the plan's bytes are the engine's bytes, and the manifest names every file" planAndEngineAgree
-        ]
+    "Plan"
+    [ testProperty "the plan is stable, and its bytes are the engine's bytes" planAndEngineAgree
+    , testCase "each finding blocks a plan or only warns" blockingRules
+    , testCase "a destination continues the media source's history" destinationContinuesTheSourceHistory
+    , testProperty "a verify sorts each path once" planVerifyPartitionsPaths
     ]
 
-classifiesManifestOnlyDiskOnlyAndSharedPaths :: Assertion
-classifiesManifestOnlyDiskOnlyAndSharedPaths = do
-  let manifest = Map.fromList [(RelPath "a", sampleHash), (RelPath "gone", sampleHash)]
-      disk = V.fromList [RelPath "a", RelPath "extra"]
-  planVerify manifest disk
-    @?= V.fromList
-      [(RelPath "a", VerifyAgainst sampleHash), (RelPath "extra", ReportNew), (RelPath "gone", ReportMissing)]
+data Expect = Blocks | OnlyWarns | NotRaised
+  deriving stock (Show)
+
+blockingRules :: Assertion
+blockingRules =
+  forM_ rules $ \(name, getPlan, code, expect) -> do
+    plan <- getPlan
+    let present = code `elem` codesOf plan
+        blocked = planBlocked plan
+        holds = case expect of
+          Blocks -> present && blocked
+          OnlyWarns -> present && not blocked
+          NotRaised -> not present && not blocked
+    assertBool (name <> ": expected " <> show expect <> " " <> show code <> ", got " <> show (codesOf plan) <> " blocked=" <> show blocked) holds
+  where
+    offload = offloadJob mediaSource [[osp|/ssd1|]] UseHistory
+    decide facts = pure (decideOffload (specOf (Offload offload)) offload facts)
+    resumed held destChain sourceChain = pure (partialPlan (Just Resume) held destChain sourceChain)
+    twoGenerations = Chain {entries = sealedChain.entries <> V.singleton ChainEntry {sequenceNr = 2, path = RelPath "0002_media-source_2020-01-02_000000.mhl", c4 = Nothing, unknown = V.empty}}
+    halfCopied = treeOf [(RelPath "b.txt", 2), (RelPath "A/1.mxf.mc3k-part", 400)] []
+    rules =
+      [ ("a warning alone", pure (samplePlan (V.singleton Finding {severity = Warning, code = AlreadySealed, detail = ""})), AlreadySealed, OnlyWarns)
+      , ("no media source", decide (offloadFacts Nothing (V.singleton (freshTarget [osp|/ssd1|] 1_000_000))), SourceMissing, Blocks)
+      , ("a foreign file, read through the store", planOffloadIn (emptyMemFS & withFile [osp|/media-source/a.mxf|] "hi" & withFile [osp|/ssd1/media-source/already.txt|] "there"), DestinationForeign, Blocks)
+      , ("too little space", decide (offloadFacts (Just (treeOf [(RelPath "big.mxf", 9000)] [])) (V.singleton (freshTarget [osp|/ssd1|] 10))), InsufficientSpace, Blocks)
+      , ("a chain that names no manifest", decide (offloadFacts (Just (treeOf [(RelPath "a.mxf", 2)] [])) (V.singleton (freshTarget [osp|/ssd1|] 1_000_000))) {originals = Left (ChainEmpty (chainPath mediaSource))}, ChainNamesNoManifest, Blocks)
+      , ("a chain that names no manifest, read through the store", planOffloadIn (emptyMemFS & withFile [osp|/media-source/a.mxf|] "hi" & withTextFile (chainPath mediaSource) (renderChain emptyChain)), ChainNamesNoManifest, Blocks)
+      , ("a verify without history", pure (decideGeneration (verifySpec mediaSource) RequireHistory (generationFacts (Just (treeOf [(RelPath "a.mxf", 2)] [])) emptyChain Map.empty)), NoSeal, Blocks)
+      , ("a seal of a sealed folder", pure (decideGeneration (sealSpec mediaSource) AllowFresh (generationFacts (Just (treeOf [(RelPath "a.mxf", 2)] [])) sealedChain (Map.singleton (RelPath "a.mxf") sampleHash))), AlreadySealed, OnlyWarns)
+      , ("a seal of a sealed folder, read through the store", sealOfTheReferenceFolder, AlreadySealed, OnlyWarns)
+      , ("a foreign file at a partial destination", resumed (treeOf [(RelPath "b.txt", 2), (RelPath "stray.txt", 1)] []) emptyChain emptyChain, DestinationForeign, Blocks)
+      , ("a foreign directory at a partial destination", resumed (treeOf [(RelPath "b.txt", 2)] [RelPath "Other"]) emptyChain emptyChain, DestinationForeign, Blocks)
+      , ("a destination generation the source does not hold", resumed (treeOf [(RelPath "b.txt", 2)] []) sealedChain emptyChain, DestinationForeign, Blocks)
+      , ("a partial destination with no choice", pure (partialPlan Nothing halfCopied emptyChain emptyChain), DestinationPartial, Blocks)
+      , ("a partial destination once the operator chose", resumed halfCopied emptyChain emptyChain, DestinationPartial, NotRaised)
+      , ("a shared generation with another c4", resumed (treeOf [(RelPath "b.txt", 2)] []) (chainWithC4 "aaaa") (chainWithC4 "bbbb"), DestinationOtherSource, Blocks)
+      , ("a destination chain that is a prefix of the source chain", resumed (treeOf [(RelPath "b.txt", 2)] []) sealedChain twoGenerations, DestinationForeign, NotRaised)
+      , ("a destination chain that is a prefix of the source chain", resumed (treeOf [(RelPath "b.txt", 2)] []) sealedChain twoGenerations, DestinationOtherSource, NotRaised)
+      ]
+
+planOffloadIn :: MemFS -> IO JobPlan
+planOffloadIn fs = do
+  ref <- newIORef fs
+  runEff (runFileSystemMem ref (planJob (specOf (Offload (offloadJob mediaSource [[osp|/ssd1|]] UseHistory)))))
+
+sealOfTheReferenceFolder :: IO JobPlan
+sealOfTheReferenceFolder = do
+  manifest <- TIO.readFile "tests/fixtures/ascmhl/0001_A002R2EC_2026-05-09_170200.mhl"
+  chain <- TIO.readFile "tests/fixtures/ascmhl/ascmhl_chain.xml"
+  ref <-
+    newIORef
+      ( emptyMemFS
+          & withFile [osp|/vol/A002C001.MXF|] "Nobody inspects the spammish repetition"
+          & withTextFile [osp|/vol/ascmhl/0001_A002R2EC_2026-05-09_170200.mhl|] manifest
+          & withTextFile [osp|/vol/ascmhl/ascmhl_chain.xml|] chain
+      )
+  runEff (runFileSystemMem ref (planJob (sealSpec [osp|/vol|])))
+
+destinationContinuesTheSourceHistory :: Assertion
+destinationContinuesTheSourceHistory = do
+  let recorded = Map.singleton (RelPath "a.mxf") sampleHash
+      facts =
+        OffloadFacts
+          { sourceTree = Just (treeOf [(RelPath "a.mxf", 900)] [])
+          , targets = V.singleton (freshTarget [osp|/ssd1|] 1_000_000)
+          , originals = Right (Just recorded)
+          , sourceHistory = Right (Just (sealedChain, recorded))
+          }
+      plainJob = offloadJob mediaSource [[osp|/ssd1|]] UseHistory
+      sealingJob = offloadJob mediaSource [[osp|/ssd1|]] (SealBeforeCopy StopBeforeCopy)
+      plain = decideOffload (specOf (Offload plainJob)) plainJob facts
+      sealing = decideOffload (specOf (Offload sealingJob)) sealingJob facts
+  plain.sealPass @?= Nothing
+  fmap (.bytes) sealing.sealPass @?= Just 900
+  fmap (.onFailure) sealing.sealPass @?= Just StopBeforeCopy
+  sealing.totalBytes @?= plain.totalBytes
+  destinationNumbers plain @?= [2]
+  destinationNumbers sealing @?= [3]
+  fmap (.generation.number) sealing.sealPass @?= Just 2
+  planRaceChecks plain @?= V.singleton (mediaSource, 2)
+  planRaceChecks sealing @?= V.singleton (mediaSource, 2)
+
+planVerifyPartitionsPaths :: Property
+planVerifyPartitionsPaths = property $ do
+  recorded <- forAll (Gen.subsequence candidatePaths)
+  disk <- forAll (Gen.subsequence candidatePaths >>= Gen.shuffle)
+  let manifest = recorded & map (\p -> (p, hashOf p)) & Map.fromList
+      expected p
+        | p `elem` recorded && p `elem` disk = VerifyAgainst (hashOf p)
+        | p `elem` recorded = ReportMissing
+        | otherwise = ReportNew
+      result = planVerify manifest (V.fromList disk) & V.toList
+  sort (map fst result) === Set.toList (Set.fromList (recorded <> disk))
+  forM_ result $ \(p, op) -> op === expected p
+  where
+    hashOf (RelPath t) = Hash XXH64 t
+
+destinationNumbers :: JobPlan -> List Int
+destinationNumbers plan = case plan.execution of
+  CopyInto copy -> copy.generations & V.toList & map (.number)
+  RecordAt _ -> []
 
 samplePlan :: Vector Finding -> JobPlan
-samplePlan = samplePlanWithFree 1_000_000
-
-samplePlanWithFree :: Int64 -> Vector Finding -> JobPlan
-samplePlanWithFree free findings =
+samplePlan findings =
   JobPlan
-    { spec = verifySpec [osp|/media-source|]
+    { spec = verifySpec mediaSource
     , execution =
         RecordAt
           RecordPass
-            { folder = [osp|/media-source|]
-            , generation = PlannedGeneration {folder = [osp|/media-source|], number = 1, manifest = [osp|/manifest|], process = ProcessInPlace, directories = V.empty}
+            { folder = mediaSource
+            , generation = PlannedGeneration {folder = mediaSource, number = 1, manifest = [osp|/manifest|], process = ProcessInPlace, directories = V.empty}
             }
-    , targets = V.singleton Target {root = [osp|/media-source|], freeBytes = Just free, state = Fresh}
+    , targets = V.singleton Target {root = mediaSource, freeBytes = Just 1_000_000, state = Fresh}
     , format = Just XXH64
     , originsUsed = "none"
     , steps = V.empty
@@ -117,260 +184,25 @@ samplePlanWithFree free findings =
     , plugins = noPluginPlan
     }
 
-warningDoesNotBlock :: Assertion
-warningDoesNotBlock = do
-  let plan = samplePlan (V.singleton Finding {severity = Warning, code = AlreadySealed, detail = "generation 3"})
-  planBlocked plan @?= False
-  V.null (blockers plan) @?= True
-
-freeSpaceIsNotAChange :: Assertion
-freeSpaceIsNotAChange = do
-  let a = samplePlan V.empty
-      b = samplePlanWithFree (1_000_000 - 4096) V.empty
-  planEquivalent a b @?= True
-
-sourceMissingBlocks :: Assertion
-sourceMissingBlocks = do
-  let job = offloadJob [osp|/media-source|] [[osp|/ssd1|]] UseHistory
-      plan = decideOffload (specOf (Offload job)) job (offloadFacts Nothing (V.singleton (freshTarget [osp|/ssd1|] 1_000_000)))
-  assertBool "expected SourceMissing" (SourceMissing `elem` codesOf plan)
-  planBlocked plan @?= True
-
-destinationWithForeignFileBlocks :: Assertion
-destinationWithForeignFileBlocks = do
-  ref <-
-    newIORef
-      ( emptyMemFS
-          & withFile [osp|/media-source/a.mxf|] "hi"
-          & withFile [osp|/ssd1/media-source/already.txt|] "there"
-      )
-  plan <- runEff (runFileSystemMem ref (planJob (specOf (Offload (offloadJob [osp|/media-source|] [[osp|/ssd1|]] UseHistory)))))
-  assertBool "expected DestinationForeign" (DestinationForeign `elem` codesOf plan)
-  planBlocked plan @?= True
-
-insufficientSpaceBlocks :: Assertion
-insufficientSpaceBlocks = do
-  let job = offloadJob [osp|/media-source|] [[osp|/ssd1|]] UseHistory
-      facts = offloadFacts (Just (treeOf [(RelPath "big.mxf", 9000)] [])) (V.singleton (freshTarget [osp|/ssd1|] 10))
-      plan = decideOffload (specOf (Offload job)) job facts
-  assertBool "expected InsufficientSpace" (InsufficientSpace `elem` codesOf plan)
-  planBlocked plan @?= True
-
-chainNamesNoManifestBlocks :: Assertion
-chainNamesNoManifestBlocks = do
-  let job = offloadJob [osp|/media-source|] [[osp|/ssd1|]] UseHistory
-      facts =
-        OffloadFacts
-          { sourceTree = Just (treeOf [(RelPath "a.mxf", 2)] [])
-          , targets = V.singleton (freshTarget [osp|/ssd1|] 1_000_000)
-          , originals = Left (ChainEmpty (chainPath [osp|/media-source|]))
-          , sourceHistory = Right Nothing
-          }
-      plan = decideOffload (specOf (Offload job)) job facts
-  assertBool "expected ChainNamesNoManifest" (ChainNamesNoManifest `elem` codesOf plan)
-  planBlocked plan @?= True
-
-verifyWithoutHistoryBlocks :: Assertion
-verifyWithoutHistoryBlocks = do
-  let facts = generationFacts (Just (treeOf [(RelPath "a.mxf", 2)] [])) emptyChain Map.empty
-      plan = decideGeneration (verifySpec [osp|/media-source|]) RequireHistory facts
-  assertBool "expected NoSeal" (NoSeal `elem` codesOf plan)
-  planBlocked plan @?= True
-
-sealOfSealedFolderWarns :: Assertion
-sealOfSealedFolderWarns = do
-  let facts = generationFacts (Just (treeOf [(RelPath "a.mxf", 2)] [])) sealedChain (Map.singleton (RelPath "a.mxf") sampleHash)
-      plan = decideGeneration (sealSpec [osp|/media-source|]) AllowFresh facts
-  assertBool "expected AlreadySealed" (AlreadySealed `elem` codesOf plan)
-  planBlocked plan @?= False
-
-chainNamesNoManifestBlocksThroughTheStore :: Assertion
-chainNamesNoManifestBlocksThroughTheStore = do
-  ref <-
-    newIORef
-      ( emptyMemFS
-          & withFile [osp|/media-source/a.mxf|] "hi"
-          & withTextFile (chainPath [osp|/media-source|]) (renderChain emptyChain)
-      )
-  plan <- runEff (runFileSystemMem ref (planJob (specOf (Offload (offloadJob [osp|/media-source|] [[osp|/ssd1|]] UseHistory)))))
-  assertBool "expected ChainNamesNoManifest" (ChainNamesNoManifest `elem` codesOf plan)
-  planBlocked plan @?= True
-
-sealOfSealedFolderWarnsThroughTheStore :: Assertion
-sealOfSealedFolderWarnsThroughTheStore = do
-  manifest <- TIO.readFile "tests/fixtures/ascmhl/0001_A002R2EC_2026-05-09_170200.mhl"
-  chain <- TIO.readFile "tests/fixtures/ascmhl/ascmhl_chain.xml"
-  ref <-
-    newIORef
-      ( emptyMemFS
-          & withFile [osp|/vol/A002C001.MXF|] "Nobody inspects the spammish repetition"
-          & withTextFile [osp|/vol/ascmhl/0001_A002R2EC_2026-05-09_170200.mhl|] manifest
-          & withTextFile [osp|/vol/ascmhl/ascmhl_chain.xml|] chain
-      )
-  plan <- runEff (runFileSystemMem ref (planJob (sealSpec [osp|/vol|])))
-  assertBool "expected AlreadySealed" (AlreadySealed `elem` codesOf plan)
-  planBlocked plan @?= False
-
-sealFirstPlansASealPass :: Assertion
-sealFirstPlansASealPass = do
-  let source = [osp|/media-source|]
-      facts = offloadFacts (Just (treeOf [(RelPath "a.mxf", 900)] [])) (V.singleton (freshTarget [osp|/ssd1|] 1_000_000))
-      plainJob = offloadJob source [[osp|/ssd1|]] UseHistory
-      sealingJob = offloadJob source [[osp|/ssd1|]] (SealBeforeCopy StopBeforeCopy)
-      plain = decideOffload (specOf (Offload plainJob)) plainJob facts
-      sealing = decideOffload (specOf (Offload sealingJob)) sealingJob facts
-  plain.sealPass @?= Nothing
-  fmap (.bytes) sealing.sealPass @?= Just 900
-  fmap (\pass -> V.length pass.steps) sealing.sealPass @?= Just 1
-  fmap (.onFailure) sealing.sealPass @?= Just StopBeforeCopy
-  sealing.totalBytes @?= plain.totalBytes
-
-twoWalksOverOneFileSystemAgree :: Assertion
-twoWalksOverOneFileSystemAgree = do
-  ref <-
-    newIORef
-      ( emptyMemFS
-          & withFile [osp|/media-source/b.txt|] "2"
-          & withFile [osp|/media-source/A/1.mxf|] "hello"
-          & withFile [osp|/media-source/A/Sub/2.mxf|] "world"
-          & withFile [osp|/media-source/a.txt|] "1"
-      )
-  let spec = specOf (Offload (offloadJob [osp|/media-source|] [[osp|/ssd1|], [osp|/ssd2|]] UseHistory))
-  first <- runEff (runFileSystemMem ref (planJob spec))
-  second <- runEff (runFileSystemMem ref (planJob spec))
-  first @?= second
-  V.length first.steps @?= 4
-
-destinationGenerationFollowsTheSourceHistory :: Assertion
-destinationGenerationFollowsTheSourceHistory = do
-  let source = [osp|/media-source|]
-      recorded = Map.singleton (RelPath "a.mxf") sampleHash
-      facts =
-        OffloadFacts
-          { sourceTree = Just (treeOf [(RelPath "a.mxf", 2)] [])
-          , targets = V.singleton (freshTarget [osp|/ssd1|] 1_000_000)
-          , originals = Right (Just recorded)
-          , sourceHistory = Right (Just (sealedChain, recorded))
-          }
-      plainJob = offloadJob source [[osp|/ssd1|]] UseHistory
-      sealingJob = offloadJob source [[osp|/ssd1|]] (SealBeforeCopy StopBeforeCopy)
-      plain = decideOffload (specOf (Offload plainJob)) plainJob facts
-      sealing = decideOffload (specOf (Offload sealingJob)) sealingJob facts
-  destinationNumbers plain @?= [2]
-  destinationNumbers sealing @?= [3]
-  fmap (.generation.number) sealing.sealPass @?= Just 2
-  planRaceChecks plain @?= V.singleton (source, 2)
-  planRaceChecks sealing @?= V.singleton (source, 2)
-
-destinationNumbers :: JobPlan -> List Int
-destinationNumbers plan = case plan.execution of
-  CopyInto copy -> copy.generations & V.toList & map (.number)
-  RecordAt _ -> []
-
-partialSource :: Tree
-partialSource = treeOf [(RelPath "A/1.mxf", 9000), (RelPath "b.txt", 2)] [RelPath "A"]
-
-partialTarget :: Tree -> Chain -> TargetFacts
-partialTarget held chain =
-  TargetFacts
-    { root = destinationPath [osp|/ssd1|] [osp|/media-source|]
-    , freeBytes = Just 1_000_000
-    , history = Right (Just chain)
-    , existing = Just held
-    }
-
 partialPlan :: Maybe ExistingCopy -> Tree -> Chain -> Chain -> JobPlan
 partialPlan choice held destChain sourceChain =
   decideOffload (specOf (Offload job)) job facts
   where
-    job = (offloadJob [osp|/media-source|] [[osp|/ssd1|]] UseHistory) {existingCopy = choice}
+    job = (offloadJob mediaSource [[osp|/ssd1|]] UseHistory) {existingCopy = choice}
     facts =
       OffloadFacts
-        { sourceTree = Just partialSource
-        , targets = V.singleton (partialTarget held destChain)
+        { sourceTree = Just (treeOf [(RelPath "A/1.mxf", 9000), (RelPath "b.txt", 2)] [RelPath "A"])
+        , targets =
+            V.singleton
+              TargetFacts
+                { root = destinationPath [osp|/ssd1|] mediaSource
+                , freeBytes = Just 1_000_000
+                , history = Right (Just destChain)
+                , existing = Just held
+                }
         , originals = Right Nothing
         , sourceHistory = Right (Just (sourceChain, Map.empty))
         }
-
-foreignFileBlocks :: Assertion
-foreignFileBlocks = do
-  let plan = partialPlan (Just Resume) (treeOf [(RelPath "b.txt", 2), (RelPath "stray.txt", 1)] []) emptyChain emptyChain
-  assertBool "expected DestinationForeign" (DestinationForeign `elem` codesOf plan)
-  detailsOf DestinationForeign plan @?= ["stray.txt"]
-
-foreignDirectoryBlocks :: Assertion
-foreignDirectoryBlocks = do
-  let plan = partialPlan (Just Resume) (treeOf [(RelPath "b.txt", 2)] [RelPath "Other"]) emptyChain emptyChain
-  assertBool "expected DestinationForeign" (DestinationForeign `elem` codesOf plan)
-  detailsOf DestinationForeign plan @?= ["Other"]
-
-extraGenerationBlocks :: Assertion
-extraGenerationBlocks = do
-  let plan = partialPlan (Just Resume) (treeOf [(RelPath "b.txt", 2)] []) sealedChain emptyChain
-  assertBool "expected DestinationForeign" (DestinationForeign `elem` codesOf plan)
-  detailsOf DestinationForeign plan @?= ["ascmhl/0001_media-source_2020-01-01_000000.mhl"]
-
-partialDestinationAwaitsAChoice :: Assertion
-partialDestinationAwaitsAChoice = do
-  let undecided = partialPlan Nothing (treeOf [(RelPath "b.txt", 2), (RelPath "A/1.mxf.mc3k-part", 400)] []) emptyChain emptyChain
-      decided = partialPlan (Just Resume) (treeOf [(RelPath "b.txt", 2), (RelPath "A/1.mxf.mc3k-part", 400)] []) emptyChain emptyChain
-  map (.state) (V.toList undecided.targets) @?= [Partial]
-  assertBool "expected DestinationPartial" (DestinationPartial `elem` codesOf undecided)
-  planBlocked undecided @?= True
-  assertBool "no DestinationPartial once chosen" (DestinationPartial `notElem` codesOf decided)
-  planBlocked decided @?= False
-
-otherSourceBlocks :: Assertion
-otherSourceBlocks = do
-  let plan = partialPlan (Just Resume) (treeOf [(RelPath "b.txt", 2)] []) (chainWithC4 "aaaa") (chainWithC4 "bbbb")
-  assertBool "expected DestinationOtherSource" (DestinationOtherSource `elem` codesOf plan)
-  detailsOf DestinationOtherSource plan @?= ["0001_media-source_2020-01-01_000000.mhl"]
-
-prefixChainPasses :: Assertion
-prefixChainPasses = do
-  let twoGenerations = Chain {entries = sealedChain.entries <> V.singleton ChainEntry {sequenceNr = 2, path = RelPath "0002_media-source_2020-01-02_000000.mhl", c4 = Nothing, unknown = V.empty}}
-      plan = partialPlan (Just Resume) (treeOf [(RelPath "b.txt", 2)] []) sealedChain twoGenerations
-  assertBool "no DestinationForeign" (DestinationForeign `notElem` codesOf plan)
-  assertBool "no DestinationOtherSource" (DestinationOtherSource `notElem` codesOf plan)
-
-writeModesFollowTheChoiceAndTheSize :: Assertion
-writeModesFollowTheChoiceAndTheSize = do
-  let held = treeOf [(RelPath "A/1.mxf", 10), (RelPath "b.txt", 2)] [RelPath "A"]
-      resume = partialPlan (Just Resume) held emptyChain emptyChain
-      replace = partialPlan (Just Replace) held emptyChain emptyChain
-      absent = partialPlan (Just Resume) (treeOf [(RelPath "A/1.mxf.mc3k-part", 5)] [RelPath "A"]) emptyChain emptyChain
-  modesOf resume @?= [(RelPath "A/1.mxf", Overwrite), (RelPath "b.txt", Reuse)]
-  modesOf replace @?= [(RelPath "A/1.mxf", Overwrite), (RelPath "b.txt", Overwrite)]
-  modesOf absent @?= [(RelPath "A/1.mxf", WriteNew), (RelPath "b.txt", WriteNew)]
-
-reuseWithRecordedOriginalReadsNoSource :: Assertion
-reuseWithRecordedOriginalReadsNoSource = do
-  let held = treeOf [(RelPath "A/1.mxf", 9000), (RelPath "b.txt", 2)] [RelPath "A"]
-      recorded = Map.fromList [(RelPath "A/1.mxf", sampleHash), (RelPath "b.txt", sampleHash)]
-      job = (offloadJob [osp|/media-source|] [[osp|/ssd1|]] UseHistory) {existingCopy = Just Resume}
-      facts =
-        OffloadFacts
-          { sourceTree = Just partialSource
-          , targets = V.singleton (partialTarget held emptyChain)
-          , originals = Right (Just recorded)
-          , sourceHistory = Right (Just (sealedChain, recorded))
-          }
-      plan = decideOffload (specOf (Offload job)) job facts
-  plan.bytesToRead @?= 9002
-  plan.totalBytes @?= 9002
-
-modesOf :: JobPlan -> List (RelPath, WriteMode)
-modesOf plan =
-  plan.steps
-    & V.toList
-    & concatMap (\step -> map (\w -> (step.path, w.mode)) (V.toList step.writes))
-
-detailsOf :: FindingCode -> JobPlan -> List Text
-detailsOf wanted plan =
-  plan.findings
-    & V.toList
-    & filter (\finding -> finding.code == wanted)
-    & map (.detail)
 
 chainWithC4 :: Text -> Chain
 chainWithC4 value =
@@ -392,7 +224,7 @@ sealedChain =
 freshTarget :: OsPath -> Int64 -> TargetFacts
 freshTarget parent free =
   TargetFacts
-    { root = destinationPath parent [osp|/media-source|]
+    { root = destinationPath parent mediaSource
     , freeBytes = Just free
     , history = Right Nothing
     , existing = Nothing
@@ -493,6 +325,8 @@ planAndEngineAgree = withTests 400 $ property $ do
   let parents = map (.parent) scenario.destinations
       job = (offloadJob mediaSource parents UseHistory) {existingCopy = scenario.choice}
   plan <- evalIO (runEff (runFileSystemMem ref (planJob (specOf (Offload job)))))
+  again <- evalIO (runEff (runFileSystemMem ref (planJob (specOf (Offload job)))))
+  again === plan
   annotateShow plan.findings
   annotateShow plan.steps
   assert (not (planBlocked plan))

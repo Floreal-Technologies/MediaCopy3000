@@ -1,10 +1,14 @@
 module MediaCopy.ModelTest (tests) where
 
+import Control.Monad (foldM, forM_, unless)
 import Data.Function ((&))
 import Data.List (List)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (isJust)
-import Hedgehog (Property, assert, forAll, property)
+import Data.Maybe (listToMaybe)
+import Data.Set (Set)
+import Data.Set qualified as Set
+import Data.Vector qualified as V
+import Hedgehog
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
 import Test.Tasty
@@ -13,7 +17,7 @@ import Test.Tasty.Hedgehog (testProperty)
 
 import MediaCopy.Demo.Fixtures
 import MediaCopy.Domain.Job
-import MediaCopy.Domain.Plan (JobPlan (..))
+import MediaCopy.Domain.Plan (JobPlan (..), Target (..))
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Theme (Accent (..), PaletteMode (..))
 import MediaCopy.Model
@@ -22,55 +26,11 @@ tests :: TestTree
 tests =
   testGroup
     "Model"
-    [ testGroup
-        "enqueue"
-        [ testCase "starts the first job immediately and resets the draft" startsFirstJobImmediatelyAndResetsDraft
-        , testCase "queues the second job" queuesTheSecondJob
-        , testCase "starts the next job when the running one finishes" startsTheNextJobWhenTheRunningOneFinishes
-        , testProperty "never has more than one running job" neverHasMoreThanOneRunningJob
-        ]
-    , testGroup
-        "cancel"
-        [ testCase "cancels the running job and starts the next" cancelsTheRunningJobAndStartsTheNext
-        , testCase "removes a queued job from the queue" removesAQueuedJobFromTheQueue
-        , testCase "does nothing with no selection" cancelSelectedWithNoSelectionDoesNothing
-        ]
-    , testGroup
-        "report"
-        [ testCase "a selected job asks for a save location" saveSelectedReportAsksForAFile
-        , testCase "no selection asks for nothing" saveSelectedReportWithNoSelectionDoesNothing
-        ]
-    , testGroup
-        "navigation"
-        [ testCase "next from no selection picks the first job" selectNextFromNoSelectionPicksTheFirst
-        , testCase "next at the last job stays" selectNextAtTheLastJobStays
-        , testCase "previous from no selection picks the last job" selectPreviousFromNoSelectionPicksTheLast
-        , testCase "previous at the first job stays" selectPreviousAtTheFirstJobStays
-        ]
-    , testGroup
-        "close"
-        [ testCase "a close while a job runs asks first" closeWhileRunningAsksFirst
-        , testCase "a confirmed close cancels the job and closes" confirmCloseCancelsTheJobAndCloses
-        ]
-    , testGroup
-        "ClearFinished"
-        [ testCase "drops finished jobs and clears selection" dropsFinishedJobsAndClearsSelection
-        ]
-    , testGroup
-        "seal"
-        [ testCase "enqueue seal asks for a plan" enqueueSealAsksForAPlan
-        ]
-    , testGroup
-        "plan"
-        [ testCase "a request asks for one plan" requestPlanAsksForOne
-        , testCase "a discarded plan queues nothing" discardPlanQueuesNothing
-        , testCase "a confirm on an idle engine starts at once" confirmOnEmptyQueueStartsAtOnce
-        , testCase "a stale replan needs review" staleReplanNeedsReview
-        , testCase "a seal choice replans the same job and drops the plan it left" sealChoiceReplansTheSameJob
-        , testCase "an existing-copy choice replans the same job" existingCopyChoiceReplansTheSameJob
-        , testCase "a failed replan fails that job and starts the next" failedReplanFailsTheJobAndStartsTheNext
-        , testCase "a ready plan asks for a save location" savePlanAsksForAFile
-        ]
+    [ testProperty "one job runs at a time, in the order confirmed" schedulerInvariants
+    , testCase "nothing runs without a confirmed plan" nothingRunsWithoutAConfirmedPlan
+    , testCase "a changed plan stops for review" aChangedPlanStopsForReview
+    , testCase "changing an option replans the same job" changingAnOptionReplansTheSameJob
+    , testCase "closing never silently aborts a job" closingNeverSilentlyAbortsAJob
     ]
 
 m0 :: Model
@@ -103,195 +63,179 @@ offloadFlow' n =
 offloadFlow :: Int -> List Message
 offloadFlow n = offloadFlow' n <> [Ui ConfirmPlan]
 
-enqueueOffload :: List Message
-enqueueOffload = offloadFlow 1
+data Replan = SamePlan | ChangedPlan | PlanFailed
+  deriving stock (Show)
 
-sealChoiceReplansTheSameJob :: Assertion
-sealChoiceReplansTheSameJob = do
-  let (m1, _) = run (offloadFlow' 1) m0
-      (m2, cmds) = update (Ui (SetSealFirst (SealBeforeCopy StopBeforeCopy))) m1
-      (m3, _) = update (planned (JobId 1) (offloadJob UseHistory)) m2
-  assertBool "replans the same job" (any (replans (JobId 1)) cmds)
-  m2.nextId @?= m1.nextId
-  m3.planPhase @?= m2.planPhase
+data Step
+  = Enqueue Job
+  | Finish Bool
+  | Cancel Int
+  | Answer Int Replan
+  deriving stock (Show)
 
-existingCopyChoiceReplansTheSameJob :: Assertion
-existingCopyChoiceReplansTheSameJob = do
-  let (m1, _) = run (offloadFlow' 1) m0
-      (m2, cmds) = update (Ui (SetExistingCopy Resume)) m1
-  assertBool "replans the same job" (any (replans (JobId 1)) cmds)
-  assertBool "the new spec carries the choice" (any (\case ComputePlan spec | Offload oj <- spec.job -> oj.existingCopy == Just Resume; _ -> False) cmds)
-  m2.nextId @?= m1.nextId
+data World = World
+  { model :: Model
+  , pending :: List JobSpec
+  , started :: List JobId
+  , dead :: Set JobId
+  }
 
-startsFirstJobImmediatelyAndResetsDraft :: Assertion
-startsFirstJobImmediatelyAndResetsDraft = do
-  let (m, cmds) = run enqueueOffload m0
-  length (filter isStartJob cmds) @?= 1
-  m.running @?= Just (JobId 1)
-  m.draft @?= Nothing
-  m.selected @?= Just (JobId 1)
+genStep :: Gen Step
+genStep =
+  Gen.frequency
+    [ (3, Enqueue <$> Gen.element [offloadJob UseHistory, verifyJob (osp "/vol"), sealJob (osp "/vol")])
+    , (2, Finish <$> Gen.bool)
+    , (1, Cancel <$> Gen.int (Range.linear 0 20))
+    , (3, Answer <$> Gen.int (Range.linear 0 20) <*> Gen.element [SamePlan, ChangedPlan, PlanFailed])
+    ]
 
-queuesTheSecondJob :: Assertion
-queuesTheSecondJob = do
-  let (m, cmds) = run (offloadFlow 1 <> offloadFlow 2) m0
-  length (filter isStartJob cmds) @?= 1
-  m.queue @?= [JobId 2]
+perform :: Step -> World -> (Model, List AppEffect, List JobSpec)
+perform step world = case step of
+  Enqueue job ->
+    let (asked, _) = update (RequestPlan job) model
+        (confirmed, effects) = case asked.planPhase of
+          Planning spec -> run [PlanComputed spec (Right (planOf job spec)), Ui ConfirmPlan] asked
+          _ -> (asked, [])
+    in (confirmed, effects, world.pending)
+  Finish ok -> case model.running of
+    Just jid
+      | phaseOf jid model == Just Running ->
+          let (next, effects) = update (EngineEvent jid (if ok then JobFinished AllOk else JobFailed "gone")) model
+          in (next, effects, world.pending <> computed effects)
+    _ -> (model, [], world.pending)
+  Cancel i -> case Map.keys model.jobs of
+    [] -> (model, [], world.pending)
+    ids ->
+      let (next, effects) = run [Ui (SelectJob (Just (ids !! (i `mod` length ids)))), Ui (RunCommand Command.CancelJob)] model
+      in (next, effects, world.pending <> computed effects)
+  Answer i replan -> case drop (i `mod` max 1 (length world.pending)) world.pending of
+    spec : _ ->
+      let stored = Map.lookup spec.jobId model.jobs >>= (.plan)
+          outcome = case (replan, stored) of
+            (SamePlan, Just plan) -> Right plan {targets = V.map (\target -> target {freeBytes = fmap (subtract 4096) target.freeBytes}) plan.targets}
+            (ChangedPlan, Just plan) -> Right plan {totalBytes = plan.totalBytes + 4096}
+            _ -> Left "gone"
+          (next, effects) = update (PlanComputed spec outcome) model
+      in (next, effects, world.pending <> computed effects)
+    _ -> (model, [], world.pending)
+  where
+    model = world.model
 
-startsTheNextJobWhenTheRunningOneFinishes :: Assertion
-startsTheNextJobWhenTheRunningOneFinishes = do
-  let (m1, _) = run (offloadFlow 1 <> offloadFlow 2) m0
-      (m2, cmds) = update (EngineEvent (JobId 1) (JobFinished AllOk)) m1
-  m2.running @?= Just (JobId 2)
-  length (filter isComputePlan cmds) @?= 1
-  assertBool "toast is set" (isJust m2.toast)
+computed :: List AppEffect -> List JobSpec
+computed effects = [spec | ComputePlan spec <- effects]
 
-neverHasMoreThanOneRunningJob :: Property
-neverHasMoreThanOneRunningJob = property $ do
-  n <- forAll $ Gen.int (Range.linear 0 10)
-  finishes <- forAll $ Gen.list (Range.linear 0 10) (Gen.int (Range.linear 1 10))
-  let msgs = concatMap offloadFlow [1 .. n] <> map (\i -> EngineEvent (JobId i) (JobFinished AllOk)) finishes
-      (m, _) = run msgs m0
-      runningCount = length (filter (\entry -> entry.state.phase == Running) (Map.elems m.jobs))
-  assert (runningCount <= 1)
-  assert (maybe True (\r -> Map.member r m.jobs) m.running)
+phaseOf :: JobId -> Model -> Maybe JobPhase
+phaseOf jid model = fmap (\entry -> entry.state.phase) (Map.lookup jid model.jobs)
 
-cancelsTheRunningJobAndStartsTheNext :: Assertion
-cancelsTheRunningJobAndStartsTheNext = do
-  let (m1, _) = run (offloadFlow 1 <> offloadFlow 2) m0
-      (m2, cmds) = run [Ui (SelectJob (Just (JobId 1))), Ui (RunCommand Command.CancelJob)] m1
-  (m2.jobs Map.! JobId 1).state.phase @?= Cancelled
-  m2.running @?= Just (JobId 2)
-  assertBool "emits CancelRunning for job 1" (any (cancels (JobId 1)) cmds)
+withPhase :: (JobPhase -> Bool) -> Model -> List JobId
+withPhase wanted model = model.jobs & Map.filter (\entry -> wanted entry.state.phase) & Map.keys
 
-removesAQueuedJobFromTheQueue :: Assertion
-removesAQueuedJobFromTheQueue = do
-  let (m1, _) = run (offloadFlow 1 <> offloadFlow 2) m0
-      (m2, _) = run [Ui (SelectJob (Just (JobId 2))), Ui (RunCommand Command.CancelJob)] m1
-  m2.queue @?= []
-  (m2.jobs Map.! JobId 2).state.phase @?= Cancelled
+isDead :: JobPhase -> Bool
+isDead = \case
+  (Cancelled; Failed _) -> True
+  _ -> False
 
-cancelSelectedWithNoSelectionDoesNothing :: Assertion
-cancelSelectedWithNoSelectionDoesNothing = do
-  let (m1, _) = run (offloadFlow 1) m0
-      (m2, cmds) = run [Ui (SelectJob Nothing), Ui (RunCommand Command.CancelJob)] m1
-  m2.running @?= Just (JobId 1)
-  assertBool "no cancel was ordered" (not (any isCancelRunning cmds))
+schedulerInvariants :: Property
+schedulerInvariants = withTests 500 $ property $ do
+  steps <- forAll (Gen.list (Range.linear 1 40) genStep)
+  final <- foldM advance World {model = m0, pending = [], started = [], dead = Set.empty} steps
+  cover 20 "two or more jobs ran" (length final.started >= 2)
+  cover 5 "a changed plan stopped for review" (not (null (withPhase (== NeedsReview) final.model)))
+  cover 20 "a job was cancelled or failed" (not (Set.null final.dead))
+  where
+    advance world step = do
+      let before = world.model
+          (next, effects, pending) = perform step world
+          starts = [plan.spec.jobId | StartJob plan <- effects]
+          running = withPhase (== Running) next
+          newlyRunning = case next.running of
+            Just jid | next.running /= before.running -> [jid]
+            _ -> []
+      annotateShow step
+      assert (length running <= 1)
+      assert (all (\jid -> next.running == Just jid) running)
+      forM_ next.running $ \jid -> do
+        assert (Map.member jid next.jobs)
+        assert (jid `notElem` next.queue)
+      assert (length starts <= 1)
+      unless (null starts) $ do
+        withPhase (== Running) before === []
+        next.running === listToMaybe starts
+      assert (and (zipWith (<) next.queue (drop 1 next.queue)))
+      forM_ newlyRunning $ \jid -> do
+        assert (all (> jid) next.queue)
+        assert (all (< jid) world.started)
+      forM_ (Set.toList world.dead) $ \jid -> do
+        assert (next.running /= Just jid)
+        assert (jid `notElem` next.queue)
+        assert (jid `notElem` starts)
+        assert (maybe False isDead (phaseOf jid next))
+      pure
+        World
+          { model = next
+          , pending
+          , started = world.started <> newlyRunning
+          , dead = Set.union world.dead (Set.fromList (withPhase isDead next))
+          }
 
-saveSelectedReportAsksForAFile :: Assertion
-saveSelectedReportAsksForAFile = do
-  let (m1, _) = run (offloadFlow 1) m0
-      (_, cmds) = run [EngineEvent (JobId 1) (JobFinished AllOk), Ui (SelectJob (Just (JobId 1))), Ui (RunCommand Command.SaveReport)] m1
-  assertBool "asks for a save location" (any isSaveDialog cmds)
+nothingRunsWithoutAConfirmedPlan :: Assertion
+nothingRunsWithoutAConfirmedPlan =
+  forM_ [offloadJob UseHistory, verifyJob (osp "/vol"), sealJob (osp "/vol")] $ \job -> do
+    let spec = specFor (JobId 1) job
+        (asked, askCmds) = update (RequestPlan job) m0
+        (shown, shownCmds) = update (PlanComputed spec (Right (planOf job spec))) asked
+        (discarded, discardCmds) = update (Ui DiscardPlan) shown
+        (confirmed, confirmCmds) = update (Ui ConfirmPlan) shown
+    length (filter isComputePlan askCmds) @?= 1
+    assertBool "no job was started" (not (any isStartJob (askCmds <> shownCmds <> discardCmds)))
+    Map.keys shown.jobs @?= []
+    Map.keys discarded.jobs @?= []
+    discarded.queue @?= []
+    map jobKind (queuedJobs confirmed) @?= [jobKind job]
+    confirmed.running @?= Just (JobId 1)
+    length (filter isStartJob confirmCmds) @?= 1
 
-savePlanAsksForAFile :: Assertion
-savePlanAsksForAFile = do
-  let (m1, _) = run (offloadFlow' 1) m0
-      (_, cmds) = update (Ui SavePlan) m1
-  assertBool "asks for a save location" (any isSaveDialog cmds)
-
-saveSelectedReportWithNoSelectionDoesNothing :: Assertion
-saveSelectedReportWithNoSelectionDoesNothing = do
-  let (m1, _) = run (offloadFlow 1) m0
-      (_, cmds) = run [Ui (SelectJob Nothing), Ui (RunCommand Command.SaveReport)] m1
-  assertBool "asks for nothing" (not (any isSaveDialog cmds))
-
-selectNextFromNoSelectionPicksTheFirst :: Assertion
-selectNextFromNoSelectionPicksTheFirst = do
-  let (m1, _) = run (offloadFlow 1 <> offloadFlow 2) m0
-      (m2, _) = run [Ui (SelectJob Nothing), Ui (RunCommand Command.NextJob)] m1
-  m2.selected @?= Just (JobId 1)
-
-selectNextAtTheLastJobStays :: Assertion
-selectNextAtTheLastJobStays = do
-  let (m1, _) = run (offloadFlow 1 <> offloadFlow 2) m0
-      (m2, _) = run [Ui (SelectJob (Just (JobId 2))), Ui (RunCommand Command.NextJob)] m1
-  m2.selected @?= Just (JobId 2)
-
-selectPreviousFromNoSelectionPicksTheLast :: Assertion
-selectPreviousFromNoSelectionPicksTheLast = do
-  let (m1, _) = run (offloadFlow 1 <> offloadFlow 2) m0
-      (m2, _) = run [Ui (SelectJob Nothing), Ui (RunCommand Command.PreviousJob)] m1
-  m2.selected @?= Just (JobId 2)
-
-selectPreviousAtTheFirstJobStays :: Assertion
-selectPreviousAtTheFirstJobStays = do
-  let (m1, _) = run (offloadFlow 1 <> offloadFlow 2) m0
-      (m2, _) = run [Ui (SelectJob (Just (JobId 1))), Ui (RunCommand Command.PreviousJob)] m1
-  m2.selected @?= Just (JobId 1)
-
-closeWhileRunningAsksFirst :: Assertion
-closeWhileRunningAsksFirst = do
-  let (m1, _) = run (offloadFlow 1) m0
-      (m2, cmds) = update (Ui RequestClose) m1
-  m2.closeConfirm @?= True
-  assertBool "the window was not closed" (not (any isDestroyWindow cmds))
-
-confirmCloseCancelsTheJobAndCloses :: Assertion
-confirmCloseCancelsTheJobAndCloses = do
-  let (m1, _) = run (offloadFlow 1) m0
-      (m2, cmds) = run [Ui RequestClose, Ui ConfirmClose] m1
-  m2.closeConfirm @?= False
-  assertBool "cancels the running job" (any (cancels (JobId 1)) cmds)
-  assertBool "closes the window" (any isDestroyWindow cmds)
-
-dropsFinishedJobsAndClearsSelection :: Assertion
-dropsFinishedJobsAndClearsSelection = do
-  let (m1, _) = run (enqueueOffload <> [EngineEvent (JobId 1) (JobFinished AllOk), Ui (RunCommand Command.ClearFinished)]) m0
-  Map.keys m1.jobs @?= []
-  m1.selected @?= Nothing
-
-enqueueSealAsksForAPlan :: Assertion
-enqueueSealAsksForAPlan = do
-  let (model, cmds) = update (RequestPlan (sealJob (osp "/vol"))) m0
-  assertBool "asks for a plan" (any isComputePlan cmds)
-  assertBool "no job was started" (not (any isStartJob cmds))
-  Map.keys model.jobs @?= []
-  let (confirmed, _) = run [planned (JobId 1) (sealJob (osp "/vol")), Ui ConfirmPlan] model
-  map jobKind (queuedJobs confirmed) @?= [SealKind]
-
-requestPlanAsksForOne :: Assertion
-requestPlanAsksForOne = do
-  let (model, cmds) = update (RequestPlan (offloadJob UseHistory)) m0
-  length (filter isComputePlan cmds) @?= 1
-  model.planPhase @?= Planning JobSpec {jobId = JobId 1, job = offloadJob UseHistory, createdAt = at, pluginFields = Map.empty}
-  Map.keys model.jobs @?= []
-
-discardPlanQueuesNothing :: Assertion
-discardPlanQueuesNothing = do
-  let (model, cmds) = run [RequestPlan (offloadJob UseHistory), planned (JobId 1) (offloadJob UseHistory), Ui DiscardPlan] m0
-  model.planPhase @?= Idle
-  Map.keys model.jobs @?= []
-  model.queue @?= []
-  assertBool "no job was started" (not (any isStartJob cmds))
-
-confirmOnEmptyQueueStartsAtOnce :: Assertion
-confirmOnEmptyQueueStartsAtOnce = do
-  let (model, cmds) = run (offloadFlow 1) m0
-  model.running @?= Just (JobId 1)
-  (model.jobs Map.! JobId 1).state.phase @?= Running
-  length (filter isStartJob cmds) @?= 1
-  length (filter isComputePlan cmds) @?= 1
-
-failedReplanFailsTheJobAndStartsTheNext :: Assertion
-failedReplanFailsTheJobAndStartsTheNext = do
+aChangedPlanStopsForReview :: Assertion
+aChangedPlanStopsForReview = do
   let (m1, _) = run (offloadFlow 1 <> offloadFlow 2 <> offloadFlow 3) m0
       (m2, _) = update (EngineEvent (JobId 1) (JobFinished AllOk)) m1
-      (m3, cmds) = update (PlanComputed (specFor (JobId 2) (offloadJob UseHistory)) (Left "the media source is gone")) m2
-  (m3.jobs Map.! JobId 2).state.phase @?= Failed "the media source is gone"
-  m3.running @?= Just (JobId 3)
-  m3.queue @?= []
-  assertBool "the next job is planned" (any isComputePlan cmds)
-  assertBool "the failure is shown" (isJust m3.toast)
+      spec = specFor (JobId 2) (offloadJob UseHistory)
+      stored = readyPlan spec
+      lessFree = stored {targets = V.map (\target -> target {freeBytes = fmap (subtract 4096) target.freeBytes}) stored.targets}
+      moved = stored {totalBytes = stored.totalBytes + 4096}
+      (same, sameCmds) = update (PlanComputed spec (Right lessFree)) m2
+      (changed, changedCmds) = update (PlanComputed spec (Right moved)) m2
+  assertBool "the free space moved" (lessFree /= stored)
+  phaseOf (JobId 2) same @?= Just Running
+  same.running @?= Just (JobId 2)
+  length (filter isStartJob sameCmds) @?= 1
+  phaseOf (JobId 2) changed @?= Just NeedsReview
+  assertBool "no job was started" (not (any isStartJob changedCmds))
+  changed.running @?= Just (JobId 3)
+  assertBool "the next job is planned" (any (replans (JobId 3)) changedCmds)
 
-staleReplanNeedsReview :: Assertion
-staleReplanNeedsReview = do
-  let (m1, _) = run (offloadFlow 1 <> offloadFlow 2) m0
-      (m2, _) = update (EngineEvent (JobId 1) (JobFinished AllOk)) m1
-      moved = (readyPlan (specFor (JobId 2) (offloadJob UseHistory))) {totalBytes = 4096}
-      (m3, cmds) = update (PlanComputed (specFor (JobId 2) (offloadJob UseHistory)) (Right moved)) m2
-  (m3.jobs Map.! JobId 2).state.phase @?= NeedsReview
-  m3.running @?= Nothing
-  assertBool "no job was started" (not (any isStartJob cmds))
+changingAnOptionReplansTheSameJob :: Assertion
+changingAnOptionReplansTheSameJob = do
+  let (m1, _) = run (offloadFlow' 1) m0
+      (sealing, sealCmds) = update (Ui (SetSealFirst (SealBeforeCopy StopBeforeCopy))) m1
+      (late, _) = update (planned (JobId 1) (offloadJob UseHistory)) sealing
+      (resuming, resumeCmds) = update (Ui (SetExistingCopy Resume)) m1
+  assertBool "seal-first replans job 1" (any (replansWith (JobId 1) (\oj -> oj.sealFirst == SealBeforeCopy StopBeforeCopy)) sealCmds)
+  assertBool "an existing-copy choice replans job 1" (any (replansWith (JobId 1) (\oj -> oj.existingCopy == Just Resume)) resumeCmds)
+  sealing.nextId @?= m1.nextId
+  resuming.nextId @?= m1.nextId
+  late.planPhase @?= sealing.planPhase
+
+closingNeverSilentlyAbortsAJob :: Assertion
+closingNeverSilentlyAbortsAJob = do
+  let (m1, _) = run (offloadFlow 1) m0
+      (asked, askCmds) = update (Ui RequestClose) m1
+      (_, closeCmds) = update (Ui ConfirmClose) asked
+  asked.closeConfirm @?= True
+  asked.running @?= Just (JobId 1)
+  assertBool "nothing was stopped" (not (any isDestroyWindow askCmds || any isCancelRunning askCmds))
+  assertBool "cancels the running job" (any (cancels (JobId 1)) closeCmds)
+  assertBool "closes the window" (any isDestroyWindow closeCmds)
 
 isComputePlan :: AppEffect -> Bool
 isComputePlan (ComputePlan _) = True
@@ -316,9 +260,10 @@ replans :: JobId -> AppEffect -> Bool
 replans wanted (ComputePlan spec) = spec.jobId == wanted
 replans _ _ = False
 
-isSaveDialog :: AppEffect -> Bool
-isSaveDialog (OpenDialog SaveAs {} _) = True
-isSaveDialog _ = False
+replansWith :: JobId -> (OffloadJob -> Bool) -> AppEffect -> Bool
+replansWith wanted holds (ComputePlan spec)
+  | Offload oj <- spec.job = spec.jobId == wanted && holds oj
+replansWith _ _ _ = False
 
 isDestroyWindow :: AppEffect -> Bool
 isDestroyWindow DestroyWindow = True

@@ -387,7 +387,7 @@ planComputed spec outcome model
   | awaitingPlan model spec = case outcome of
       Right plan -> (model {planPhase = Ready plan}, [])
       Left message -> (model {planPhase = PlanError message}, [])
-  | model.running == Just spec.jobId = case outcome of
+  | awaitingReplan model spec.jobId = case outcome of
       Right plan -> replanReady spec.jobId plan model
       Left message ->
         startNext
@@ -401,6 +401,10 @@ planComputed spec outcome model
               )
           )
   | otherwise = (model, [])
+
+awaitingReplan :: Model -> JobId -> Bool
+awaitingReplan model jid =
+  model.running == Just jid && model ^? #jobs % ix jid % #state % #phase == Just Queued
 
 awaitingPlan :: Model -> JobSpec -> Bool
 awaitingPlan model spec = case model.planPhase of
@@ -474,20 +478,18 @@ confirmPlan plan model =
        else (model1 {queue = model1.queue <> [jid]}, refresh)
 
 replanReady :: JobId -> JobPlan -> Model -> (Model, List AppEffect)
-replanReady jid fresh model
-  | model.running /= Just jid = (model, [])
-  | otherwise = case Map.lookup jid model.jobs >>= \entry -> entry.plan of
-      Nothing -> (model, [])
-      Just stored
-        | planEquivalent stored fresh ->
-            (setPhase jid Running (storePlan jid fresh model), [StartJob fresh])
-        | otherwise ->
-            startNext
-              ( setPhase
-                  jid
-                  NeedsReview
-                  (storePlan jid fresh model) {running = Nothing, planPhase = offered fresh model.planPhase}
-              )
+replanReady jid fresh model = case Map.lookup jid model.jobs >>= \entry -> entry.plan of
+  Nothing -> (model, [])
+  Just stored
+    | planEquivalent stored fresh ->
+        (setPhase jid Running (storePlan jid fresh model), [StartJob fresh])
+    | otherwise ->
+        startNext
+          ( setPhase
+              jid
+              NeedsReview
+              (storePlan jid fresh model) {running = Nothing, planPhase = offered fresh model.planPhase}
+          )
 
 startNext :: Model -> (Model, List AppEffect)
 startNext model = case model.running of

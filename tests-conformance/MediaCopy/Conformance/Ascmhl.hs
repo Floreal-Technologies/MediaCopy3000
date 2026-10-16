@@ -7,12 +7,12 @@ module MediaCopy.Conformance.Ascmhl
   , verifyFolder
   , verifyDirectoryHashes
   , createHistory
-  , infoFolder
   , assertOk
   , assertFails
-  , assertSchemaValidManifest
+  , assertConforms
   ) where
 
+import Control.Monad (forM_)
 import Data.List (List)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -20,6 +20,8 @@ import System.Directory (findExecutable)
 import System.Exit (ExitCode (ExitFailure, ExitSuccess))
 import System.Process (readProcessWithExitCode)
 import Test.Tasty.HUnit
+
+import MediaCopy.Conformance.Harness (chainFileIn, mhlFilesIn)
 
 data Tools = Tools
   { ascmhl :: FilePath
@@ -72,9 +74,6 @@ verifyDirectoryHashes tools folder = run tools.ascmhlDebug ["verify", "-dh", fol
 createHistory :: Tools -> Text -> FilePath -> IO Outcome
 createHistory tools format folder = run tools.ascmhl ["create", "-h", T.unpack format, folder]
 
-infoFolder :: Tools -> FilePath -> IO Outcome
-infoFolder tools folder = run tools.ascmhl ["info", "-v", folder]
-
 assertOk :: String -> Outcome -> Assertion
 assertOk what outcome =
   assertBool
@@ -87,7 +86,11 @@ assertFails what outcome =
     (what <> " unexpectedly succeeded\nstdout:\n" <> T.unpack outcome.out)
     (outcome.exitCode /= 0)
 
-assertSchemaValidManifest :: Tools -> FilePath -> Assertion
-assertSchemaValidManifest tools file = do
-  outcome <- schemaCheckManifest tools file
-  assertOk ("xsd-schema-check " <> file) outcome
+assertConforms :: Tools -> FilePath -> Assertion
+assertConforms tools folder = do
+  manifests <- mhlFilesIn folder
+  assertBool ("no manifest in " <> folder) (not (null manifests))
+  forM_ manifests (\file -> schemaCheckManifest tools file >>= assertOk ("xsd-schema-check " <> file))
+  schemaCheckChain tools (chainFileIn folder) >>= assertOk ("xsd-schema-check -df " <> folder)
+  verifyFolder tools folder >>= assertOk ("ascmhl-debug verify " <> folder)
+  verifyDirectoryHashes tools folder >>= assertOk ("ascmhl-debug verify -dh " <> folder)
