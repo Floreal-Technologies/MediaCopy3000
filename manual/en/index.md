@@ -1,8 +1,26 @@
-# Manual
+---
+layout: home
 
-MediaCopy 3000 (or MC3K) is a media transfer application that focuses on the
-**integrity** and **completeness** of your data, while offloading between storage
-volumes.
+hero:
+  name: MediaCopy 3000
+  text: Copy your media and prove the copy
+  tagline: Offload camera cards and drives to more than one destination. Each copy is checked and recorded in the ASC MHL format.
+  actions:
+    - theme: brand
+      text: Introduction
+      link: /introduction
+    - theme: alt
+      text: Offload a media source
+      link: /offload
+
+features:
+  - title: Integrity and completeness
+    details: Each job hashes every file and reads each copy back. A manifest proves that the bytes did not change and that every file is there.
+  - title: The plan comes first
+    details: Before a job starts, the plan shows what the job will do. Blockers and warnings show before a file is copied.
+  - title: An industry standard
+    details: MediaCopy 3000 reads and writes ASC MHL. Each folder keeps its history as a chain of generations.
+---
 
 ![The application with a plan ready](images/plan-ready.png)
 

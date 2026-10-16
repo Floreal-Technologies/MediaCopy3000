@@ -1,7 +1,26 @@
-# Manuel
+---
+layout: home
 
-MediaCopy 3000 (MC3K) est une application de transferts de médias, concentrée sur
-**l'intégrité** et la **complétude** des transferts des volumes de stockage.
+hero:
+  name: MediaCopy 3000
+  text: Copiez vos médias et prouvez la copie
+  tagline: Déchargez les cartes et les disques vers une ou plusieurs destinations. Chaque copie est vérifiée et enregistrée au format ASC MHL.
+  actions:
+    - theme: brand
+      text: Introduction
+      link: /fr/introduction
+    - theme: alt
+      text: Décharger des médias
+      link: /fr/offload
+
+features:
+  - title: Intégrité et complétude
+    details: Chaque tâche calcule la somme de contrôle de chaque fichier et relit chaque copie. Un manifeste prouve que les octets n'ont pas changé et que tous les fichiers sont présents.
+  - title: Le plan d'abord
+    details: Avant l'exécution d'une tâche, le plan montre ce qu'elle va faire. Les bloqueurs et les avertissements apparaissent avant la copie du premier fichier.
+  - title: Un standard de l'industrie
+    details: MediaCopy 3000 lit et écrit le format ASC MHL. Chaque dossier garde son historique dans une chaîne de générations.
+---
 
 ![L'application avec un plan prêt](../en/images/plan-ready.png)
 
