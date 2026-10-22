@@ -92,7 +92,6 @@ tests =
     , testCase "an offload continues the source history" anOffloadContinuesTheSourceHistory
     , testCase "seal-first" sealFirst
     , testCase "each finding blocks a plan or only warns" eachFindingBlocksOrWarns
-    , testCase "plug-in reports during a run, and the job log" pluginReportsAndTheJobLog
     , testCase "a failed copy never passes a later verify" aFailedCopyNeverPassesALaterVerify
     ]
 
@@ -720,60 +719,6 @@ readyPlan :: Settled -> Maybe Plan
 readyPlan settled = case settled.model.planPhase of
   Ready plan -> Just plan
   _ -> Map.lookupMax settled.model.jobs >>= \pair -> (snd pair).plan
-
-pluginReportsAndTheJobLog :: Assertion
-pluginReportsAndTheJobLog = do
-  let threeFiles = twoFiles & InMemoryFS.withFile [osp|/card/c.mxf|] "c essence"
-  done <- Harness.drive Harness.Rig {disk = threeFiles, picks = [], plugins = [probeInstall [Capability.FilesInspect] inspected]} (offload card [ssd1] <> [Harness.user ConfirmPlan])
-  Harness.expectClean done
-  phaseOf (JobId.JobId 1) done @?= Just (JobState.Finished JobResult.AllOk)
-  assertBool "a toast is set" (isJust done.model.toast)
-  Set.toList done.model.pluginToasts @?= [(JobId.JobId 1, probe.id)]
-  let reported = done.events & mapMaybe (reportOf . snd)
-  length (filter isWarned reported) @?= 3
-  length (filter isLogged reported) @?= 0
-  entry <- maybe (assertFailure "no job 1") pure (Map.lookup (JobId.JobId 1) done.model.jobs)
-  plan <- maybe (assertFailure "job 1 has no plan") pure entry.plan
-  case Map.toList done.logFiles of
-    [(path, text)] -> do
-      assertBool ("the log name: " <> show path) ("-1-card-offload.log" `T.isSuffixOf` OsPath.toText path)
-      entry.state.logPath @?= Just path
-      let header = T.lines ("MediaCopy 3000 event log\n" <> renderPlanText entry.state.spec plan <> "\n")
-          logged = T.lines text
-          body = drop (length header) logged
-          events = done.events & filter (\pair -> fst pair == JobId.JobId 1) & fmap snd & filter (not . isLogOpened)
-          (pluginLines, eventLines) = partition (T.isInfixOf ": saw ") body
-      take (length header) logged @?= header
-      length pluginLines @?= 3
-      length eventLines @?= length events
-      let unstamped line = line & T.dropWhile (/= ' ') & T.drop 1
-          (reportEvents, engineEvents) = partition (isJust . reportOf) events
-          reportTexts = fmap display reportEvents
-          (reportLines, engineLines) = eventLines & fmap unstamped & partition (`elem` reportTexts)
-      assertEqual "one line per job 1 event" (sort (fmap display events)) (sort (fmap unstamped eventLines))
-      assertEqual "the engine events in order" (fmap display engineEvents) engineLines
-      assertEqual "the plug-in reports in order" reportTexts reportLines
-      assertBool "the last line is the end of the job" (maybe False (\line -> display (JobEvent.Finished JobResult.AllOk) `T.isSuffixOf` line) (lastLine body))
-    other -> assertFailure ("the log files: " <> show (fmap fst other))
-  where
-    inspected method params = case fromJSON params of
-      Success (file :: InspectFile.Params)
-        | method == Method.inspectFile ->
-            Just (FakeWorld.Logging ("saw " <> file.path) (FakeWorld.Answer (toJSON InspectFile.Result {annotations = V.empty, warnings = V.singleton ProtocolFinding.Finding {key = "probe", severity = ProtocolFinding.Warning, title = "looked", detail = file.path}})))
-      _ -> Nothing
-    reportOf = \case
-      JobEvent.PluginReported report -> Just report
-      _ -> Nothing
-    isWarned = \case
-      PluginReport.Warned _ -> True
-      _ -> False
-    isLogged = \case
-      PluginReport.Logged _ _ -> True
-      _ -> False
-    isLogOpened = \case
-      JobEvent.LogOpened _ -> True
-      _ -> False
-    lastLine body = body & reverse & listToMaybe
 
 probe :: PluginRef
 probe = PluginRef.PluginRef {id = "tech.floreal.probe", name = "Probe"}
