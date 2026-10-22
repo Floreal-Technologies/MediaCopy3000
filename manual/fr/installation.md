@@ -52,8 +52,8 @@ sudo pacman -U ./mediacopy3000-1.2.3-archlinux-x86_64.pkg.tar.zst
 flatpak install --user ./mediacopy3000-1.2.3-x86_64.flatpak
 ```
 
-Ce paquet nécessite l'environnement d'exécution `org.gnome.Platform`, version
-49. Flatpak le récupère depuis Flathub lorsque votre système ne le possède pas.
+Ce paquet nécessite l'environnement d'exécution `org.gnome.Platform`. Flatpak le
+récupère depuis Flathub lorsque votre système ne le possède pas.
 
 ### L'archive Linux
 

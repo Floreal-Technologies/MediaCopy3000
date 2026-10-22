@@ -434,7 +434,7 @@ For the Flatpak version of MediaCopy 3000, ship the plug-in as a Flatpak extensi
 1. Give the extension the identifier `tech.floreal.MediaCopy3000.Plugin.<identifier>`, for example
    `tech.floreal.MediaCopy3000.Plugin.tech.floreal.credits`.
 2. Install `plugin.json` and the program at the root of the extension.
-3. Build the program for the runtime `org.gnome.Platform`, version 49.
+3. Build the program for the `org.gnome.Platform` runtime that MediaCopy 3000 uses.
 
 A Flatpak identifier allows the character `-` only in its last part, and no part can start with a
 digit. If the identifier of the plug-in breaks these rules, it cannot be the name of an extension.

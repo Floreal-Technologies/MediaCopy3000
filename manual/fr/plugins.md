@@ -451,7 +451,7 @@ Pour la version Flatpak de MediaCopy 3000, distribuez l’extension comme une ex
 1. Donnez à l’extension Flatpak l’identifiant `tech.floreal.MediaCopy3000.Plugin.<identifiant>`, par exemple
    `tech.floreal.MediaCopy3000.Plugin.tech.floreal.credits`.
 2. Installez `plugin.json` et le programme à la racine de l’extension Flatpak.
-3. Compilez le programme pour l’environnement d’exécution `org.gnome.Platform`, version 49.
+3. Compilez le programme pour l’environnement d’exécution `org.gnome.Platform` qu’utilise MediaCopy 3000.
 
 Un identifiant Flatpak n’accepte le caractère `-` que dans sa dernière partie, et aucune partie ne
 peut commencer par un chiffre. Si l’identifiant de l’extension ne respecte pas ces règles, il ne
