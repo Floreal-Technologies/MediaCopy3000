@@ -13,7 +13,7 @@ jobs:
       test-matrix: ${{ steps.set-test-matrix.outputs.matrix }}
       release-matrix: ${{ steps.extend-release-matrix.outputs.matrix }}
       primary: ${{ steps.primary.outputs.entry }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Extract the tested GHC versions (tests)
         id: set-test-matrix
@@ -430,7 +430,7 @@ jobs:
   release:
     name: Publish release
     needs: [packages, package-windows]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
     env:
