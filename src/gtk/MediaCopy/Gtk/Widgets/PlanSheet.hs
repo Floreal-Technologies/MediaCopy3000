@@ -182,7 +182,7 @@ data SealControls = SealControls
 newSealGroup :: (UiMessage -> IO ()) -> IO SealControls
 newSealGroup dispatch = do
   group <- new Adw.PreferencesGroup [#title := "Before Copying"]
-  sealSwitch <- new Adw.SwitchRow [#title := "Seal the media source first", #active := False]
+  sealSwitch <- new Adw.SwitchRow [#title := "Seal the media source first", #active := True]
   policySwitch <- new Adw.SwitchRow [#title := "Copy anyway if the seal finds a problem", #active := False]
   resumeButton <- new Gtk.CheckButton [#label := "Resume", #valign := Gtk.AlignCenter]
   replaceButton <- new Gtk.CheckButton [#label := "Replace", #valign := Gtk.AlignCenter]
