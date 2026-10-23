@@ -40,6 +40,7 @@ expectedWording wording =
     <> map (humanBytes wording) [0, 12_288, 999_500, 95_600_000_000, 2_500_000_000_000]
     <> map (humanRate wording) [0, 1.1e9]
     <> map (humanEta wording) [34, 125, 3_720]
+    <> map (humanPercent wording) [0, 42]
     <> map (runningVerbText wording) [minBound ..]
     <> map (\doing -> quietLine wording doing 25) (JobState.WritingManifest : map JobState.OnFile fileStatuses)
     <> map (jobKindText wording) [minBound ..]

@@ -79,7 +79,7 @@ instance Plugin.JsonSchema Field where
              , object ["if" .= kindIs "authors", "then" .= object ["not" .= object ["required" .= ["default" :: Text]]]]
              ]
       ]
-      & JsonSchema.describe "A setting or a job field. The kind authors is allowed only in settings, only once, only with manifest.write, and without default. Its stored value and its value in initialize are arrays of authorSlot."
+      & JsonSchema.describe "A setting or a job field. The kind authors is allowed only in settings, only once, only with manifest.write, and without default. Its stored value and its value in initialise are arrays of authorSlot."
     where
       kindIs :: Text -> Value
       kindIs name = object ["properties" .= object ["kind" .= object ["const" .= name]]]

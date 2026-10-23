@@ -84,7 +84,7 @@ buildAndPresent loopRef environment startup app = do
   installTicker environment startup widgets.window dispatchNow
   widgets.render model
   Gtk.windowPresent widgets.window
-  when (isNothing startup) (perform runtime LoadCatalog)
+  when (isNothing startup) (perform runtime LoadCatalogue)
   forM_ startup (seeded environment widgets.window (\command -> command & RunCommand & Ui & dispatchNow) (replaceModel runtime))
 
 installCloseRequest :: Adw.ApplicationWindow -> (Message -> IO ()) -> IO ()

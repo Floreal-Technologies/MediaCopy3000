@@ -24,8 +24,8 @@ import MediaCopy.Domain.Offload (Offload)
 import MediaCopy.Domain.Offload qualified as Offload
 import MediaCopy.Domain.Plan (Plan)
 import MediaCopy.Domain.Plan qualified as Plan
-import MediaCopy.Domain.PluginCatalog (PluginCatalog)
-import MediaCopy.Domain.PluginCatalog qualified as PluginCatalog
+import MediaCopy.Domain.PluginCatalogue (PluginCatalogue)
+import MediaCopy.Domain.PluginCatalogue qualified as PluginCatalogue
 import MediaCopy.Domain.PluginFinding qualified as PluginFinding
 import MediaCopy.Domain.PluginRef qualified as PluginRef
 import MediaCopy.Domain.PluginReport qualified as PluginReport
@@ -74,7 +74,7 @@ data Model = Model
   , now :: UTCTime
   , closeConfirm :: Bool
   , wording :: Wording
-  , plugins :: PluginCatalog
+  , plugins :: PluginCatalogue
   , pluginToasts :: Set (JobId, Text)
   , palette :: Maybe Text
   }
@@ -98,7 +98,7 @@ initialModel t desktop accent =
     , now = t
     , closeConfirm = False
     , wording = embeddedWording English
-    , plugins = PluginCatalog.empty
+    , plugins = PluginCatalogue.empty
     , pluginToasts = Set.empty
     , palette = Nothing
     }
@@ -122,7 +122,7 @@ data UiMessage
   | ConfirmClose
   | CancelClose
   | DismissToast
-  | ChangePlugin PluginCatalog.Change
+  | ChangePlugin PluginCatalogue.Change
   | PickPluginPath Text Text
   | OpenPluginFolder Text
   | ReloadPlugins
@@ -148,7 +148,7 @@ data Message
   | DesktopAccent Accent
   | ShowToast Text
   | WordingReloaded Wording
-  | CatalogLoaded PluginCatalog
+  | CatalogueLoaded PluginCatalogue
   deriving stock (Eq, Show)
 
 data DialogKind = PickFolder | PickFile | SaveAs Text Text
@@ -161,8 +161,8 @@ data AppEffect
   | LoadHistory JobId OsPath
   | WriteFile OsPath Text
   | DestroyWindow
-  | LoadCatalog
-  | ApplyChange PluginCatalog.Change
+  | LoadCatalogue
+  | ApplyChange PluginCatalogue.Change
   | ShowFolder Text
   | ShowChrome Chrome
 
@@ -250,7 +250,7 @@ update msg model = case msg of
   DesktopAccent wanted -> (model {desktopAccent = wanted}, [])
   ShowToast message -> (model {toast = Just message}, [])
   WordingReloaded wording -> (model {wording}, [])
-  CatalogLoaded catalog -> (model & #plugins .~ catalog, [])
+  CatalogueLoaded catalogue -> (model & #plugins .~ catalogue, [])
 
 updateUi :: UiMessage -> Model -> (Model, List AppEffect)
 updateUi msg model = case msg of
@@ -279,9 +279,9 @@ updateUi msg model = case msg of
   CancelClose -> (model {closeConfirm = False}, [])
   DismissToast -> (model {toast = Nothing}, [])
   ChangePlugin change -> (model, [ApplyChange change])
-  PickPluginPath pluginId key -> (model, [OpenDialog PickFile (\path -> OsPath.toText path & PluginCatalog.SettingText & PluginCatalog.SetSetting key & PluginCatalog.Change pluginId & ChangePlugin & Ui)])
+  PickPluginPath pluginId key -> (model, [OpenDialog PickFile (\path -> OsPath.toText path & PluginCatalogue.SettingText & PluginCatalogue.SetSetting key & PluginCatalogue.Change pluginId & ChangePlugin & Ui)])
   OpenPluginFolder folder -> (model, [ShowFolder folder])
-  ReloadPlugins -> (model, [LoadCatalog])
+  ReloadPlugins -> (model, [LoadCatalogue])
   SetJobField pluginId key value -> setJobField pluginId key value model
   PickJobFieldPath pluginId key -> (model, [OpenDialog PickFile (\path -> OsPath.toText path & SetJobField pluginId key & Ui)])
   ClosePalette -> (model {palette = Nothing}, [])

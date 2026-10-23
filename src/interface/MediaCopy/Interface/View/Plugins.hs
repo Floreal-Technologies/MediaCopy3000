@@ -11,25 +11,25 @@ import Data.Vector qualified as V
 import MediaCopy.Plugin.Capability qualified as Capability
 import MediaCopy.Plugin.Capability qualified as Plugin (Capability)
 
-import MediaCopy.Domain.PluginCatalog qualified as PluginCatalog
+import MediaCopy.Domain.PluginCatalogue qualified as PluginCatalogue
 
 -- |
 -- >>> fmap answerText answers
 -- "Not answered" :| ["Granted","Declined"]
-answers :: NonEmpty PluginCatalog.Answer
-answers = PluginCatalog.Unanswered :| [PluginCatalog.Granted, PluginCatalog.Declined]
+answers :: NonEmpty PluginCatalogue.Answer
+answers = PluginCatalogue.Unanswered :| [PluginCatalogue.Granted, PluginCatalogue.Declined]
 
-entrySubtitle :: PluginCatalog.Entry -> Text
+entrySubtitle :: PluginCatalogue.Entry -> Text
 entrySubtitle entry = T.intercalate " · " (entry.version : T.intercalate ", " (V.toList (V.map (Capability.toText . (.capability)) entry.capabilities)) : maybe [] pure entry.problem)
 
-capabilitySubtitle :: PluginCatalog.CapabilityView -> Text
-capabilitySubtitle view = capabilityText view.capability <> (if view.answer == PluginCatalog.Unanswered then " – not answered yet" else "")
+capabilitySubtitle :: PluginCatalogue.CapabilityView -> Text
+capabilitySubtitle view = capabilityText view.capability <> (if view.answer == PluginCatalogue.Unanswered then " – not answered yet" else "")
 
-answerText :: PluginCatalog.Answer -> Text
+answerText :: PluginCatalogue.Answer -> Text
 answerText = \case
-  PluginCatalog.Unanswered -> "Not answered"
-  PluginCatalog.Granted -> "Granted"
-  PluginCatalog.Declined -> "Declined"
+  PluginCatalogue.Unanswered -> "Not answered"
+  PluginCatalogue.Granted -> "Granted"
+  PluginCatalogue.Declined -> "Declined"
 
 capabilityText :: Plugin.Capability -> Text
 capabilityText = \case

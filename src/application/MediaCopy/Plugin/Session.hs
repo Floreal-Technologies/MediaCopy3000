@@ -32,7 +32,7 @@ import MediaCopy.Plugin.Capability qualified as Plugin (Capability)
 import MediaCopy.Plugin.Id qualified as Id
 import MediaCopy.Plugin.Manifest qualified as Manifest
 import MediaCopy.Plugin.Protocol.Contribute qualified as Contribute
-import MediaCopy.Plugin.Protocol.Initialize qualified as Initialize
+import MediaCopy.Plugin.Protocol.Initialise qualified as Initialise
 import MediaCopy.Plugin.Protocol.InspectFile qualified as InspectFile
 import MediaCopy.Plugin.Protocol.InspectPlan qualified as InspectPlan
 import MediaCopy.Plugin.Protocol.JobInfo qualified as JobInfo
@@ -199,7 +199,7 @@ startMember registry config stage plan ready = do
       broken <- newTVarIO Nothing
       started <- newEmptyTMVarIO
       let params =
-            Initialize.Params
+            Initialise.Params
               { api = Api.major
               , minor = Api.minor
               , app = T.pack (showVersion version)
@@ -253,7 +253,7 @@ runWorker
   :: (Connection.Host es)
   => Config es
   -> Connection.Launch es
-  -> Initialize.Params
+  -> Initialise.Params
   -> PluginRef
   -> TQueue Work
   -> TVar Int
@@ -278,9 +278,9 @@ runWorker config launch params ref mailbox queued skippedFiles broken started = 
               atomically (unGetTQueue mailbox (Inspect file))
               giveUp callFault
     connected conn =
-      Connection.call conn (Connection.Fixed 10) Method.initialize params >>= \case
+      Connection.call conn (Connection.Fixed 10) Method.initialise params >>= \case
         Left callFault -> pure (Left callFault)
-        Right (answer :: Initialize.Result)
+        Right (answer :: Initialise.Result)
           | answer.api /= Api.major -> pure (Left (Connection.Refused ("answered with plug-in API " <> T.show answer.api)))
           | otherwise -> do
               void (atomically (tryPutTMVar started (Right ())))

@@ -1,4 +1,4 @@
-module MediaCopy.Plugin.Catalog
+module MediaCopy.Plugin.Catalogue
   ( load
   , apply
   , editGrants
@@ -31,8 +31,8 @@ import System.OsPath (takeDirectory)
 
 import MediaCopy.Domain.FieldView (FieldView)
 import MediaCopy.Domain.FieldView qualified as FieldView
-import MediaCopy.Domain.PluginCatalog (PluginCatalog)
-import MediaCopy.Domain.PluginCatalog qualified as PluginCatalog
+import MediaCopy.Domain.PluginCatalogue (PluginCatalogue)
+import MediaCopy.Domain.PluginCatalogue qualified as PluginCatalogue
 import MediaCopy.Domain.PluginRef qualified as PluginRef
 import MediaCopy.Effects.FileSystem (FileSystem)
 import MediaCopy.Effects.FileSystem qualified as FileSystem
@@ -44,26 +44,26 @@ import MediaCopy.Plugin.Installed qualified as Installed
 import MediaCopy.Plugin.Installed qualified as Plugin (Installed)
 import MediaCopy.Plugin.Setup qualified as Setup
 
-load :: (FileSystem :> es, Environment :> es, Xdg :> es) => Eff es PluginCatalog
+load :: (FileSystem :> es, Environment :> es, Xdg :> es) => Eff es PluginCatalogue
 load = do
   setup <- Setup.load
   pure
-    PluginCatalog.PluginCatalog
+    PluginCatalogue.PluginCatalogue
       { entries = V.map (entryOf setup.grants) setup.installed
       , rejected = V.map (\entry -> (OsPath.toText entry.folder, entry.reason)) setup.rejected
       , problem = setup.grantsProblem
       }
 
-entryOf :: Map.Map Plugin.Id Plugin.Grant -> Plugin.Installed -> PluginCatalog.Entry
+entryOf :: Map.Map Plugin.Id Plugin.Grant -> Plugin.Installed -> PluginCatalogue.Entry
 entryOf grantMap installed =
-  PluginCatalog.Entry
+  PluginCatalogue.Entry
     { plugin = PluginRef.PluginRef {id = pluginId, name = manifest.name}
     , version = manifest.version
     , description = manifest.description
     , folder = OsPath.toText installed.folder
     , enabled
     , trace = maybe False (.trace) grant
-    , capabilities = V.map (\capability -> PluginCatalog.CapabilityView {capability, answer = answerOf capability}) manifest.capabilities
+    , capabilities = V.map (\capability -> PluginCatalogue.CapabilityView {capability, answer = answerOf capability}) manifest.capabilities
     , settings
     , jobFields = V.map (settingView Map.empty) manifest.jobFields <> V.concatMap (\view -> FieldView.authorFields view.key (FieldView.authorSlots view.value)) settings
     , active = isRight activated
@@ -76,9 +76,9 @@ entryOf grantMap installed =
     enabled = maybe False (.enabled) grant
     answerOf capability = case grant of
       Just g
-        | Set.member capability g.grants -> PluginCatalog.Granted
-        | Set.member capability g.declined -> PluginCatalog.Declined
-      _ -> PluginCatalog.Unanswered
+        | Set.member capability g.grants -> PluginCatalogue.Granted
+        | Set.member capability g.declined -> PluginCatalogue.Declined
+      _ -> PluginCatalogue.Unanswered
     stored = maybe Map.empty (.settings) grant
     settings = V.map (settingView stored) manifest.settings
     activated = Setup.activate grantMap installed
@@ -101,7 +101,7 @@ valueText = \case
   Bool False -> "false"
   other -> decodeUtf8Lenient (LBS.toStrict (encodePretty other))
 
-apply :: (FileSystem :> es, Environment :> es, Xdg :> es) => PluginCatalog.Change -> Eff es (Either Text ())
+apply :: (FileSystem :> es, Environment :> es, Xdg :> es) => PluginCatalogue.Change -> Eff es (Either Text ())
 apply change = do
   path <- Grant.path
   current <- Grant.readJson path
@@ -113,8 +113,8 @@ apply change = do
         FileSystem.writeTextAtomically path (decodeUtf8Lenient (LBS.toStrict (encodePretty edited)) <> "\n")
       pure (either (\e -> Left ("plugins.json cannot be written: " <> T.show e)) Right written)
 
-editGrants :: PluginCatalog.Change -> Value -> Either Text Value
-editGrants (PluginCatalog.Change pluginId edit) = \case
+editGrants :: PluginCatalogue.Change -> Value -> Either Text Value
+editGrants (PluginCatalogue.Change pluginId edit) = \case
   Object root -> do
     plugins <- objectAt "plugins" root
     entry <- objectAt pluginId plugins
@@ -131,23 +131,23 @@ editGrants (PluginCatalog.Change pluginId edit) = \case
       _ -> []
     setTexts name values entry = KeyMap.insert name (toJSON (Set.toList (Set.fromList values))) entry
     editEntry entry = case edit of
-      PluginCatalog.SetEnabled on -> KeyMap.insert "enabled" (Bool on) entry
-      PluginCatalog.SetTrace on -> KeyMap.insert "trace" (Bool on) entry
-      PluginCatalog.SetAnswer capability answer ->
+      PluginCatalogue.SetEnabled on -> KeyMap.insert "enabled" (Bool on) entry
+      PluginCatalogue.SetTrace on -> KeyMap.insert "trace" (Bool on) entry
+      PluginCatalogue.SetAnswer capability answer ->
         let name = Capability.toText capability
             grants = filter (/= name) (texts "grants" entry)
             declined = filter (/= name) (texts "declined" entry)
         in case answer of
-             PluginCatalog.Granted -> setTexts "grants" (name : grants) (setTexts "declined" declined entry)
-             PluginCatalog.Declined -> setTexts "grants" grants (setTexts "declined" (name : declined) entry)
-             PluginCatalog.Unanswered -> setTexts "grants" grants (setTexts "declined" declined entry)
-      PluginCatalog.SetSetting key setting ->
+             PluginCatalogue.Granted -> setTexts "grants" (name : grants) (setTexts "declined" declined entry)
+             PluginCatalogue.Declined -> setTexts "grants" grants (setTexts "declined" (name : declined) entry)
+             PluginCatalogue.Unanswered -> setTexts "grants" grants (setTexts "declined" declined entry)
+      PluginCatalogue.SetSetting key setting ->
         let settings = fromRight KeyMap.empty (objectAt "settings" entry)
             json = case setting of
-              PluginCatalog.SettingText text -> String text
-              PluginCatalog.SettingBool flag -> Bool flag
-              PluginCatalog.SettingAuthors slots -> toJSON slots
+              PluginCatalogue.SettingText text -> String text
+              PluginCatalogue.SettingBool flag -> Bool flag
+              PluginCatalogue.SettingAuthors slots -> toJSON slots
         in KeyMap.insert "settings" (Object (KeyMap.insert (Key.fromText key) json settings)) entry
-      PluginCatalog.ClearSetting key ->
+      PluginCatalogue.ClearSetting key ->
         let settings = fromRight KeyMap.empty (objectAt "settings" entry)
         in KeyMap.insert "settings" (Object (KeyMap.delete (Key.fromText key) settings)) entry

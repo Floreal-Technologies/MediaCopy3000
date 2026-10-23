@@ -20,7 +20,7 @@ import MediaCopy.Plugin.Protocol.FileInfo qualified as Protocol (FileInfo)
 import MediaCopy.Plugin.Protocol.Finding qualified as Finding
 import MediaCopy.Plugin.Protocol.Finding qualified as Protocol (Finding)
 import MediaCopy.Plugin.Protocol.HashValue qualified as HashValue
-import MediaCopy.Plugin.Protocol.Initialize qualified as Initialize
+import MediaCopy.Plugin.Protocol.Initialise qualified as Initialise
 import MediaCopy.Plugin.Protocol.InspectFile qualified as InspectFile
 import MediaCopy.Plugin.Protocol.InspectPlan qualified as InspectPlan
 import MediaCopy.Plugin.Protocol.JobInfo qualified as JobInfo
@@ -37,8 +37,8 @@ tests =
 
 protocolMessagesRoundTrip :: Property
 protocolMessagesRoundTrip = property $ do
-  roundTrips (Initialize.Params <$> genInt <*> genInt <*> Generators.genText <*> Generators.genText <*> Generators.genText <*> genMap <*> genMap <*> genVector Gen.enumBounded <*> Generators.genValue)
-  roundTrips (Initialize.Result <$> genInt)
+  roundTrips (Initialise.Params <$> genInt <*> genInt <*> Generators.genText <*> Generators.genText <*> Generators.genText <*> genMap <*> genMap <*> genVector Gen.enumBounded <*> Generators.genValue)
+  roundTrips (Initialise.Result <$> genInt)
   roundTrips (InspectPlan.Params <$> genJob <*> genVector genFile <*> genSize)
   roundTrips (InspectPlan.Result <$> genVector genFinding)
   roundTrips (Contribute.Params <$> genJob <*> genVector genFile)

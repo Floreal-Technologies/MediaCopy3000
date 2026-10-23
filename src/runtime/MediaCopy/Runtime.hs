@@ -31,7 +31,7 @@ import MediaCopy.Domain.JobSpec (JobSpec)
 import MediaCopy.Domain.JobSpec qualified as JobSpec
 import MediaCopy.Domain.Plan (Plan)
 import MediaCopy.Domain.Plan qualified as Plan
-import MediaCopy.Domain.PluginCatalog qualified as PluginCatalog
+import MediaCopy.Domain.PluginCatalogue qualified as PluginCatalogue
 import MediaCopy.Domain.PluginReport (PluginReport)
 import MediaCopy.Domain.PluginReport qualified as PluginReport
 import MediaCopy.Effects.AppStack (AppStack)
@@ -45,7 +45,7 @@ import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Wording (noHistoryText)
 import MediaCopy.Mhl.Store qualified as Store
 import MediaCopy.Model
-import MediaCopy.Plugin.Catalog qualified as Catalog
+import MediaCopy.Plugin.Catalogue qualified as Catalogue
 import MediaCopy.Plugin.Ready qualified as Plugin (Ready)
 import MediaCopy.Plugin.Session qualified as Session
 import MediaCopy.Plugin.Setup qualified as Setup
@@ -74,7 +74,7 @@ data Runtime = Runtime
   , engine :: IORef (Maybe (JobId, Async ()))
   , planner :: IORef (Maybe (JobId, Async ()))
   , workers :: IORef (Set (Async ()))
-  , catalogLock :: MVar ()
+  , catalogueLock :: MVar ()
   , threads :: TVar Int
   }
 
@@ -86,9 +86,9 @@ newRuntime shell runner model = do
   engine <- newIORef Nothing
   planner <- newIORef Nothing
   workers <- newIORef Set.empty
-  catalogLock <- newMVar ()
+  catalogueLock <- newMVar ()
   threads <- newTVarIO 0
-  pure Runtime {shell, runner, modelRef, busy, pending, engine, planner, workers, catalogLock, threads}
+  pure Runtime {shell, runner, modelRef, busy, pending, engine, planner, workers, catalogueLock, threads}
 
 -- | Fold a message through 'update', render the new model, and run its effects. A message sent
 -- while the loop runs waits in a queue and runs after the current one. A message that throws
@@ -172,7 +172,7 @@ runEffect runtime model effect = toasting runtime $ case effect of
   LoadHistory jobId folder -> loadHistory runtime wording jobId folder
   WriteFile path text -> run runtime (FileSystem.writeTextAtomically path text)
   DestroyWindow -> runtime.shell.destroyWindow
-  LoadCatalog -> void $ counted runtime (withMVar runtime.catalogLock (const (reloadCatalog runtime)))
+  LoadCatalogue -> void $ counted runtime (withMVar runtime.catalogueLock (const (reloadCatalogue runtime)))
   ApplyChange change -> changeWorker runtime change
   ShowFolder folder -> runtime.shell.showFolder folder
   ShowChrome chrome -> runtime.shell.showChrome chrome
@@ -219,20 +219,20 @@ toasting runtime action = guarded action >>= either (toastFailure runtime) pure
 toastFailure :: Runtime -> SomeException -> IO ()
 toastFailure runtime err = runtime.shell.post (ShowToast (T.pack (displayException err)))
 
-changeWorker :: Runtime -> PluginCatalog.Change -> IO ()
+changeWorker :: Runtime -> PluginCatalogue.Change -> IO ()
 changeWorker runtime change =
-  void $ counted runtime $ withMVar runtime.catalogLock $ \() -> do
-    guarded (run runtime (Catalog.apply change)) >>= \case
+  void $ counted runtime $ withMVar runtime.catalogueLock $ \() -> do
+    guarded (run runtime (Catalogue.apply change)) >>= \case
       Left err -> toastFailure runtime err
       Right (Left problem) -> runtime.shell.post (ShowToast problem)
       Right (Right ()) -> pure ()
-    reloadCatalog runtime
+    reloadCatalogue runtime
 
-reloadCatalog :: Runtime -> IO ()
-reloadCatalog runtime =
-  guarded (run runtime Catalog.load) >>= \case
+reloadCatalogue :: Runtime -> IO ()
+reloadCatalogue runtime =
+  guarded (run runtime Catalogue.load) >>= \case
     Left err -> toastFailure runtime err
-    Right catalog -> runtime.shell.post (CatalogLoaded catalog)
+    Right catalogue -> runtime.shell.post (CatalogueLoaded catalogue)
 
 startJob :: Runtime -> Wording -> Plan -> IO ()
 startJob runtime wording plan = do

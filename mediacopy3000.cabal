@@ -91,7 +91,7 @@ library domain
     MediaCopy.Domain.PlannedGeneration
     MediaCopy.Domain.PlannedWrite
     MediaCopy.Domain.PlanStep
-    MediaCopy.Domain.PluginCatalog
+    MediaCopy.Domain.PluginCatalogue
     MediaCopy.Domain.PluginFinding
     MediaCopy.Domain.PluginPlan
     MediaCopy.Domain.PluginRef
@@ -136,7 +136,7 @@ library application
     MediaCopy.Engine.PlanViolation
     MediaCopy.EventLog
     MediaCopy.Mhl.Store
-    MediaCopy.Plugin.Catalog
+    MediaCopy.Plugin.Catalogue
     MediaCopy.Plugin.Connection
     MediaCopy.Plugin.Connection.Native
     MediaCopy.Plugin.Discovery
@@ -426,7 +426,7 @@ test-suite core-test
     MediaCopy.Domain.HashFormatTest
     MediaCopy.Domain.JobTest
     MediaCopy.Domain.PartTest
-    MediaCopy.Domain.PluginCatalogTest
+    MediaCopy.Domain.PluginCatalogueTest
     MediaCopy.Domain.PluginReportTest
     MediaCopy.Effects.FileSystemTest
     MediaCopy.FlowTest
@@ -434,7 +434,7 @@ test-suite core-test
     MediaCopy.Interface.View.PlanSheetTest
     MediaCopy.Interface.WordingTest
     MediaCopy.ModelTest
-    MediaCopy.Plugin.CatalogTest
+    MediaCopy.Plugin.CatalogueTest
     MediaCopy.Plugin.FieldsTest
     MediaCopy.Plugin.SetupTest
     MediaCopy.Plugin.WireTest

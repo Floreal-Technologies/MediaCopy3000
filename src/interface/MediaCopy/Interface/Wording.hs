@@ -3,6 +3,7 @@ module MediaCopy.Interface.Wording
   , humanBytes
   , humanRate
   , humanEta
+  , humanPercent
   , resultText
   , jobFinishedToast
   , jobFailedToast
@@ -60,26 +61,56 @@ import MediaCopy.Interface.Translation.Messages
 count :: (Show a) => a -> Text
 count n = T.show n
 
+-- |
+-- >>> humanBytes (embeddedWording English) 95_600_000_000
+-- "95.6 GB"
+-- >>> humanBytes (embeddedWording French) 12_288
+-- "12\160ko"
+-- >>> humanBytes (embeddedWording French) 95_600_000_000
+-- "95,6\160Go"
 humanBytes :: Wording -> Int64 -> Text
 humanBytes wording n
-  | n < 1_000 = count n <> " B"
-  | n < 999_500 = count (round (bytes / 1e3) :: Int64) <> " KB"
-  | n < 999_950_000 = decimal wording (bytes / 1e6) <> " MB"
-  | n < 999_950_000_000 = decimal wording (bytes / 1e9) <> " GB"
-  | otherwise = decimal wording (bytes / 1e12) <> " TB"
+  | n < 1_000 = sized sizeBytes (count n)
+  | n < 999_500 = sized sizeKilobytes (count (round (bytes / 1e3) :: Int64))
+  | n < 999_950_000 = sized sizeMegabytes (decimal wording (bytes / 1e6))
+  | n < 999_950_000_000 = sized sizeGigabytes (decimal wording (bytes / 1e9))
+  | otherwise = sized sizeTerabytes (decimal wording (bytes / 1e12))
   where
     bytes = fromIntegral n :: Double
+    sized reference size = getTranslation wording reference [("size", str size)]
 
+-- |
+-- >>> humanRate (embeddedWording French) 0
+-- "0\160o/s"
+-- >>> humanRate (embeddedWording French) 1.1e9
+-- "1,1\160Go/s"
 humanRate :: Wording -> Double -> Text
-humanRate wording bytesPerSecond
-  | not (isNormalPositive bytesPerSecond) = "0 B/s"
-  | otherwise = humanBytes wording (round bytesPerSecond) <> "/s"
+humanRate wording bytesPerSecond = getTranslation wording sizePerSecond [("size", str (humanBytes wording bytes))]
+  where
+    bytes
+      | isNormalPositive bytesPerSecond = round bytesPerSecond
+      | otherwise = 0
 
+-- |
+-- >>> humanPercent (embeddedWording English) 42
+-- "42 %"
+-- >>> humanPercent (embeddedWording French) 42
+-- "42\160%"
+humanPercent :: Wording -> Int -> Text
+humanPercent wording percent = getTranslation wording progressPercent [("percent", str (count percent))]
+
+-- |
+-- >>> humanEta (embeddedWording English) 125
+-- "2 min 05 s"
+-- >>> humanEta (embeddedWording French) 185
+-- "3\160min 5\160s"
+-- >>> humanEta (embeddedWording French) 3_900
+-- "1\160h 5\160min"
 humanEta :: Wording -> Double -> Text
 humanEta wording seconds
   | total < 60 = getTranslation wording durationSeconds [("seconds", str (count total))]
-  | total < 3_600 = getTranslation wording durationMinutes [("minutes", str (count (total `div` 60))), ("seconds", str (pad2 (total `mod` 60)))]
-  | otherwise = getTranslation wording durationHours [("hours", str (count (total `div` 3_600))), ("minutes", str (pad2 (total `mod` 3_600 `div` 60)))]
+  | total < 3_600 = getTranslation wording durationMinutes [("minutes", str (count (total `div` 60))), ("seconds", str (subunit wording (total `mod` 60)))]
+  | otherwise = getTranslation wording durationHours [("hours", str (count (total `div` 3_600))), ("minutes", str (subunit wording (total `mod` 3_600 `div` 60)))]
   where
     total
       | isNormalPositive seconds = round seconds :: Int
@@ -145,8 +176,10 @@ decimal wording = case wording.language of
   English -> English.decimal
   French -> French.decimal
 
-pad2 :: Int -> Text
-pad2 n = T.justifyRight 2 '0' (count n)
+subunit :: Wording -> Int -> Text
+subunit wording = case wording.language of
+  English -> English.subunit
+  French -> French.subunit
 
 -- |
 -- >>> resultText (embeddedWording English) Job.SealKind JobResult.AllOk
@@ -267,7 +300,7 @@ pluginFaultText wording = \case
 -- |
 -- >>> let probe = PluginRef.PluginRef {id = "tech.floreal.probe", name = "Probe"}
 -- >>> pluginFindingTexts (embeddedWording French) PluginFinding.PluginFinding {plugin = probe, severity = Severity.Blocker, about = PluginFinding.Faulted (PluginFinding.Unavailable "timed out after 30 s")}
--- ("Probe : extension indisponible","timed out after 30 s")
+-- ("Probe\160: extension indisponible","timed out after 30 s")
 pluginFindingTexts :: Wording -> PluginFinding -> (Text, Text)
 pluginFindingTexts wording finding = (titled title, detail)
   where

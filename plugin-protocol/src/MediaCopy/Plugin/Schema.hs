@@ -29,7 +29,7 @@ import MediaCopy.Plugin.Protocol.FileInfo qualified as Protocol (FileInfo)
 import MediaCopy.Plugin.Protocol.Finding qualified as Finding
 import MediaCopy.Plugin.Protocol.Finding qualified as Protocol (Finding)
 import MediaCopy.Plugin.Protocol.HashValue qualified as Protocol (HashValue)
-import MediaCopy.Plugin.Protocol.Initialize qualified as Initialize
+import MediaCopy.Plugin.Protocol.Initialise qualified as Initialise
 import MediaCopy.Plugin.Protocol.InspectFile qualified as InspectFile
 import MediaCopy.Plugin.Protocol.InspectPlan qualified as InspectPlan
 import MediaCopy.Plugin.Protocol.JobInfo qualified as Protocol (JobInfo)
@@ -55,7 +55,7 @@ document
         , "description" .= String "JSON-RPC 2.0 protocol for MC3K and plugins"
         , "x-methods"
             .= object
-              [ method Method.initialize (JsonSchema.embed @Initialize.Params) (JsonSchema.embed @Initialize.Result)
+              [ method Method.initialise (JsonSchema.embed @Initialise.Params) (JsonSchema.embed @Initialise.Result)
               , method Method.inspectPlan (JsonSchema.embed @InspectPlan.Params) (JsonSchema.embed @InspectPlan.Result)
               , method Method.contribute (JsonSchema.embed @Contribute.Params) (JsonSchema.embed @Contribute.Result)
               , method Method.inspectFile (JsonSchema.embed @InspectFile.Params) (JsonSchema.embed @InspectFile.Result)
@@ -80,8 +80,8 @@ document
         , def @InspectFile.Annotation
         , def @Contribute.Author
         , def @Contribute.FileMetadata
-        , def @Initialize.Params
-        , def @Initialize.Result
+        , def @Initialise.Params
+        , def @Initialise.Result
         , def @InspectPlan.Params
         , def @InspectPlan.Result
         , def @Contribute.Params

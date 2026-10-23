@@ -15,7 +15,7 @@ module MediaCopy.Demo.Fixtures
   , partialPlan
   , verifyPlan
   , sealPlan
-  , pluginCatalog
+  , pluginCatalogue
   , pluginSpec
   , pluginPlan
   , pluginReports
@@ -71,8 +71,8 @@ import MediaCopy.Domain.Offload qualified as Offload
 import MediaCopy.Domain.Part qualified as Part
 import MediaCopy.Domain.Plan (Plan)
 import MediaCopy.Domain.Plan qualified as Plan
-import MediaCopy.Domain.PluginCatalog (PluginCatalog)
-import MediaCopy.Domain.PluginCatalog qualified as PluginCatalog
+import MediaCopy.Domain.PluginCatalogue (PluginCatalogue)
+import MediaCopy.Domain.PluginCatalogue qualified as PluginCatalogue
 import MediaCopy.Domain.PluginFinding qualified as PluginFinding
 import MediaCopy.Domain.PluginPlan qualified as PluginPlan
 import MediaCopy.Domain.PluginRef (PluginRef)
@@ -245,19 +245,19 @@ credits = PluginRef.PluginRef {id = "tech.floreal.credits", name = "Credits"}
 demoSlots :: Vector Plugin.AuthorSlot
 demoSlots = V.fromList [AuthorSlot.AuthorSlot "DIT" "Jane Doe" "jane@example.com" "", AuthorSlot.AuthorSlot "Camera operator" "" "" ""]
 
-pluginCatalog :: PluginCatalog
-pluginCatalog =
-  PluginCatalog.PluginCatalog
+pluginCatalogue :: PluginCatalogue
+pluginCatalogue =
+  PluginCatalogue.PluginCatalogue
     { entries =
         V.fromList
-          [ PluginCatalog.Entry
+          [ PluginCatalogue.Entry
               { plugin = credits
               , version = "1.0.0"
               , description = "Puts the names of the crew into each manifest that a job writes."
               , folder = "/home/you/.local/share/mediacopy3000/plugins/tech.floreal.credits"
               , enabled = True
               , trace = False
-              , capabilities = V.singleton (PluginCatalog.CapabilityView Capability.ManifestWrite PluginCatalog.Granted)
+              , capabilities = V.singleton (PluginCatalogue.CapabilityView Capability.ManifestWrite PluginCatalogue.Granted)
               , settings = V.singleton (FieldView.FieldView "authors" "Authors" Field.AuthorsField True (FieldView.AuthorList demoSlots))
               , jobFields = FieldView.authorFields "authors" demoSlots
               , active = True

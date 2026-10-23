@@ -60,7 +60,7 @@ library
     MediaCopy.Plugin.Protocol.FileInfo
     MediaCopy.Plugin.Protocol.Finding
     MediaCopy.Plugin.Protocol.HashValue
-    MediaCopy.Plugin.Protocol.Initialize
+    MediaCopy.Plugin.Protocol.Initialise
     MediaCopy.Plugin.Protocol.InspectFile
     MediaCopy.Plugin.Protocol.InspectPlan
     MediaCopy.Plugin.Protocol.JobInfo

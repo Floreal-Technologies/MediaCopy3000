@@ -9,6 +9,7 @@ module MediaCopy.Interface.Translation.English
   , formatNumber
   , formatTime
   , decimal
+  , subunit
   ) where
 
 import Data.Char qualified as Char
@@ -49,3 +50,6 @@ formatTime t = T.pack (Time.formatTime Time.defaultTimeLocale "%Y-%m-%d %H:%M" t
 
 decimal :: Double -> Text
 decimal x = T.pack (showFFloat (Just 1) x "")
+
+subunit :: Int -> Text
+subunit n = T.justifyRight 2 '0' (T.show n)

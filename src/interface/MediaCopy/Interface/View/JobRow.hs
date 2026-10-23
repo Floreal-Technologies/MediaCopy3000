@@ -54,8 +54,8 @@ runningText wording now state
   | (kindUi kind).showsProgress =
       verb
         <> " • "
-        <> count (floor (JobState.fraction state * 100) :: Int)
-        <> " % • "
+        <> humanPercent wording (floor (JobState.fraction state * 100))
+        <> " • "
         <> humanRate wording (JobState.rate state)
   | otherwise = verb <> "…"
   where
