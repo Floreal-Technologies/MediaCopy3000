@@ -12,6 +12,17 @@ Thus, the form is the function.
 > "OPTIONAL" in this document are to be interpreted as described in
 > [RFC 2119].
 
+## Localisation
+
+### English
+
+In both code and prose, the orthography and constructs used SHOULD use British
+Spelling as outlined in the [New Oxford Style Manual].
+
+### Français
+
+L'usage du français DEVRAIT fait selon les usages présentés dans le [Lexique des règles typographiques en usage à l'Imprimerie Nationale][Lexique Typographique].
+
 ## Haskell
 
 ### Point-free style
@@ -201,10 +212,12 @@ Should your work be sponsored, your are invited to mention it with the
 `Sponsored-By: <company name>` trailer. This allows us to properly give
 attribution to our sponsors.
 
-[RFC 2119]: https://datatracker.ietf.org/doc/html/rfc2119
-[Scoped Commits]: https://scopedcommits.com/
-
 ## Closing words
 
 Our style is both the expression of ourselves, and aspirational.
 You are encouraged to submit patches that make the codebase adhere to it.
+
+[RFC 2119]: https://datatracker.ietf.org/doc/html/rfc2119
+[Scoped Commits]: https://scopedcommits.com/
+[New Oxford Style Manual]: https://global.oup.com/academic/product/new-oxford-style-manual-9780198767251?cc=fr&lang=en&
+[Lexique Typographique]: https://actes-sud.fr/catalogue/lexique-des-regles-typographiques-000702
