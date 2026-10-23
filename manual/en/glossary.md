@@ -1,16 +1,16 @@
 # Glossary
 
-These are the terms used throughout the manual:
+Familiarise yourself with the commonly used terms below:
 
 <dl>
-  <dt>Media source</dt>
-  <dd>The source a job reads: a camera card, an SSD, or any folder. Only a seal writes
+  <dt>Media Source</dt>
+  <dd>The source an MC3K job reads: a camera card, an SSD, or any folder. Only a seal writes
   to it, and only in its <code>ascmhl</code> folder.
   </dd>
   <dt>Destination</dt>
   <dd>A folder an offload copies into.</dd>
   <dt>Manifest</dt>
-  <dd>One <code>.mhl</code> file. It holds a hash for every file in the tree it sits in.</dd>
+  <dd>A <code>.mhl</code> file. A manifest holds a hash for every file in the tree it sits in.</dd>
   <dt>Generation</dt>
   <dd>A manifest in a folder's history, numbered from 1.</dd>
   <dt>Chain</dt>
