@@ -4,13 +4,13 @@ module MediaCopy.Gtk.Widgets.Preferences
   ) where
 
 import Data.GI.Base (AttrOp ((:=)), new)
-import Data.Vector qualified as V
-import Floreal.Commons.Gtk.Bind (bind, comboRow, toggleRadio)
+import Floreal.Commons.Gtk.Bind (bind, toggleRadio)
 import Floreal.Commons.Gtk.Common (renderCell)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
 import MediaCopy.Gtk.Widgets.Common (nameAccessible)
+import MediaCopy.Gtk.Widgets.Lists (choiceRow)
 import MediaCopy.Gtk.Widgets.PluginsPage (PluginsPage (..), newPluginsPage)
 import MediaCopy.Interface.Theme
 import MediaCopy.Interface.Translation
@@ -55,20 +55,20 @@ pageName = \case
 data AppearanceRows = AppearanceRows
   { baseRow :: Adw.ComboRow
   , accentRow :: Adw.ActionRow
-  , paintBase :: Word32 -> IO ()
+  , paintBase :: Base -> IO ()
   , paintAccent :: Maybe (Maybe Accent) -> IO ()
   }
 
 newAppearanceRows :: Wording -> (UiMessage -> IO ()) -> IO AppearanceRows
 newAppearanceRows wording dispatch = do
-  baseNames <- Gtk.stringListNew (Just (V.toList (V.map (displayBase wording) baseValues)))
-  baseRow <- new Adw.ComboRow [#title := "Base", #model := baseNames]
+  baseRow <- new Adw.ComboRow [#title := "Base"]
+  bases <- choiceRow (displayBase wording) baseValues baseRow
   accentRow <- new Adw.ActionRow [#title := "Accent"]
   swatches <- newSwatches wording
   box <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #spacing := 6, #valign := Gtk.AlignCenter]
   forM_ swatches (\(_, button) -> Gtk.boxAppend box button)
   Adw.actionRowAddSuffix accentRow box
-  paintBase <- bind (comboRow baseRow) (\index -> forM_ (baseValues V.!? fromIntegral index) (dispatch . SetBase))
+  paintBase <- bind bases (dispatch . SetBase)
   paintAccent <- bind (toggleRadio swatches) (mapM_ (dispatch . SetAccent))
   pure AppearanceRows {baseRow, accentRow, paintBase, paintAccent}
 
@@ -95,8 +95,8 @@ newSwatch wording accent = do
 
 paintAppearance :: AppearanceRows -> Appearance -> IO ()
 paintAppearance rows appearance = do
-  forM_ (V.elemIndex appearance.base baseValues) (rows.paintBase . fromIntegral)
+  rows.paintBase appearance.base
   rows.paintAccent (Just appearance.accent)
 
-baseValues :: Vector Base
-baseValues = V.fromList [minBound .. maxBound]
+baseValues :: NonEmpty Base
+baseValues = minBound :| drop 1 [minBound .. maxBound]

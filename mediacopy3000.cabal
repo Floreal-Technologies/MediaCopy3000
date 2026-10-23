@@ -307,6 +307,7 @@ library
     MediaCopy.Gtk.Widgets.JobDetail
     MediaCopy.Gtk.Widgets.JobRow
     MediaCopy.Gtk.Widgets.KeyCaps
+    MediaCopy.Gtk.Widgets.Lists
     MediaCopy.Gtk.Widgets.OffloadDialog
     MediaCopy.Gtk.Widgets.PlanSheet
     MediaCopy.Gtk.Widgets.PluginsPage
@@ -324,6 +325,7 @@ library
     extra,
     filepath,
     floreal-commons,
+    floreal-commons:gi,
     floreal-commons:gtk,
     gi-adwaita ^>=1.0,
     gi-gdk4,
@@ -394,6 +396,8 @@ executable render-bench
     extra,
     filepath,
     floreal-commons,
+    floreal-commons:gi,
+    floreal-commons:gtk,
     gi-adwaita ^>=1.0,
     gi-gdk4,
     gi-gio ^>=2.0,

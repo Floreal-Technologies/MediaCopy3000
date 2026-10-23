@@ -5,13 +5,15 @@ module MediaCopy.Gtk.Reload
   ) where
 
 import Control.Exception (catch)
-import Data.GI.Base (GError, disownObject, gerrorMessage, on)
+import Data.GI.Base (GError, disownObject, gerrorMessage)
 import Data.List.NonEmpty qualified as NE
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8')
 import Effectful.Exception (tryIO)
 import Effectful.Log (logAttention_, logInfo_)
-import GI.GLib qualified as GLib
+import Floreal.Commons.Exception (guardedLog)
+import Floreal.Commons.GLib.MainLoop (debounced)
+import Floreal.Commons.Gtk.Signal (onSelf)
 import GI.Gdk qualified as Gdk
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
@@ -102,20 +104,10 @@ watchFile environment label path action =
       file <- Gio.fileNewForPath path
       monitor <- Gio.fileMonitorFile file [Gio.FileMonitorFlagsWatchMoves] (Nothing @Gio.Cancellable)
       logWith environment (logInfo_ ("watching " <> T.pack path))
-      pendingReload <- newIORef Nothing
-      on monitor #changed $ \_file _otherFile eventType ->
-        when (eventType `elem` reloadEvents) (scheduleReload action pendingReload)
+      reload <- debounced 200
+      onSelf monitor #changed $ \_file _otherFile eventType ->
+        when (eventType `elem` reloadEvents) (reload (runIn environment (guardedLog (label <> " reload") (liftIO action))))
       void (disownObject monitor)
-
-scheduleReload :: IO () -> IORef (Maybe Word32) -> IO ()
-scheduleReload action pendingReload = do
-  pending <- readIORef pendingReload
-  forM_ pending GLib.sourceRemove
-  sourceId <- GLib.timeoutAdd GLib.PRIORITY_DEFAULT 200 $ do
-    writeIORef pendingReload Nothing
-    action
-    pure False
-  writeIORef pendingReload (Just sourceId)
 
 reloadEvents :: List Gio.FileMonitorEvent
 reloadEvents =

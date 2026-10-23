@@ -1,3 +1,5 @@
+{-# LANGUAGE ImplicitParams #-}
+
 module MediaCopy.Gtk.Theme
   ( ThemeAdapter (..)
   , newThemeAdapter
@@ -9,12 +11,13 @@ module MediaCopy.Gtk.Theme
   ) where
 
 import Control.Monad.Extra
-import Data.GI.Base (AttrOp ((:=)), on, set)
+import Data.GI.Base (AttrOp ((:=)), SignalProxy (PropertySet), set)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8')
 import Effectful.Exception (tryIO)
 import Effectful.Log (Log, logAttention_)
 import Floreal.Commons.Environment qualified as Env
+import Floreal.Commons.Gtk.Signal (onSelf)
 import GI.Adw qualified as Adw
 import GI.Gdk qualified as Gdk
 import GI.Gtk qualified as Gtk
@@ -48,12 +51,10 @@ newThemeAdapter environment = do
   forced <- newIORef Nothing
   handler <- newIORef Nothing
   let adapter = ThemeAdapter {provider, manager, darkSheet, forced, handler}
-  void $ on manager (Adw.PropertyNotify #dark) $ \_ ->
+  void $ onSelf manager (PropertySet #dark) $ \_ ->
     readIORef forced >>= \case
       Just _ -> pure ()
-      Nothing ->
-        readDesktopBase adapter
-          >>= \observed -> report adapter observed
+      Nothing -> paletteOf ?self >>= report handler
   pure adapter
 
 readDarkSheet :: (Env.Environment :> es, FileSystem :> es, Log :> es, IOE :> es) => Mode -> Eff es Text
@@ -90,11 +91,14 @@ apply adapter appearance desktop desktopAccent = do
   case (previous, wanted) of
     (Just _, Nothing) -> do
       observed <- readDesktopBase adapter
-      when (observed /= desktop) (report adapter observed)
+      when (observed /= desktop) (report adapter.handler observed)
     _ -> pure ()
 
 readDesktopBase :: ThemeAdapter -> IO PaletteMode
-readDesktopBase adapter = Adw.styleManagerGetDark adapter.manager <&> \dark -> if dark then DarkPalette else LightPalette
+readDesktopBase adapter = paletteOf adapter.manager
+
+paletteOf :: Adw.StyleManager -> IO PaletteMode
+paletteOf manager = Adw.styleManagerGetDark manager <&> \dark -> if dark then DarkPalette else LightPalette
 
 onDesktopBase :: ThemeAdapter -> (PaletteMode -> IO ()) -> IO ()
 onDesktopBase adapter notify = do
@@ -103,13 +107,16 @@ onDesktopBase adapter notify = do
     Just _ -> pure ()
     Nothing -> readDesktopBase adapter >>= \observed -> notify observed
 
-report :: ThemeAdapter -> PaletteMode -> IO ()
-report adapter observed =
-  readIORef adapter.handler >>= mapM_ (\notify -> notify observed)
+report :: IORef (Maybe (PaletteMode -> IO ())) -> PaletteMode -> IO ()
+report handler observed =
+  readIORef handler >>= mapM_ (\notify -> notify observed)
 
 readDesktopAccent :: ThemeAdapter -> IO Accent
-readDesktopAccent adapter =
-  Adw.styleManagerGetAccentColor adapter.manager <&> \case
+readDesktopAccent adapter = accentOf adapter.manager
+
+accentOf :: Adw.StyleManager -> IO Accent
+accentOf manager =
+  Adw.styleManagerGetAccentColor manager <&> \case
     Adw.AccentColorBlue -> Blue
     Adw.AccentColorTeal -> Teal
     Adw.AccentColorGreen -> Green
@@ -124,5 +131,5 @@ readDesktopAccent adapter =
 onDesktopAccent :: ThemeAdapter -> (Accent -> IO ()) -> IO ()
 onDesktopAccent adapter notify =
   void $
-    on adapter.manager (Adw.PropertyNotify #accentColor) $ \_ ->
-      readDesktopAccent adapter >>= notify
+    onSelf adapter.manager (PropertySet #accentColor) $ \_ ->
+      accentOf ?self >>= notify

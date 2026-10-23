@@ -87,7 +87,7 @@ bench-render files="500":
 
 # Run the code linter (HLint) with automatic refactoring
 lint:
-    find app src ascmhl plugin-protocol tests tests-conformance -name "*.hs" | xargs -P {{procs}} -I {} hlint --refactor-options="-i" --refactor {}
+    find app bench src ascmhl plugin-protocol tests tests-conformance -name "*.hs" | xargs -P {{procs}} -I {} hlint --refactor-options="-i" --refactor {}
 
 # Run the code formatters (cabal-gild, fourmolu)
 style:

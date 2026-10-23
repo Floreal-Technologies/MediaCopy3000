@@ -5,14 +5,13 @@ module MediaCopy.Test.FakeWorld
   ( World (..)
   , FakeAnswer (..)
   , FakePlugin (..)
-  , answering
   , runEnvironmentFake
   , runXdgFake
   , runProcessFake
   , fakeRunner
   ) where
 
-import Data.Aeson (Value (Null), encode, object, toJSON, (.=))
+import Data.Aeson (Value, encode, object, (.=))
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy qualified as LBS
@@ -28,11 +27,9 @@ import Effectful.Timeout (runTimeout)
 import Floreal.Commons.Environment (Environment (..))
 import Floreal.Commons.Process (Child (..), Output (..), Process (..), Spawn (..))
 import Floreal.Commons.Xdg (Xdg (..), XdgDirectory (..))
-import MediaCopy.Plugin.Api qualified as Api
 import MediaCopy.Plugin.JsonRpc qualified as JsonRpc
 import MediaCopy.Plugin.JsonRpc.Error qualified as Error
 import MediaCopy.Plugin.JsonRpc.Request qualified as Request
-import MediaCopy.Plugin.Protocol.Initialize qualified as Initialize
 import MediaCopy.Plugin.Protocol.LogLine qualified as LogLine
 import MediaCopy.Plugin.Protocol.Method qualified as Method
 import System.Exit (ExitCode (..))
@@ -58,14 +55,6 @@ data FakeAnswer
   | Logging Text FakeAnswer
 
 newtype FakePlugin = FakePlugin (Text -> Value -> FakeAnswer)
-
-answering :: (Text -> Value -> Maybe FakeAnswer) -> FakePlugin
-answering respond = FakePlugin answer
-  where
-    answer method params
-      | method == Method.initialize = Answer (toJSON Initialize.Result {api = Api.major})
-      | method == Method.shutdown = Answer Null
-      | otherwise = fromMaybe (Refuse "unknown method") (respond method params)
 
 runEnvironmentFake :: Eff (Environment : es) a -> Eff es a
 runEnvironmentFake = interpret_ $ \case

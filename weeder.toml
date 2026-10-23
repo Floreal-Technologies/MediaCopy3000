@@ -2,7 +2,6 @@ roots = [
   "^Main.main$",
   "^Paths_.*",
   "^MediaCopy.Interface.Translation.Splice.messageReferences$",
-  "^Floreal\\.Commons\\.",
 ]
 type-class-roots = true
 unused-types = true

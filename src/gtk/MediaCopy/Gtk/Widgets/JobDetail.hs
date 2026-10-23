@@ -9,6 +9,7 @@ import Data.Map.Strict qualified as Map
 import Data.Vector qualified as V
 import Floreal.Commons.Gtk.Bind (bind, toggleRadio)
 import Floreal.Commons.Gtk.Common (newCell, newLabel, paddedBox, renderCell, toggleClass)
+import Floreal.Commons.Gtk.ListStore (listModel)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
@@ -21,6 +22,7 @@ import MediaCopy.Domain.JobState qualified as JobState
 import MediaCopy.Gtk.Widgets.Common (RowHost (..), nameAccessible, newRowsCell)
 import MediaCopy.Gtk.Widgets.FileRow (FileRow (..), newFileRow)
 import MediaCopy.Gtk.Widgets.History (HistoryView (..), newHistoryView, renderHistory)
+import MediaCopy.Gtk.Widgets.Lists (KeyedList (..), newKeyedList, renderKeyed)
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.View.JobDetail (DetailView (..), detailView, historyFor, pluginStatusRows)
@@ -136,10 +138,9 @@ newCounters = do
   pure Counters {box, verified, failed, missing, newFiles, algo}
 
 data FileListPane = FileListPane
-  { list :: Gtk.ListBox
-  , header :: Gtk.Box
+  { header :: Gtk.Box
   , scroll :: Gtk.ScrolledWindow
-  , rows :: IORef (Map RelPath FileRow)
+  , rows :: KeyedList RelPath Wording JobState.FileEntry FileRow
   , lastRendered :: IORef (Maybe (JobId, Int, FileFilter, Wording))
   }
 
@@ -159,18 +160,24 @@ newFilterButtons dispatch = do
 newFileListPane :: IO FileListPane
 newFileListPane = do
   header <- newFileListHeader
-  list <- new Gtk.ListBox [#selectionMode := Gtk.SelectionModeNone]
-  Gtk.widgetAddCssClass list "boxed-list"
+  rows <-
+    newKeyedList
+      (newFileRow <&> \fileRow -> (fileRow.row, fileRow))
+      (\wording path entry fileRow -> fileRow.update wording path entry.size entry.status)
+  items <- listModel rows.store
+  selection <- new Gtk.NoSelection [#model := items]
+  list <- new Gtk.ListView [#model := selection, #factory := rows.factory, #showSeparators := True]
   scroll <-
     new
       Gtk.ScrolledWindow
       [ #child := list
       , #hscrollbarPolicy := Gtk.PolicyTypeNever
       , #vexpand := True
+      , #overflow := Gtk.OverflowHidden
+      , #cssClasses := ["card"]
       ]
-  rows <- newIORef Map.empty
   lastRendered <- newIORef Nothing
-  pure FileListPane {list, header, scroll, rows, lastRendered}
+  pure FileListPane {header, scroll, rows, lastRendered}
 
 newActionBar :: (Command.Command -> List Text -> IO Gtk.Button) -> IO Gtk.Box
 newActionBar button = do
@@ -188,36 +195,14 @@ diffFileList files model state = do
   rendered <- readIORef files.lastRendered
   let wanted = (state.spec.id, state.revision, model.fileFilter, model.wording)
   when (rendered /= Just wanted) $ do
-    when (fmap (\(jobId, _, _, _) -> jobId) rendered /= Just state.spec.id) (clearFileList files)
     writeIORef files.lastRendered (Just wanted)
     renderFileList files model state
+    when (fmap (\(jobId, _, _, _) -> jobId) rendered /= Just state.spec.id) $
+      Gtk.scrolledWindowGetVadjustment files.scroll >>= \adjustment -> Gtk.adjustmentSetValue adjustment 0
 
 renderFileList :: FileListPane -> Model -> JobState -> IO ()
 renderFileList files model state = do
-  let visible = visibleFiles model.fileFilter state
-  let wanted = visible & V.toList & Map.fromList
-  existing <- readIORef files.rows
-  let gone = Map.difference existing wanted
-  forM_ gone (\fileRow -> Gtk.listBoxRemove files.list fileRow.row)
-  writeIORef files.rows (Map.difference existing gone)
-  V.imapM_ (syncFileRow files model.wording) visible
-
-syncFileRow :: FileListPane -> Wording -> Int -> (RelPath, JobState.FileEntry) -> IO ()
-syncFileRow files wording index (path, entry) = do
-  rows <- readIORef files.rows
-  case Map.lookup path rows of
-    Just fileRow -> fileRow.update wording entry.size entry.status
-    Nothing -> do
-      fileRow <- newFileRow path
-      fileRow.update wording entry.size entry.status
-      Gtk.listBoxInsert files.list fileRow.row (fromIntegral index)
-      writeIORef files.rows (Map.insert path fileRow rows)
-
-clearFileList :: FileListPane -> IO ()
-clearFileList files = do
-  existing <- readIORef files.rows
-  forM_ existing (\fileRow -> Gtk.listBoxRemove files.list fileRow.row)
-  writeIORef files.rows Map.empty
+  renderKeyed files.rows model.wording state.files (V.map fst (visibleFiles model.fileFilter state))
 
 newCounter :: Text -> IO (Gtk.Box, Gtk.Label)
 newCounter caption = do

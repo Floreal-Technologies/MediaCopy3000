@@ -3,7 +3,7 @@
 module Main (main) where
 
 import Ascmhl.RelPath (RelPath)
-import Data.GI.Base (AttrOp (On, (:=)), new, on)
+import Data.GI.Base (AttrOp (On, (:=)), new)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time (addUTCTime)
@@ -11,6 +11,8 @@ import Data.Time.Format.ISO8601 (iso8601Show)
 import Data.Vector qualified as V
 import Effectful.Time (currentTime, monotonicTime)
 import Floreal.Commons.Environment (getArgs)
+import Floreal.Commons.GLib.MainLoop (postAfter)
+import Floreal.Commons.Gtk.Signal (onSelf)
 import GI.Adw qualified as Adw
 import GI.GLib qualified as GLib
 import GI.Gio qualified as Gio
@@ -76,13 +78,13 @@ readResultsPath = \case
 
 bench :: Environment -> Int -> FilePath -> Adw.Application -> IO ()
 bench environment fileCount resultsPath app = do
-  (_themeAdapter, widgets) <- buildView environment app (\_intent -> pure ())
+  (_themeAdapter, widgets) <- buildView environment app (\_intent -> pure ()) (\_intent -> pure ())
   Gtk.windowPresent widgets.window
-  settle 500
+  settle environment 500
   counters <- newCounters widgets.window
   let stream = streamOf (benchFiles fileCount)
   samples <- runIn environment (measure widgets stream)
-  settle 500
+  settle environment 500
   result <- resultOf fileCount (length stream) counters samples
   baseline <- runIn environment (readBaseline resultsPath fileCount)
   runIn environment (report result baseline resultsPath)
@@ -142,8 +144,8 @@ newCounters window =
     Just clock -> do
       layouts <- newIORef 0
       paints <- newIORef 0
-      on clock #layout (bump layouts)
-      on clock #afterPaint (bump paints)
+      void $ onSelf clock #layout (bump layouts)
+      void $ onSelf clock #afterPaint (bump paints)
       pure (Just Counters {layouts, paints})
   where
     bump counter = modifyIORef' counter (\seen -> seen + 1)
@@ -167,10 +169,10 @@ drain = do
   more <- GLib.mainContextIteration (Nothing @GLib.MainContext) False
   when more drain
 
-settle :: Int -> IO ()
-settle milliseconds = do
+settle :: Environment -> Word32 -> IO ()
+settle environment milliseconds = do
   loop <- GLib.mainLoopNew Nothing False
-  GLib.timeoutAdd GLib.PRIORITY_DEFAULT (fromIntegral milliseconds) (GLib.mainLoopQuit loop >> pure False)
+  runIn environment (postAfter milliseconds (liftIO (GLib.mainLoopQuit loop)))
   GLib.mainLoopRun loop
 
 data Result = Result

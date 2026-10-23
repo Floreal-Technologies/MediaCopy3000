@@ -6,14 +6,15 @@ module MediaCopy.Gtk.Screenshot
 import Control.Monad.Extra
 import Data.GI.Base (AttrOp ((:=)), castTo, set)
 import Data.Text qualified as T
+import Effectful.Exception (onException)
 import Effectful.Log (logAttention_)
+import Floreal.Commons.GLib.MainLoop (postAfter)
 import GI.Adw qualified as Adw
-import GI.GLib qualified as GLib
 import GI.Gdk qualified as Gdk
 import GI.Gsk qualified as Gsk
 import GI.Gtk qualified as Gtk
 
-import MediaCopy.Gtk.Environment (Environment, logWith)
+import MediaCopy.Gtk.Environment (Environment, runIn)
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Scene (Frame (..))
 import MediaCopy.Model (Model)
@@ -27,23 +28,25 @@ seeded :: Environment -> Adw.ApplicationWindow -> (Command.Command -> IO ()) -> 
 seeded environment window activate showFrame startup = do
   Gtk.widgetSetCanTarget window False
   Gtk.windowSetFocusVisible window False
-  void $ GLib.timeoutAdd GLib.PRIORITY_DEFAULT 250 $ do
-    showFrame startup.scene.model
-    forM_ startup.scene.action activate
-    void (GLib.timeoutAdd GLib.PRIORITY_DEFAULT 600 prepare)
-    pure False
+  runIn environment $ postAfter 250 $ abandoning $ do
+    liftIO $ do
+      showFrame startup.scene.model
+      forM_ startup.scene.action activate
+    postAfter 600 (abandoning prepare)
   where
+    abandoning action
+      | isJust startup.shot = action `onException` liftIO (Gtk.windowDestroy window)
+      | otherwise = action
     prepare = do
-      when startup.scene.expand (expandAll window)
-      when startup.scene.scroll (scrollToEnd window)
-      forM_ startup.shot (GLib.timeoutAdd GLib.PRIORITY_DEFAULT settleMs . takeShot)
-      pure False
+      liftIO $ do
+        when startup.scene.expand (expandAll window)
+        when startup.scene.scroll (scrollToEnd window)
+      forM_ startup.shot (\path -> path & takeShot & abandoning & postAfter settleMs)
     settleMs = 3_500
     takeShot path = do
-      outcome <- saveWindowPng window path
-      either (logWith environment . logAttention_) pure outcome
-      Gtk.windowDestroy window
-      pure False
+      outcome <- liftIO (saveWindowPng window path)
+      either logAttention_ pure outcome
+      liftIO (Gtk.windowDestroy window)
 
 saveWindowPng :: Adw.ApplicationWindow -> FilePath -> IO (Either Text ())
 saveWindowPng window path = do

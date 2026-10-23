@@ -15,3 +15,29 @@
 
 - warn: {lhs: mapM_ f x, rhs: forM_ x f, name: Use forM_}
 - warn: {lhs: mapM f x, rhs: forM x f, name: Use forM}
+
+- functions:
+  - {name: Data.GI.Base.on, within: [], message: "Use onSelf or onBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: Data.GI.Base.Signals.on, within: [], message: "Use onSelf or onBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: Data.GI.Base.after, within: [], message: "Use onSelf or onBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: Data.GI.Base.Signals.after, within: [], message: "Use onSelf or onBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: GI.GLib.timeoutAdd, within: [], message: "Use postAfter or debounced from Floreal.Commons.GLib.MainLoop, or everyOnBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: GI.GLib.timeoutAddFull, within: [], message: "Use postAfter or debounced from Floreal.Commons.GLib.MainLoop, or everyOnBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: GI.GLib.timeoutAddSeconds, within: [], message: "Use postAfter or debounced from Floreal.Commons.GLib.MainLoop, or everyOnBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: GI.GLib.timeoutAddSecondsFull, within: [], message: "Use postAfter or debounced from Floreal.Commons.GLib.MainLoop, or everyOnBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: GI.GLib.idleAdd, within: [], message: "Use postMain or postIdle from Floreal.Commons.GLib.MainLoop"}
+  - {name: GI.GLib.idleAddFull, within: [], message: "Use postMain or postIdle from Floreal.Commons.GLib.MainLoop"}
+  - {name: GI.GLib.Functions.timeoutAdd, within: [], message: "Use postAfter or debounced from Floreal.Commons.GLib.MainLoop, or everyOnBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: GI.GLib.Functions.timeoutAddFull, within: [], message: "Use postAfter or debounced from Floreal.Commons.GLib.MainLoop, or everyOnBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: GI.GLib.Functions.timeoutAddSeconds, within: [], message: "Use postAfter or debounced from Floreal.Commons.GLib.MainLoop, or everyOnBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: GI.GLib.Functions.timeoutAddSecondsFull, within: [], message: "Use postAfter or debounced from Floreal.Commons.GLib.MainLoop, or everyOnBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: GI.GLib.Functions.idleAdd, within: [], message: "Use postMain or postIdle from Floreal.Commons.GLib.MainLoop"}
+  - {name: GI.GLib.Functions.idleAddFull, within: [], message: "Use postMain or postIdle from Floreal.Commons.GLib.MainLoop"}
+  - {name: GI.GLib.timeoutSourceNew, within: [], message: "Use postAfter or debounced from Floreal.Commons.GLib.MainLoop, or everyOnBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: GI.GLib.timeoutSourceNewSeconds, within: [], message: "Use postAfter or debounced from Floreal.Commons.GLib.MainLoop, or everyOnBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: GI.GLib.idleSourceNew, within: [], message: "Use postAfter or debounced from Floreal.Commons.GLib.MainLoop, or everyOnBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: GI.GLib.Functions.timeoutSourceNew, within: [], message: "Use postAfter or debounced from Floreal.Commons.GLib.MainLoop, or everyOnBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: GI.GLib.Functions.timeoutSourceNewSeconds, within: [], message: "Use postAfter or debounced from Floreal.Commons.GLib.MainLoop, or everyOnBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: GI.GLib.Functions.idleSourceNew, within: [], message: "Use postAfter or debounced from Floreal.Commons.GLib.MainLoop, or everyOnBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: Data.GI.Base.After, within: [], message: "Connect with onSelf or onBehalf from Floreal.Commons.Gtk.Signal"}
+  - {name: Data.GI.Base.Attributes.After, within: [], message: "Connect with onSelf or onBehalf from Floreal.Commons.Gtk.Signal"}

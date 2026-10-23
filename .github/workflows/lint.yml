@@ -36,5 +36,5 @@ jobs:
       - name: 'Run HLint'
         uses: haskell-actions/hlint-run@v2
         with:
-          path: '["app/", "src/", "ascmhl/", "plugin-protocol/", "tests/", "tests-conformance/"]'
+          path: '["app/", "bench/", "src/", "ascmhl/", "plugin-protocol/", "tests/", "tests-conformance/"]'
           fail-on: warning

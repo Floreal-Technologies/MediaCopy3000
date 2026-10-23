@@ -17,18 +17,18 @@ import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Wording (fileStatusText, humanBytes)
 
 data FileRow = FileRow
-  { row :: Gtk.ListBoxRow
-  , update :: Wording -> FileSize -> FileStatus -> IO ()
+  { row :: Gtk.Box
+  , update :: Wording -> RelPath -> FileSize -> FileStatus -> IO ()
   }
 
-newFileRow :: RelPath -> IO FileRow
-newFileRow path = do
-  name <- newLabel (display path) [#xalign := 0, #hexpand := True, #ellipsize := Pango.EllipsizeModeEnd] []
+newFileRow :: IO FileRow
+newFileRow = do
+  name <- newLabel "" [#xalign := 0, #hexpand := True, #ellipsize := Pango.EllipsizeModeEnd] []
   size <- newLabel "" [#xalign := 1, #widthChars := 10] ["dim-label"]
   dot <- new Gtk.Image [#accessibleRole := Gtk.AccessibleRolePresentation]
   status <-
     newLabel "" [#xalign := 0, #widthChars := 22, #maxWidthChars := 22, #ellipsize := Pango.EllipsizeModeEnd] ["status"]
-  body <-
+  row <-
     new
       Gtk.Box
       [ #orientation := Gtk.OrientationHorizontal
@@ -38,18 +38,18 @@ newFileRow path = do
       , #marginStart := 10
       , #marginEnd := 10
       ]
-  Gtk.boxAppend body name
-  Gtk.boxAppend body size
-  Gtk.boxAppend body dot
-  Gtk.boxAppend body status
-  row <- new Gtk.ListBoxRow [#child := body, #activatable := False]
-  cell <- newCell $ \(wording, fileSize, fileStatus) -> do
+  Gtk.boxAppend row name
+  Gtk.boxAppend row size
+  Gtk.boxAppend row dot
+  Gtk.boxAppend row status
+  cell <- newCell $ \(wording, path, fileSize, fileStatus) -> do
+    set name [#label := display path]
     set size [#label := humanBytes wording fileSize]
     set status [#label := fileStatusText wording fileStatus]
     set dot [#iconName := statusIcon fileStatus]
     toggleClass row "error" (FileStatus.isFailure fileStatus)
     toggleClass status "success" (isVerified fileStatus)
-  let update wording fileSize fileStatus = renderCell cell (wording, fileSize, fileStatus)
+  let update wording path fileSize fileStatus = renderCell cell (wording, path, fileSize, fileStatus)
   pure FileRow {row, update}
 
 statusIcon :: FileStatus -> Text

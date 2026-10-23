@@ -19,26 +19,26 @@ import MediaCopy.Interface.View.JobRow (JobRowView (..), jobRowView)
 import MediaCopy.Interface.Wording
 
 data JobRow = JobRow
-  { row :: Gtk.ListBoxRow
+  { row :: Gtk.Box
   , update :: Wording -> UTCTime -> JobState -> IO ()
   }
 
-newJobRow :: Wording -> JobState -> IO JobRow
-newJobRow wording state = do
+newJobRow :: IO JobRow
+newJobRow = do
   icon <- new Gtk.Image [#valign := Gtk.AlignStart]
-  nameAccessible icon (jobKindText wording (Job.kind state.spec.job))
-  name <- newLabel (Job.label state.spec.job) [#xalign := 0, #ellipsize := Pango.EllipsizeModeEnd] ["heading"]
+  name <- newLabel "" [#xalign := 0, #ellipsize := Pango.EllipsizeModeEnd] ["heading"]
   sub <- newLabel "" [#xalign := 0, #ellipsize := Pango.EllipsizeModeEnd] ["caption"]
   bar <- new Gtk.ProgressBar []
-  nameAccessible bar (Job.label state.spec.job <> " progress")
   lines' <- new Gtk.Box [#orientation := Gtk.OrientationVertical, #spacing := 2, #hexpand := True]
   Gtk.boxAppend lines' name
   Gtk.boxAppend lines' sub
   Gtk.boxAppend lines' bar
-  body <- paddedBox Gtk.OrientationHorizontal 10 6
-  Gtk.boxAppend body icon
-  Gtk.boxAppend body lines'
-  row <- new Gtk.ListBoxRow [#child := body]
+  row <- paddedBox Gtk.OrientationHorizontal 10 6
+  Gtk.boxAppend row icon
+  Gtk.boxAppend row lines'
+  names <- newCell $ \(kind, label) -> do
+    nameAccessible icon kind
+    nameAccessible bar (label <> " progress")
   cell <- newCell $ \view -> do
     set icon [#iconName := view.icon]
     set name [#label := view.label]
@@ -48,6 +48,7 @@ newJobRow wording state = do
     toggleClass bar "success" view.allOk
     toggleClass sub "error" view.bad
     toggleClass bar "error" view.bad
-  let update wording' now current = renderCell cell (jobRowView wording' now current)
-  update wording state.lastMovedAt state
+  let update wording now current = do
+        renderCell names (jobKindText wording (Job.kind current.spec.job), Job.label current.spec.job)
+        renderCell cell (jobRowView wording now current)
   pure JobRow {row, update}

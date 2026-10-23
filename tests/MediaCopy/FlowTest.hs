@@ -48,17 +48,10 @@ import MediaCopy.Domain.Plan (Plan)
 import MediaCopy.Domain.Plan qualified as Plan
 import MediaCopy.Domain.PlanStep (PlanStep)
 import MediaCopy.Domain.PlanStep qualified as PlanStep
-import MediaCopy.Domain.PluginFinding qualified as PluginFinding
-import MediaCopy.Domain.PluginPlan qualified as PluginPlan
-import MediaCopy.Domain.PluginRef (PluginRef)
-import MediaCopy.Domain.PluginRef qualified as PluginRef
-import MediaCopy.Domain.Severity qualified as Severity
 import MediaCopy.Effects.Hasher qualified as Hasher
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Model (JobEntry (..), Message (..), Model (..), PlanPhase (..), UiMessage (..), toastMessage)
-import MediaCopy.Test.FakeWorld (FakeAnswer)
-import MediaCopy.Test.FakeWorld qualified as FakeWorld
-import MediaCopy.Test.Harness (Act, FakeInstall, Settled)
+import MediaCopy.Test.Harness (Act, Settled)
 import MediaCopy.Test.Harness qualified as Harness
 import MediaCopy.Test.InMemoryFS (MemFS)
 import MediaCopy.Test.InMemoryFS qualified as InMemoryFS
@@ -550,15 +543,6 @@ data Expect = Blocks | OnlyWarns | NotRaised
 data Raised = Code Finding.Code | PluginBlocker
   deriving stock (Show)
 
--- | The plan the window showed last: the one still on offer, or the one the newest job holds.
-readyPlan :: Settled -> Maybe Plan
-readyPlan settled = case settled.model.planPhase of
-  Ready plan -> Just plan
-  _ -> Map.lookupMax settled.model.jobs >>= \pair -> (snd pair).plan
-
-probe :: PluginRef
-probe = PluginRef.PluginRef {id = "tech.floreal.probe", name = "Probe"}
-
 -- | The read-back of the copy gives another hash, and the bad copy stays. Each later verify
 -- records a @failed@ entry with the hash it computed. The second verify must still compare with
 -- the first hash, so the copy never passes.
@@ -655,17 +639,6 @@ bytesAt path fs = Map.lookup path fs.files <&> fst
 
 withoutFile :: OsPath -> MemFS -> MemFS
 withoutFile path fs = fs {InMemoryFS.files = Map.delete path fs.files}
-
-removeTree :: OsPath -> MemFS -> MemFS
-removeTree root fs = fs {InMemoryFS.files = Map.filterWithKey (\path _ -> not (under root path)) fs.files}
-
-copyTree :: OsPath -> OsPath -> MemFS -> MemFS
-copyTree from to fs = fs {InMemoryFS.files = Map.union fs.files copies}
-  where
-    copies =
-      fs.files
-        & Map.filterWithKey (\path _ -> under from path)
-        & Map.mapKeys (joined to . makeRelative from)
 
 manifestsIn :: OsPath -> MemFS -> List OsPath
 manifestsIn root fs =

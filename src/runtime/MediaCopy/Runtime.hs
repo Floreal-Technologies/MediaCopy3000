@@ -91,8 +91,8 @@ newRuntime shell runner model = do
   pure Runtime {shell, runner, modelRef, busy, pending, engine, planner, workers, catalogLock, threads}
 
 -- | Fold a message through 'update', render the new model, and run its effects. A message sent
--- while the loop runs waits in a queue and runs after the current one. Call it from one thread
--- only: the loop state is in plain 'IORef's.
+-- while the loop runs waits in a queue and runs after the current one. A message that throws
+-- does not stop the queue. Call it from one thread only: the loop state is in plain 'IORef's.
 dispatch :: Runtime -> Message -> IO ()
 dispatch runtime msg = do
   modifyIORef' runtime.pending (`V.snoc` msg)
@@ -107,8 +107,19 @@ drain runtime =
     Nothing -> pure ()
     Just (next, rest) -> do
       writeIORef runtime.pending rest
-      step runtime next
+      guarded (step runtime next) >>= either (failed runtime next) pure
       drain runtime
+
+-- | Log the failure, and show it unless the message itself shows or hides a toast.
+failed :: Runtime -> Message -> SomeException -> IO ()
+failed runtime msg err = do
+  void (guarded (run runtime (logAttention_ ("message failed: " <> T.pack (displayException err)))))
+  unless (aboutToast msg) (modifyIORef' runtime.pending (`V.snoc` ShowToast (T.pack (displayException err))))
+  where
+    aboutToast = \case
+      ShowToast _ -> True
+      Ui DismissToast -> True
+      _ -> False
 
 step :: Runtime -> Message -> IO ()
 step runtime msg = do
