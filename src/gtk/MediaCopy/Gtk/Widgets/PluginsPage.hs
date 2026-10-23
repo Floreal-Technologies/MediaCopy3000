@@ -4,10 +4,11 @@ module MediaCopy.Gtk.Widgets.PluginsPage
   ) where
 
 import Control.Monad (zipWithM_)
-import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
+import Data.GI.Base (AttrOp (On, (:=)), new, set)
 import Data.Vector qualified as V
-import Floreal.Commons.Gtk.Bind (bind, comboRow, switch, switchRow)
+import Floreal.Commons.Gtk.Bind (bind, switch, switchRow)
 import Floreal.Commons.Gtk.Common (Cell, newCell)
+import Floreal.Commons.Gtk.Signal (onSelf)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 import MediaCopy.Plugin.Capability qualified as Capability
@@ -20,7 +21,8 @@ import MediaCopy.Domain.PluginCatalog (PluginCatalog)
 import MediaCopy.Domain.PluginCatalog qualified as PluginCatalog
 import MediaCopy.Domain.PluginRef qualified as PluginRef
 import MediaCopy.Gtk.Widgets.FieldRows (FieldActions (..), FieldRow (..), authorsRow, fieldRow)
-import MediaCopy.Interface.View.Plugins (answerAt, answerIndex, capabilitySubtitle, entrySubtitle)
+import MediaCopy.Gtk.Widgets.Lists (choiceRow)
+import MediaCopy.Interface.View.Plugins (answerText, answers, capabilitySubtitle, entrySubtitle)
 import MediaCopy.Model (UiMessage (..))
 
 data PluginsPage = PluginsPage
@@ -153,7 +155,7 @@ entryRows groups dispatch entry = do
   chevron <- new Gtk.Image [#iconName := "go-next-symbolic"]
   Adw.actionRowAddSuffix row enabledSwitch
   Adw.actionRowAddSuffix row chevron
-  void $ on row #activated (openSubpage groups dispatch pluginId)
+  void $ onSelf row #activated (openSubpage groups dispatch pluginId)
   pure EntryRows {row, paintEnabled}
 
 refreshEntry :: EntryRows -> PluginCatalog.Entry -> IO ()
@@ -174,7 +176,7 @@ openSubpage groups dispatch pluginId = do
       toolbar <- new Adw.ToolbarView [#content := body]
       Adw.toolbarViewAddTopBar toolbar header
       navigation <- Adw.navigationPageNew toolbar entry.plugin.name
-      void $ on navigation #hidden $ do
+      void $ onSelf navigation #hidden $ do
         shown <- readIORef groups.open
         when (maybe False (\subpage -> subpage.pluginId == pluginId) shown) (writeIORef groups.open Nothing)
       writeIORef groups.open (Just Subpage {pluginId, body, detail})
@@ -232,17 +234,12 @@ refreshDetail rows entry = do
 
 capabilityRow :: (PluginCatalog.Edit -> IO ()) -> PluginCatalog.CapabilityView -> IO (Adw.ComboRow, PluginCatalog.Answer -> IO ())
 capabilityRow change view = do
-  choices <- Gtk.stringListNew (Just ["Not answered", "Granted", "Declined"])
-  row <-
-    new
-      Adw.ComboRow
-      [ #useMarkup := False
-      , #model := choices
-      , #selected := answerIndex view.answer
-      ]
+  row <- new Adw.ComboRow [#useMarkup := False]
   set row [#title := Capability.toText view.capability, #subtitle := capabilitySubtitle view]
-  paintIndex <- bind (comboRow row) (mapM_ (change . PluginCatalog.SetAnswer view.capability) . answerAt)
-  pure (row, paintIndex . answerIndex)
+  choices <- choiceRow answerText answers row
+  paintAnswer <- bind choices (change . PluginCatalog.SetAnswer view.capability)
+  paintAnswer view.answer
+  pure (row, paintAnswer)
 
 settingRow :: (PluginCatalog.Edit -> IO ()) -> (UiMessage -> IO ()) -> Text -> FieldView -> IO FieldRow
 settingRow send dispatch pluginId field

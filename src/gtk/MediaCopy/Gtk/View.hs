@@ -3,13 +3,16 @@ module MediaCopy.Gtk.View
   , buildWidgets
   ) where
 
-import Data.GI.Base (AttrOp (On, (:=)), new, on, set)
+import Data.GI.Base (AttrOp (On, (:=)), new, set)
 import Data.Map.Strict qualified as Map
-import Floreal.Commons.Gtk.Bind (bind, bindQuietly, dialog, listSelection)
+import Data.Time (UTCTime)
+import Data.Vector qualified as V
+import Floreal.Commons.Gtk.Bind (bind, bindQuietly, dialog)
 import Floreal.Commons.Gtk.CommandPalette (PaletteEvents (..), newCommandPalette)
 import Floreal.Commons.Gtk.Common (Cell, newCell, renderCell)
+import Floreal.Commons.Gtk.ListStore (listModel)
+import Floreal.Commons.Gtk.Signal (onSelf)
 import GI.Adw qualified as Adw
-import GI.GLib qualified as GLib
 import GI.Gtk qualified as Gtk
 
 import MediaCopy.Domain.JobId (JobId)
@@ -18,6 +21,7 @@ import MediaCopy.Gtk.Widgets.Common (flatNamed)
 import MediaCopy.Gtk.Widgets.JobDetail (JobDetail (..), newJobDetail)
 import MediaCopy.Gtk.Widgets.JobRow (JobRow (..), newJobRow)
 import MediaCopy.Gtk.Widgets.KeyCaps (newKeyCaps)
+import MediaCopy.Gtk.Widgets.Lists (KeyedList (..), keyedSelection, newKeyedList, renderKeyed)
 import MediaCopy.Gtk.Widgets.OffloadDialog (newOffloadDialog, renderOffloadDialog)
 import MediaCopy.Gtk.Widgets.PlanSheet (newPlanSheet, renderPlanSheet)
 import MediaCopy.Gtk.Widgets.Preferences (Preferences (..), newPreferences)
@@ -39,8 +43,9 @@ buildWidgets
   -> (Appearance -> PaletteMode -> Accent -> IO ())
   -> Wording
   -> (UiMessage -> IO ())
+  -> (UiMessage -> IO ())
   -> IO Widgets
-buildWidgets app applyTheme wording dispatch = do
+buildWidgets app applyTheme wording dispatch postUi = do
   window <- newAppWindow app
   actions <- installActions app window dispatch
   toolbar <- newHeaderToolbar actions wording
@@ -53,7 +58,7 @@ buildWidgets app applyTheme wording dispatch = do
   set toolbar [#content := splitView]
   set toastOverlay [#child := toolbar]
   set window [#content := toastOverlay]
-  toastCell <- newToastCell toastOverlay dispatch
+  toastCell <- newToastCell toastOverlay postUi
   themeCell <- newCell (\(appearance, desktop, desktopAccent) -> applyTheme appearance desktop desktopAccent)
   offloadDialog <- newOffloadDialog window dispatch
   planSheet <- newPlanSheet window dispatch
@@ -140,19 +145,19 @@ addNarrowBreakpoint :: Adw.ApplicationWindow -> Adw.NavigationSplitView -> IO ()
 addNarrowBreakpoint window splitView = do
   narrow <- Adw.breakpointConditionParse "max-width: 620sp"
   breakpoint <- Adw.breakpointNew narrow
-  void $ on breakpoint #apply $ set splitView [#collapsed := True]
-  void $ on breakpoint #unapply $ set splitView [#collapsed := False]
+  void $ onSelf breakpoint #apply $ set splitView [#collapsed := True]
+  void $ onSelf breakpoint #unapply $ set splitView [#collapsed := False]
   Adw.applicationWindowAddBreakpoint window breakpoint
 
 newToastCell :: Adw.ToastOverlay -> (UiMessage -> IO ()) -> IO (Cell (Maybe Text))
-newToastCell toastOverlay dispatch =
+newToastCell toastOverlay postUi =
   newCell $ \message ->
     forM_
       message
       ( \text -> do
           toast <- new Adw.Toast [#title := text, #useMarkup := False]
           Adw.toastOverlayAddToast toastOverlay toast
-          void (GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE (dispatch DismissToast >> pure False))
+          postUi DismissToast
       )
 
 newCloseConfirm
@@ -178,34 +183,27 @@ newCloseConfirm window dispatch = do
   bind openControl (\_ -> pure ())
 
 data Sidebar = Sidebar
-  { list :: Gtk.ListBox
-  , rows :: IORef (Map JobId JobRow)
+  { rows :: KeyedList JobId (Wording, UTCTime) JobEntry JobRow
   , paintSelection :: Maybe JobId -> IO ()
   , quietly :: IO () -> IO ()
   }
 
 newSidebar :: (UiMessage -> IO ()) -> IO (Sidebar, Adw.NavigationPage)
 newSidebar dispatch = do
-  list <- new Gtk.ListBox [#selectionMode := Gtk.SelectionModeSingle]
-  Gtk.widgetAddCssClass list "navigation-sidebar"
+  rows <-
+    newKeyedList
+      (newJobRow <&> \jobRow -> (jobRow.row, jobRow))
+      (\(wording, now) _ entry jobRow -> jobRow.update wording now entry.state)
+  items <- listModel rows.store
+  selection <- new Gtk.SingleSelection [#model := items, #autoselect := False, #canUnselect := True]
+  list <- new Gtk.ListView [#model := selection, #factory := rows.factory, #cssClasses := ["navigation-sidebar"]]
   scroll <- new Gtk.ScrolledWindow [#child := list, #hscrollbarPolicy := Gtk.PolicyTypeNever]
   page <- Adw.navigationPageNew scroll "Jobs"
   set page [#widthRequest := 260]
-  rows <- newIORef Map.empty
-  let rowOf jobId = fmap (\jobRow -> jobRow.row) . Map.lookup jobId <$> readIORef rows
-      keyOf listRow = readIORef rows <&> \jobs -> jobs & Map.filter (\jobRow -> jobRow.row == listRow) & Map.lookupMin & fmap fst
-  (paintSelection, quietly) <- bindQuietly (listSelection list keyOf rowOf) (dispatch . SelectJob)
-  pure (Sidebar {list, rows, paintSelection, quietly}, page)
+  (paintSelection, quietly) <- bindQuietly (keyedSelection selection rows) (dispatch . SelectJob)
+  pure (Sidebar {rows, paintSelection, quietly}, page)
 
 renderSidebar :: Sidebar -> Model -> Maybe JobId -> IO ()
 renderSidebar sidebar current selected = sidebar.quietly $ do
-  existing <- readIORef sidebar.rows
-  let gone = Map.difference existing current.jobs
-      kept = Map.intersectionWith (,) existing current.jobs
-      missing = Map.difference current.jobs existing
-  traverse_ (\jobRow -> Gtk.listBoxRemove sidebar.list jobRow.row) gone
-  added <- traverse (\entry -> newJobRow current.wording entry.state) missing
-  traverse_ (\jobRow -> Gtk.listBoxAppend sidebar.list jobRow.row) added
-  writeIORef sidebar.rows (Map.union (Map.map fst kept) added)
-  traverse_ (\(jobRow, entry) -> jobRow.update current.wording current.now entry.state) kept
+  renderKeyed sidebar.rows (current.wording, current.now) current.jobs (V.fromList (Map.keys current.jobs))
   sidebar.paintSelection selected
