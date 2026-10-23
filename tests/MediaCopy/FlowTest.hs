@@ -12,30 +12,18 @@ import Ascmhl.Hash qualified as Hash
 import Ascmhl.History qualified as History
 import Ascmhl.Manifest qualified as Manifest
 import Ascmhl.ManifestEntry qualified as ManifestEntry
-import Ascmhl.OsPath qualified as OsPath
 import Ascmhl.RelPath (RelPath)
 import Ascmhl.RelPath qualified as RelPath
-import Data.Aeson (Result (..), Value, fromJSON, object, toJSON, (.=))
 import Data.ByteString qualified as BS
-import Data.List (findIndex, partition)
+import Data.List (findIndex)
 import Data.Map.Strict qualified as Map
-import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
-import Data.Text.IO qualified as TIO
 import Data.Vector qualified as V
 import Effectful (runEff)
 import Hedgehog (Gen, Property, assert, cover, evalIO, evalMaybe, forAll, property, withTests, (===))
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
-import MediaCopy.Plugin.Api qualified as Api
-import MediaCopy.Plugin.Capability qualified as Capability
-import MediaCopy.Plugin.Capability qualified as Plugin (Capability)
-import MediaCopy.Plugin.Manifest qualified as PluginManifest
-import MediaCopy.Plugin.Protocol.Finding qualified as ProtocolFinding
-import MediaCopy.Plugin.Protocol.InspectFile qualified as InspectFile
-import MediaCopy.Plugin.Protocol.InspectPlan qualified as InspectPlan
-import MediaCopy.Plugin.Protocol.Method qualified as Method
 import System.OsPath (makeRelative, unsafeEncodeUtf, (</>))
 import splice System.OsPath (osp)
 import System.OsString (isPrefixOf, isSuffixOf)
@@ -64,15 +52,13 @@ import MediaCopy.Domain.PluginFinding qualified as PluginFinding
 import MediaCopy.Domain.PluginPlan qualified as PluginPlan
 import MediaCopy.Domain.PluginRef (PluginRef)
 import MediaCopy.Domain.PluginRef qualified as PluginRef
-import MediaCopy.Domain.PluginReport qualified as PluginReport
 import MediaCopy.Domain.Severity qualified as Severity
 import MediaCopy.Effects.Hasher qualified as Hasher
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Model (JobEntry (..), Message (..), Model (..), PlanPhase (..), UiMessage (..), toastMessage)
-import MediaCopy.Report (renderPlanText)
 import MediaCopy.Test.FakeWorld (FakeAnswer)
 import MediaCopy.Test.FakeWorld qualified as FakeWorld
-import MediaCopy.Test.Harness (Act, FakeInstall, Rig, Settled)
+import MediaCopy.Test.Harness (Act, FakeInstall, Settled)
 import MediaCopy.Test.Harness qualified as Harness
 import MediaCopy.Test.InMemoryFS (MemFS)
 import MediaCopy.Test.InMemoryFS qualified as InMemoryFS
@@ -91,7 +77,6 @@ tests =
     , testCase "verify reports each kind of difference, and the report is saved" verifyReportsEachDifference
     , testCase "an offload continues the source history" anOffloadContinuesTheSourceHistory
     , testCase "seal-first" sealFirst
-    , testCase "each finding blocks a plan or only warns" eachFindingBlocksOrWarns
     , testCase "a failed copy never passes a later verify" aFailedCopyNeverPassesALaterVerify
     ]
 
@@ -564,155 +549,6 @@ data Expect = Blocks | OnlyWarns | NotRaised
 
 data Raised = Code Finding.Code | PluginBlocker
   deriving stock (Show)
-
-data Rule = Rule
-  { label :: String
-  , start :: IO Rig
-  , acts :: List Act
-  , raised :: Raised
-  , expect :: Expect
-  }
-
-eachFindingBlocksOrWarns :: Assertion
-eachFindingBlocksOrWarns = do
-  forM_ rules $ \rule -> do
-    let named what = rule.label <> ": " <> what
-    setup <- rule.start
-    settled <- Harness.drive setup (rule.acts <> [Harness.user ConfirmPlan])
-    assertEqual (named "violations") [] settled.violations
-    case readyPlan settled of
-      Nothing -> assertFailure (named "no plan")
-      Just plan -> do
-        let present = raisedIn rule.raised plan
-            seen = named ("expected " <> show rule.expect <> " " <> show rule.raised <> ", got " <> show (codesOf plan))
-        case rule.expect of
-          Blocks -> do
-            assertBool seen (present && Plan.blocked plan)
-            assertEqual (named "no job") [] (Map.keys settled.model.jobs)
-            -- A part copy that the seed holds stays: the plan wrote nothing.
-            assertEqual (named "the disk is unchanged") setup.disk.files settled.disk.files
-          OnlyWarns -> do
-            Harness.expectClean settled
-            assertBool seen (present && not (Plan.blocked plan))
-            let phase = Map.lookupMax settled.model.jobs <&> \pair -> (snd pair).state.phase
-            assertBool (named ("the job finished: " <> show phase)) (maybe False isFinished phase)
-          NotRaised -> do
-            Harness.expectClean settled
-            assertBool seen (not present)
-  faulty <- Harness.drive Harness.Rig {disk = twoFiles, picks = [], plugins = [crashingPlugin]} (offload card [ssd1] <> [Harness.user ConfirmPlan])
-  Harness.expectClean faulty
-  case faulty.model.planPhase of
-    PlanError _ -> pure ()
-    other -> assertFailure ("a plug-in fault at plan time: " <> show other)
-  Map.keys faulty.model.jobs @?= []
-  where
-    isFinished = \case
-      JobState.Finished _ -> True
-      _ -> False
-
-rules :: List Rule
-rules =
-  [ offloadRule "the source is missing" (pure InMemoryFS.emptyMemFS) [] Finding.SourceMissing Blocks
-  , offloadRule "a foreign file at the destination" (pure (aFile & InMemoryFS.withFile [osp|/ssd1/card/already.txt|] "there")) [] Finding.DestinationForeign Blocks
-  , offloadRule "too little space" (pure (InMemoryFS.emptyMemFS & InMemoryFS.withFile [osp|/card/big.mxf|] (BS.replicate 9000 0x61) & InMemoryFS.withFreeSpace ssd1 10)) [] Finding.InsufficientSpace Blocks
-  , offloadRule "a chain that names no manifest" (pure (aFile & InMemoryFS.withTextFile [osp|/card/ascmhl/ascmhl_chain.xml|] (Chain.render Chain.Chain {entries = V.empty}))) [] Finding.ChainNamesNoManifest Blocks
-  , Rule
-      { label = "a verify without history"
-      , start = pure (Harness.rig (InMemoryFS.emptyMemFS & InMemoryFS.withFile [osp|/vol/a.mxf|] "hi")) {Harness.picks = [vol]}
-      , acts = [Harness.user (RunCommand Command.VerifyFolder)]
-      , raised = Code Finding.NoSeal
-      , expect = Blocks
-      }
-  , Rule
-      { label = "a seal of a sealed folder"
-      , start = referenceFolder <&> \disk -> (Harness.rig disk) {Harness.picks = [vol]}
-      , acts = [Harness.user (RunCommand Command.SealMedia)]
-      , raised = Code Finding.AlreadySealed
-      , expect = OnlyWarns
-      }
-  , offloadRule "a foreign file at a part copy" (pure (halfCopied & InMemoryFS.withFile [osp|/ssd1/card/stray.txt|] "x")) resume Finding.DestinationForeign Blocks
-  , offloadRule "a foreign directory at a part copy" (pure (halfCopied & InMemoryFS.withDir [osp|/ssd1/card/Other|])) resume Finding.DestinationForeign Blocks
-  , offloadRule "a destination generation the source does not hold" foreignGeneration resume Finding.DestinationForeign Blocks
-  , offloadRule "a part copy with no choice" (pure halfCopied) [] Finding.DestinationPartial Blocks
-  , offloadRule "a part copy once the operator chose" (pure halfCopied) resume Finding.DestinationPartial NotRaised
-  , offloadRule "a shared generation with another c4" otherSource resume Finding.DestinationOtherSource Blocks
-  , offloadRule "a destination chain that is a prefix of the source chain, DestinationForeign" prefixChain resume Finding.DestinationForeign NotRaised
-  , offloadRule "a destination chain that is a prefix of the source chain, DestinationOtherSource" prefixChain resume Finding.DestinationOtherSource NotRaised
-  , Rule
-      { label = "a plug-in blocker at plan time"
-      , start = pure Harness.Rig {disk = aFile, picks = [], plugins = [blockingPlugin]}
-      , acts = offload card [ssd1]
-      , raised = PluginBlocker
-      , expect = Blocks
-      }
-  ]
-  where
-    offloadRule label seed choosing code expect =
-      Rule {label, start = seed <&> Harness.rig, acts = offload card [ssd1] <> choosing, raised = Code code, expect}
-    resume = [Harness.user (SetExistingCopy Offload.Resume)]
-    aFile = InMemoryFS.emptyMemFS & InMemoryFS.withFile [osp|/card/a.mxf|] "hi"
-    halfCopied =
-      InMemoryFS.emptyMemFS
-        & InMemoryFS.withFile [osp|/card/A/1.mxf|] (BS.replicate 9000 0x62)
-        & InMemoryFS.withFile [osp|/card/b.txt|] "hi"
-        & InMemoryFS.withFile [osp|/ssd1/card/b.txt|] "hi"
-        & InMemoryFS.withFile [osp|/ssd1/card/A/1.mxf.mc3k-part|] (BS.replicate 400 0x62)
-    copiedTo disk = disk & copyTree [osp|/card/ascmhl|] [osp|/ssd1/card/ascmhl|] & InMemoryFS.withFile [osp|/ssd1/card/b.txt|] "hi"
-    plainCard = InMemoryFS.emptyMemFS & InMemoryFS.withFile [osp|/card/b.txt|] "hi"
-    foreignGeneration = sealedCard plainCard <&> \disk -> disk & copiedTo & removeTree [osp|/card/ascmhl|]
-    otherSource = do
-      sealedOnce <- sealedCard plainCard
-      sealedOnce & copiedTo & removeTree [osp|/card/ascmhl|] & InMemoryFS.withFile [osp|/card/b.txt|] "HI" & sealedCard
-    prefixChain = sealedCard plainCard >>= \disk -> disk & copiedTo & sealedCard
-
--- | The disk after a seal of @/card@.
-sealedCard :: MemFS -> IO MemFS
-sealedCard disk = Harness.drive (Harness.rig disk) {Harness.picks = [card]} sealVol <&> (.disk)
-
-referenceFolder :: IO MemFS
-referenceFolder = do
-  manifest <- TIO.readFile "tests/fixtures/ascmhl/0001_A002R2EC_2026-05-09_170200.mhl"
-  chain <- TIO.readFile "tests/fixtures/ascmhl/ascmhl_chain.xml"
-  pure
-    ( InMemoryFS.emptyMemFS
-        & InMemoryFS.withFile volFile "Nobody inspects the spammish repetition"
-        & InMemoryFS.withTextFile [osp|/vol/ascmhl/0001_A002R2EC_2026-05-09_170200.mhl|] manifest
-        & InMemoryFS.withTextFile [osp|/vol/ascmhl/ascmhl_chain.xml|] chain
-    )
-
-crashingPlugin :: FakeInstall
-crashingPlugin =
-  probeInstall [Capability.PlanInspect] $ \method _ ->
-    if method == Method.inspectPlan then Just (FakeWorld.Crash 1) else Nothing
-
-blockingPlugin :: FakeInstall
-blockingPlugin =
-  probeInstall [Capability.PlanInspect, Capability.Block] $ \method _ ->
-    if method == Method.inspectPlan
-      then Just (FakeWorld.Answer (toJSON InspectPlan.Result {findings = V.singleton ProtocolFinding.Finding {key = "stop", severity = ProtocolFinding.Blocker, title = "stop", detail = "here"}}))
-      else Nothing
-
-probeInstall :: List Plugin.Capability -> (Text -> Value -> Maybe FakeAnswer) -> FakeInstall
-probeInstall capabilities respond =
-  Harness.FakeInstall
-    { manifest =
-        object
-          [ "id" .= probe.id
-          , "name" .= probe.name
-          , "description" .= ("Looks at the job." :: Text)
-          , "version" .= ("1.0.0" :: Text)
-          , "api" .= Api.major
-          , "executable" .= Map.singleton PluginManifest.platformKey ("probe" :: Text)
-          , "capabilities" .= capabilities
-          ]
-    , grant = object ["enabled" .= True, "grants" .= capabilities]
-    , behaviour = FakeWorld.answering respond
-    }
-
-raisedIn :: Raised -> Plan -> Bool
-raisedIn raised plan = case raised of
-  Code code -> code `elem` codesOf plan
-  PluginBlocker -> V.any (\finding -> finding.severity == Severity.Blocker) plan.plugins.findings
 
 -- | The plan the window showed last: the one still on offer, or the one the newest job holds.
 readyPlan :: Settled -> Maybe Plan

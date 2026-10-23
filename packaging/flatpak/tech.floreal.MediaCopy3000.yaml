@@ -1,6 +1,6 @@
 app-id: tech.floreal.MediaCopy3000
 runtime: org.gnome.Platform
-runtime-version: '49'
+runtime-version: '51'
 sdk: org.gnome.Sdk
 command: mediacopy3000
 finish-args:

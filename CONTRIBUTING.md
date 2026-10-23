@@ -133,8 +133,8 @@ host operating system. `flatpak` is built only when you name it.
 
 The Flatpak build compiles nothing inside the sandbox. The script builds the application on the
 host, then stages it under `dist-package/root/usr`. The manifest
-`packaging/flatpak/tech.floreal.MediaCopy3000.yml` copies that tree into `/app`. It names the
-`org.gnome.Platform` runtime, version 49. `flatpak-builder` pulls the runtime from Flathub, so
+`packaging/flatpak/tech.floreal.MediaCopy3000.yaml` copies that tree into `/app`. It names the
+`org.gnome.Platform` runtime, version 51. `flatpak-builder` pulls the runtime from Flathub, so
 the first build needs a network.
 
 The script then compares the glibc version of the binary against the version in the runtime. If

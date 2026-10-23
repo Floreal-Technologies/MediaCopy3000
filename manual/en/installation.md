@@ -51,8 +51,8 @@ sudo pacman -U ./mediacopy3000-1.2.3-archlinux-x86_64.pkg.tar.zst
 flatpak install --user ./mediacopy3000-1.2.3-x86_64.flatpak
 ```
 
-The bundle needs the `org.gnome.Platform` runtime, version 49. Flatpak gets the
-runtime from Flathub when your system does not have it.
+The bundle needs the `org.gnome.Platform` runtime. Flatpak gets the runtime from
+Flathub when your system does not have it.
 
 ### The Linux archive
 
