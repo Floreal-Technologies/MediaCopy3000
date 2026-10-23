@@ -1,23 +1,23 @@
 # Apparence
 
-Ouvrez les préférences via l'élément de menu **Préférences** ou avec `Ctrl+,`.
+Ouvrez les préférences via l’élément de menu **Préférences** ou avec <kbd>Ctrl</kbd>+<kbd>,</kbd>.
 
 ![La boîte de dialogue des préférences](../en/images/preferences.png)
 
 ## Thème
 
-Le groupe `Appearance` contient deux réglages :
+Le groupe `Appearance` contient deux réglages :
 
 | Réglage | Effet |
 |---|---|
 | `Base` | Indique qui choisit entre clair et sombre. |
 | `Accent` | Définit la couleur des boutons, des liens et des sélections. |
 
-`Base` a trois valeurs :
+`Base` a trois valeurs :
 
 | Valeur | Effet |
 |---|---|
-| `Suivre le bureau` | Le bureau décide. Un changement du bureau s'applique tout de suite, même pendant une tâche. |
+| `Suivre le bureau` | Le bureau décide. Un changement du bureau s’applique tout de suite, même pendant une tâche. |
 | `Toujours clair` | La fenêtre reste claire, quel que soit le bureau. |
 | `Toujours sombre` | La fenêtre reste sombre, quel que soit le bureau. |
 
@@ -26,7 +26,7 @@ Le thème clair est le thème standard de GNOME. Le thème sombre est
 
 ## Accent
 
-Le premier bouton suit l'accent du bureau. Les autres boutons choisissent une de
+Le premier bouton suit l’accent du bureau. Les autres boutons choisissent une de
 ces couleurs.
 
 | Couleur | Thème clair | Thème sombre |

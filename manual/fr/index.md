@@ -19,9 +19,9 @@ hero:
 
 features:
   - title: Intégrité et complétude
-    details: Assurez-vous de <b>l'intégrité</b> et la <b>complétude</b> de vos transferts entre vos volumes de stockage.
-  - title: Plan, Exécution, Rapport
-    details: Les tranferts commencent avec un plan et finissent avec un rapport. Gardez confiance dans les étapes du transfert.
-  - title: Un standard de l'industrie
-    details: MediaCopy 3000 lit et écrit le format ASC Media Hash Lists. Chaque dossier garde son historique, pour vous donner de la visibilité sur les transferts précédents.
+    details: Assurez-vous de <b>l’intégrité</b> et de la <b>complétude</b> de vos transferts entre vos volumes de stockage.
+  - title: Plan, exécution, rapport
+    details: Les transferts commencent avec un plan et finissent avec un rapport. Gardez confiance dans les étapes du transfert.
+  - title: Un standard de l’industrie
+    details: MediaCopy 3000 lit et écrit le format ASC Media Hash List. Chaque dossier garde son historique, pour vous donner de la visibilité sur les transferts précédents.
 ---

@@ -17,9 +17,19 @@ duration-seconds = { $seconds } s
 duration-minutes = { $minutes } min { $seconds } s
 duration-hours = { $hours } h { $minutes } min
 
+## Sizes
+
+size-bytes = { $size } B
+size-kilobytes = { $size } KB
+size-megabytes = { $size } MB
+size-gigabytes = { $size } GB
+size-terabytes = { $size } TB
+size-per-second = { $size }/s
+
 ## Activity
 
 quiet-doing = { $doing } · { $elapsed }
+progress-percent = { $percent } %
 running-copying = Copying
 running-verifying = Verifying
 running-sealing = Sealing

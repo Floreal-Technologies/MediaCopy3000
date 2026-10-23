@@ -192,7 +192,7 @@ message is one [JSON-RPC 2.0](https://www.jsonrpc.org/) object on one line. Medi
 
 | Method | When |
 |---|---|
-| `initialize` | First. It gives the settings, the job fields and the grants. |
+| `initialise` | First. It gives the settings, the job fields and the grants. |
 | `inspect/plan` | When the plan is made, to a plug-in with `plan.inspect` |
 | `contribute` | When the plan is made, to a plug-in with `manifest.write` |
 | `inspect/file` | After each verified file, to a plug-in with `files.inspect` |
@@ -224,7 +224,7 @@ A plug-in that breaks one of these rules is not valid. The group **Not Valid** s
 A setting has a kind: `text`, `secret`, `bool`, `choice`, `path` or `authors`. The kind `authors`
 is a list of author slots that the user edits in the preferences. MediaCopy 3000 accepts it only
 in `settings`, only once, only with `manifest.write`, and without `default`. The plan sheet asks for
-the name, the email and the phone of each slot. `initialize` gives the merged list in `settings`,
+the name, the email and the phone of each slot. `initialise` gives the merged list in `settings`,
 without the slots that have no name. The plug-in returns these slots as `authors` in `contribute`.
 
 The folder `plugins/credits` in the source code holds the plug-in Credits. It is a complete plug-in
@@ -296,7 +296,7 @@ sequenceDiagram
     User->>MC3K: Make the plan
     MC3K->>MC3K: Check the job fields
     MC3K->>Plugin: start
-    MC3K->>Plugin: initialize {settings, jobFields, grants, locale, job}
+    MC3K->>Plugin: initialise {settings, jobFields, grants, locale, job}
     Plugin-->>MC3K: result
     opt plan.inspect granted
         MC3K->>Plugin: inspect/plan {job, files}
@@ -328,7 +328,7 @@ sequenceDiagram
 
     User->>MC3K: Start the job
     MC3K->>Plugin: start
-    MC3K->>Plugin: initialize
+    MC3K->>Plugin: initialise
     Plugin-->>MC3K: result
     loop each verified file
         MC3K->>Plugin: inspect/file {file}
@@ -369,7 +369,7 @@ MediaCopy 3000 asks for this data when it makes the plan, with the request `cont
 only if you granted `manifest.write`.
 
 The request gives the job: its kind, its source, its destinations, its hash format if it has one,
-and the path and size of each file. The settings and the job fields come before, in `initialize`.
+and the path and size of each file. The settings and the job fields come before, in `initialise`.
 
 The answer holds three parts:
 

@@ -8,11 +8,11 @@ plus tard, ce qui est arrivé à une source multimédia.
 
 1. Sélectionnez une tâche terminée.
 2. Cliquez sur **Enregistrer le rapport…** ou appuyez sur <kbd>Ctrl</kbd>+<kbd>S</kbd>.
-3. Choisissez l'emplacement du fichier.
+3. Choisissez l’emplacement du fichier.
 
 Le nom suggéré est `<nom du dossier>-report.txt`.
 
-Ce bouton ne fonctionne que pour une tâche terminée, ayant échoué ou ayant été annulée. Une tâche en cours ne produit aucun résultat à consigner.
+Cette commande ne fonctionne que pour une tâche terminée, ayant échoué ou ayant été annulée. Une tâche en cours ne produit aucun résultat à consigner.
 
 ## Contenu du rapport
 
@@ -45,14 +45,14 @@ Log: /home/you/.local/state/mediacopy3000/jobs/2026-09-12_140300-1-CARD_A001-off
 |---|---|
 | `Job`, `Source`, `Destination`, `Folder` | Tâche concernée et dossiers impliqués |
 | `Created` | Date de création de la tâche |
-| `Plan` | Le plan que vous avez approuvé, avec ses conclusions, mot pour mot. Un transfert vers une destination partielle ajoute la mention `existing copy: resume` (reprise) ou `replace` (remplacement). |
+| `Plan` | Le plan que vous avez approuvé, avec ses constats, mot pour mot. Un déchargement vers une destination partielle ajoute la mention `existing copy: resume` ou `existing copy: replace`. |
 | `Result` | Issue de la tâche |
 | `Files` | Compteurs issus du volet de détails |
 | `Manifest` | Tous les manifestes générés par la tâche |
 | `Originals` | Éléments de référence utilisés pour la vérification |
-| `Log` | Journal des événements de la tâche. La page [Journal des événements](event-log.md) fournit des explications à ce sujet. |
+| `Log` | Journal des événements de la tâche. La page [Le journal des événements](event-log.md) fournit des explications à ce sujet. |
 
-Une tâche ayant rencontré des échecs comporte une section `Failures:`. Une ligne est indiquée pour chaque fichier problématique :
+Une tâche ayant rencontré des échecs comporte une section `Failures:`. Une ligne est indiquée pour chaque fichier problématique :
 
 ```
 Failures:
@@ -61,11 +61,11 @@ FAILED  A001C004_260912_R1AB.mov  io error input/output error
 MISSING Sidecar/A001C001.wav
 ```
 
-Une opération de vérification ou de scellement (*seal*) inclut également une section `History:`, avec une ligne pour chaque génération.
+Une vérification ou un scellement inclut également une section `History:`, avec une ligne pour chaque génération.
 
 ## Les extensions dans le rapport
 
-Une tâche avec des [extensions](plugins.md) ajoute des lignes au bloc `Plan` :
+Une tâche avec des [extensions](plugins.md) ajoute des lignes au bloc `Plan` :
 
 ```
   plug-in: Credits (tech.floreal.credits)
@@ -73,7 +73,7 @@ Une tâche avec des [extensions](plugins.md) ajoute des lignes au bloc `Plan` :
   author: Sam Roe (Camera operator)
 ```
 
-Elle reçoit aussi une section `Plug-ins:`, avec une ligne pour chaque événement :
+Elle reçoit aussi une section `Plug-ins:`, avec une ligne pour chaque événement :
 
 ```
 Plug-ins:
@@ -88,14 +88,14 @@ WARNING  Credits: plug-in unavailable – contribute timed out after 30 s
 
 ## Pourquoi le plan y figure
 
-Le bloc `Plan` est l'élément qui transforme le rapport en une piste d'audit.
-Il indique ce que l'application a signalé avant que vous ne donniez votre
-approbation, y compris tous les avertissements que vous avez choisi d'accepter.
+Le bloc `Plan` est l’élément qui transforme le rapport en une piste d’audit.
+Il indique ce que l’application a signalé avant que vous ne donniez votre
+approbation, y compris tous les avertissements que vous avez choisi d’accepter.
 Le rapport et la fiche du plan ne peuvent pas diverger, car ils se basent sur le
 même plan.
 
-## Le rapport n'est pas l'enregistrement de référence
+## Le rapport n’est pas l’enregistrement de référence
 
-C'est le manifeste qui constitue l'enregistrement de référence. Il accompagne
-les fichiers et perdure au-delà de cette application. Le rapport n'est qu'une
+C’est le manifeste qui constitue l’enregistrement de référence. Il accompagne
+les fichiers et perdure au-delà de cette application. Le rapport n’est qu’une
 note relative à une exécution spécifique.

@@ -13,13 +13,23 @@ toast-no-history = pas d’historique ASC Media Hash List (ascmhl/) dans { $fold
 
 ## Durations
 
-duration-seconds = { $seconds } s
-duration-minutes = { $minutes } min { $seconds } s
-duration-hours = { $hours } h { $minutes } min
+duration-seconds = { $seconds } s
+duration-minutes = { $minutes } min { $seconds } s
+duration-hours = { $hours } h { $minutes } min
+
+## Sizes
+
+size-bytes = { $size } o
+size-kilobytes = { $size } ko
+size-megabytes = { $size } Mo
+size-gigabytes = { $size } Go
+size-terabytes = { $size } To
+size-per-second = { $size }/s
 
 ## Activity
 
 quiet-doing = { $doing } · { $elapsed }
+progress-percent = { $percent } %
 running-copying = Copie
 running-verifying = Vérification
 running-sealing = Scellement
@@ -37,7 +47,7 @@ file-status-verified = Vérifié
 file-status-hash-mismatch = Empreinte différente
 file-status-missing = Manquant
 file-status-new = Nouveau (absent du manifeste)
-file-status-io-error = Erreur d’E/S : { $message }
+file-status-io-error = Erreur d’E/S : { $message }
 file-status-replaced = Remplacé après une différence
 
 ## Job kinds
@@ -94,18 +104,18 @@ theme-accent-slate = Ardoise
 
 ## Job toasts & dialogs
 
-toast-job-finished = { $label } : { $result }
-toast-job-failed = { $label } : échec – { $message }
+toast-job-finished = { $label } : { $result }
+toast-job-failed = { $label } : échec – { $message }
 dialog-save-plan = Enregistrer le plan
 dialog-save-report = Enregistrer le rapport
 
 ## Plug-ins
 
-plugin-finding = { $plugin } : { $title }
+plugin-finding = { $plugin } : { $title }
 plugin-unavailable = extension indisponible
 plugin-field-missing = le champ { $field } n’a pas de valeur valide
 plugin-bad-output = l’extension a envoyé une réponse invalide
-toast-plugin = { $label } : { $message }
+toast-plugin = { $label } : { $message }
 
 ## Commands
 
