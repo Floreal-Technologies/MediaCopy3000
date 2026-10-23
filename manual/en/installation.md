@@ -4,7 +4,7 @@
 
 ### Windows and macOS
 
-| Your computer | Package |
+| Operating System | Package |
 |---|---|
 | Windows 10 or 11, 64-bit Intel or AMD | [`mediacopy3000-0.1.0-x64.msi`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-x64.msi) |
 | macOS 15 or later, Apple silicon (M1, M2, M3, M4) | [`mediacopy3000-0.1.0-macos-15-arm64.pkg`](https://github.com/Floreal-Technologies/MediaCopy3000/releases/download/v0.1.0/mediacopy3000-0.1.0-macos-15-arm64.pkg) |
@@ -54,33 +54,15 @@ flatpak install --user ./mediacopy3000-1.2.3-x86_64.flatpak
 The bundle needs the `org.gnome.Platform` runtime. Flatpak gets the runtime from
 Flathub when your system does not have it.
 
-### The Linux archive
-
-The archive holds the file tree that goes under `/usr`. Unpack it there:
-
-```
-sudo tar -C /usr -xzf mediacopy3000-1.2.3-linux-x86_64.tar.gz
-```
-
-The archive names no dependency. Install GTK 4.20, libadwaita 1.6 and Pango 1.56 or later with the
-package manager of your system. The `.deb`, `.rpm` and `.pkg.tar.zst` packages name them for you.
-
 ### macOS
-
-```
-sudo installer -pkg mediacopy3000-1.2.3-macos-15-arm64.pkg -target /
-```
-
-The package puts `MediaCopy3000.app` in `/Applications`. The application carries its own copy of
-GTK and libadwaita, so the system needs nothing else.
 
 This package has no Apple developer signature, and macOS will refuse it on the first start.
 To start it, open **System Settings** > **Privacy & Security**, then choose **Open Anyway**.
 
 ### Windows
 
-Double-click the `.msi` file. The installer works for the account that runs it, and it asks for no
-administrator rights. The files go to `%LOCALAPPDATA%\Programs\MediaCopy 3000`.
+Double-click the `.msi` file and proceed with the installation wizard.
+The files go to `%LOCALAPPDATA%\Programs\MediaCopy 3000`.
 
 ## The `head` tag
 
