@@ -13,12 +13,12 @@
         "$ref": "#/$defs/contributeResult"
       }
     },
-    "initialize": {
+    "initialise": {
       "params": {
-        "$ref": "#/$defs/initializeParams"
+        "$ref": "#/$defs/initialiseParams"
       },
       "result": {
-        "$ref": "#/$defs/initializeResult"
+        "$ref": "#/$defs/initialiseResult"
       }
     },
     "inspect/file": {
@@ -94,7 +94,7 @@
       }
     },
     "authorSlot": {
-      "description": "One author slot of a setting of kind authors. In plugins.json, name, email and phone are the defaults. In initialize.settings, they are the merged values for the job, and slots with no name are removed.",
+      "description": "One author slot of a setting of kind authors. In plugins.json, name, email and phone are the defaults. In initialise.settings, they are the merged values for the job, and slots with no name are removed.",
       "type": "object",
       "required": [
         "role"
@@ -167,7 +167,7 @@
       }
     },
     "field": {
-      "description": "A setting or a job field. The kind authors is allowed only in settings, only once, only with manifest.write, and without default. Its stored value and its value in initialize are arrays of authorSlot.",
+      "description": "A setting or a job field. The kind authors is allowed only in settings, only once, only with manifest.write, and without default. Its stored value and its value in initialise are arrays of authorSlot.",
       "type": "object",
       "required": [
         "key",
@@ -315,7 +315,7 @@
         }
       }
     },
-    "initializeParams": {
+    "initialiseParams": {
       "type": "object",
       "required": [
         "api",
@@ -365,7 +365,7 @@
         }
       }
     },
-    "initializeResult": {
+    "initialiseResult": {
       "type": "object",
       "required": [
         "api"

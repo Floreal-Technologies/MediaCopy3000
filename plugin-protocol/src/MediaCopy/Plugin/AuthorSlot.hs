@@ -40,4 +40,4 @@ instance Plugin.JsonSchema AuthorSlot where
             , "phone" .= JsonSchema.string
             ]
       ]
-      & JsonSchema.describe "One author slot of a setting of kind authors. In plugins.json, name, email and phone are the defaults. In initialize.settings, they are the merged values for the job, and slots with no name are removed."
+      & JsonSchema.describe "One author slot of a setting of kind authors. In plugins.json, name, email and phone are the defaults. In initialise.settings, they are the merged values for the job, and slots with no name are removed."

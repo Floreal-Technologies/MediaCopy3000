@@ -1,5 +1,5 @@
 module MediaCopy.Plugin.Protocol.Method
-  ( initialize
+  ( initialise
   , inspectPlan
   , contribute
   , inspectFile
@@ -11,8 +11,8 @@ module MediaCopy.Plugin.Protocol.Method
 import Data.Text (Text)
 import Prelude hiding (log)
 
-initialize, inspectPlan, contribute, inspectFile, shutdown :: Text
-initialize = "initialize"
+initialise, inspectPlan, contribute, inspectFile, shutdown :: Text
+initialise = "initialise"
 inspectPlan = "inspect/plan"
 contribute = "contribute"
 inspectFile = "inspect/file"

@@ -1,5 +1,5 @@
-module MediaCopy.Domain.PluginCatalog
-  ( PluginCatalog (..)
+module MediaCopy.Domain.PluginCatalogue
+  ( PluginCatalogue (..)
   , Entry (..)
   , CapabilityView (..)
   , Answer (..)
@@ -43,15 +43,15 @@ data Entry = Entry
   }
   deriving stock (Eq, Show)
 
-data PluginCatalog = PluginCatalog
+data PluginCatalogue = PluginCatalogue
   { entries :: Vector Entry
   , rejected :: Vector (Text, Text)
   , problem :: Maybe Text
   }
   deriving stock (Eq, Show)
 
-empty :: PluginCatalog
-empty = PluginCatalog {entries = V.empty, rejected = V.empty, problem = Nothing}
+empty :: PluginCatalogue
+empty = PluginCatalogue {entries = V.empty, rejected = V.empty, problem = Nothing}
 
 data Setting = SettingText Text | SettingBool Bool | SettingAuthors (Vector Plugin.AuthorSlot)
   deriving stock (Eq, Show)
@@ -62,11 +62,11 @@ data Change = Change Text Edit
 data Edit = SetEnabled Bool | SetTrace Bool | SetAnswer Plugin.Capability Answer | SetSetting Text Setting | ClearSetting Text
   deriving stock (Eq, Show)
 
-enabledJobFields :: PluginCatalog -> Vector (PluginRef, Vector FieldView)
-enabledJobFields catalog =
+enabledJobFields :: PluginCatalogue -> Vector (PluginRef, Vector FieldView)
+enabledJobFields catalogue =
   V.mapMaybe
     (\entry -> if entry.enabled && entry.active && not (V.null entry.jobFields) then Just (entry.plugin, entry.jobFields) else Nothing)
-    catalog.entries
+    catalogue.entries
 
-entryById :: Text -> PluginCatalog -> Maybe Entry
-entryById pluginId catalog = V.find (\entry -> entry.plugin.id == pluginId) catalog.entries
+entryById :: Text -> PluginCatalogue -> Maybe Entry
+entryById pluginId catalogue = V.find (\entry -> entry.plugin.id == pluginId) catalogue.entries

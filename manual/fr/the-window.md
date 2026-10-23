@@ -2,47 +2,46 @@
 
 ![La fenêtre avant la première tâche](../en/images/empty.png)
 
-La fenêtre principale a trois parties: la barre d'en-tête, la liste des tâches et le panneau.
+La fenêtre principale a trois parties : la barre d’en-tête, la liste des tâches et le volet de détails.
 
-## La barre d'en-tête
+## La barre d’en-tête
 
-Les trois boutons situés à gauche servent pour trois types de tâche : 
+Les trois boutons situés à gauche servent pour trois types de tâche :
 
-| Bouton | Tâche |
+| Bouton | Tâche |
 |---|---|
-| **New Offload…** | Un déchargement. La page [Décharger des médias](offload.md) l'explique. |
-| **Verify Folder…** | Une vérification. La page [Vérifier un dossier](verify.md) l'explique. |
-| **Seal Media…** | Un scellement. la page [Sceller une source de médias](seal.md) l'explique. |
+| **Nouveau déchargement…** | Un déchargement. La page [Décharger une source multimédia](offload.md) l’explique. |
+| **Vérifier le dossier…** | Une vérification. La page [Vérifier un dossier](verify.md) l’explique. |
+| **Sceller le support…** | Un scellement. La page [Sceller une source multimédia](seal.md) l’explique. |
 
-Le bouton de menu est à droite, qui s'ouvre avec la touche <kbd>F10</kbd>.
+À droite se trouve le bouton de menu, qui s’ouvre avec la touche <kbd>F10</kbd>.
 
 ## La liste des tâches
 
 ![La liste avec plusieurs tâches](../en/images/queue.png)
 
-La liste sur la gauche contient les tâches, une par rangée, leur phase et la barre de progression.
+La liste sur la gauche contient les tâches, une par ligne, avec leur phase et une barre de progression.
 
-| The row says | What it means |
+| La ligne indique | Signification |
 |---|---|
-| `Queued` | La tâche est en attente de traitement. Une tâche est executée à la fois. |
-| `Needs review` | La tâche a été reprogrammée et le plan a changé. Le plan attend une nouvelle approbation. |
-| `Copying · 42 % · 310 MB/s` | Un déchargement est en cours, avec sa progression et son taux de transfert |
-| `Writing the manifest · 25 s` | La tâche a lu ou écrit tous les fichiers, et est en train d'écrire le manifeste. Le temps écoulé est celui passé à attendre le disque. |
-| `Saving to disk · 14 s` | La tâche n'a transféré aucune donnée depuis quelques secondes. Les termes indiquent l'état du fichier en cours de traitement, et le nombre correspond à la durée écoulée. La page [Exécution d'une tâche](running-a-job.md) fournit des explications à ce sujet. |
-| `Verifying…` | Une tâche de vérification. |
-| `Sealing…` | Une tâche de scellement. |
-| `Finished · 7 files · all OK` | Tous les fichiers sont OK. |
-| `Finished · 2 failures` | Certains fichiers ne sont pas OK. |
-| `Failed` | La tâche s'est arrêtée avant son terme. Un message au bas de la fenêtre en indique la raison, et le rapport la conserve. |
-| `Cancelled` | La tâche a été annulée. |
+| `Queued` | La tâche attend son tour. Une seule tâche est exécutée à la fois. |
+| `Needs review` | La tâche a été planifiée à nouveau et le plan a changé. La fiche du plan attend votre réponse. |
+| `Copie • 42 % • 310,0 Mo/s` | Un déchargement est en cours. Le nombre est la part des octets traités sur les octets prévus, puis vient le débit. |
+| `Écriture du manifeste · 25 s` | La tâche a lu ou écrit tous les fichiers, et écrit maintenant son manifeste. La durée est le temps passé à attendre le disque. |
+| `Écriture sur le disque · 14 s` | La tâche n’a transféré aucun octet depuis quelques secondes. Les mots indiquent l’état du fichier en cours de traitement, et la durée est le temps passé dans cet état. La page [Pendant l’exécution d’une tâche](running-a-job.md) l’explique. |
+| `Vérification…` | Une vérification est en cours. |
+| `Scellement…` | Un scellement est en cours. |
+| `Finished · 7 files · all OK` | Tous les fichiers sont conformes. La ligne passe au vert. |
+| `Finished · 2 failures` | Certains fichiers ne sont pas conformes. La ligne passe au rouge. |
+| `Failed` | La tâche s’est arrêtée avant son terme. Un message au bas de la fenêtre en indique la raison, et le rapport la conserve. |
+| `Cancelled` | Vous avez annulé la tâche. |
 
-Cliquez sur une ligne pour sélectionner la tâche. <kbd>Ctrl</kbd>+<kbd>Page ⇟</kbd>
-(Page suivante) et <kbd>Ctrl</kbd>+<kbd>Page ⇞</kbd> (Page précédente) permettent de
-déplacer la sélection.
+Cliquez sur une ligne pour sélectionner la tâche. <kbd>Ctrl</kbd>+<kbd>Page bas</kbd>
+et <kbd>Ctrl</kbd>+<kbd>Page haut</kbd> déplacent la sélection.
 La page [Raccourcis clavier](keyboard.md) liste toutes les touches.
 <kbd>Ctrl</kbd>+<kbd>K</kbd> ouvre la [palette de commandes](keyboard.md#la-palette-de-commandes).
 
-## Le volet Détails
+## Le volet de détails
 
 La vue centrale affiche la tâche sélectionnée.
-La page [Exécution d'une tâche](running-a-job.md) explique chaque partie du volet.
+La page [Pendant l’exécution d’une tâche](running-a-job.md) explique chaque partie du volet.

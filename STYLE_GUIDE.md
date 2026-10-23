@@ -16,12 +16,13 @@ Thus, the form is the function.
 
 ### English
 
-In both code and prose, the orthography and constructs used SHOULD use British
-Spelling as outlined in the [New Oxford Style Manual].
+In both code and prose, the orthography and constructs used SHOULD use Standard
+British Spelling, and conventions outlined in the [New Oxford Style Manual].
 
 ### Français
 
-L'usage du français DEVRAIT fait selon les usages présentés dans le [Lexique des règles typographiques en usage à l'Imprimerie Nationale][Lexique Typographique].
+L’usage du français DEVRAIT être conforme au [Lexique des règles typographiques
+en usage à l’Imprimerie nationale][Lexique Typographique].
 
 ## Haskell
 

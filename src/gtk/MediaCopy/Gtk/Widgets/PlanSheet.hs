@@ -19,7 +19,7 @@ import MediaCopy.Domain.FieldView qualified as FieldView
 import MediaCopy.Domain.JobSpec qualified as JobSpec
 import MediaCopy.Domain.Offload qualified as Offload
 import MediaCopy.Domain.Plan qualified as Plan
-import MediaCopy.Domain.PluginCatalog qualified as PluginCatalog
+import MediaCopy.Domain.PluginCatalogue qualified as PluginCatalogue
 import MediaCopy.Domain.PluginRef (PluginRef)
 import MediaCopy.Domain.PluginRef qualified as PluginRef
 import MediaCopy.Gtk.Widgets.Common
@@ -221,7 +221,7 @@ renderPlanSheet widgets current = do
         Refreshing _ spec -> spec.pluginFields
         Ready plan -> plan.spec.pluginFields
         _ -> Map.empty
-  renderCell widgets.fieldsCell (PluginCatalog.enabledJobFields current.plugins, given)
+  renderCell widgets.fieldsCell (PluginCatalogue.enabledJobFields current.plugins, given)
 
 renderJobFields :: ReadyBody -> (UiMessage -> IO ()) -> (Vector (PluginRef, Vector FieldView), Map.Map Text (Map.Map Text Text)) -> IO ()
 renderJobFields body dispatch (wanted, given) = do

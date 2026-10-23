@@ -13,7 +13,7 @@ import MediaCopy.Plugin.JsonRpc.Error qualified as Error
 import MediaCopy.Plugin.JsonRpc.Request qualified as JsonRpc (Request)
 import MediaCopy.Plugin.JsonRpc.Request qualified as Request
 import MediaCopy.Plugin.Protocol.Contribute qualified as Contribute
-import MediaCopy.Plugin.Protocol.Initialize qualified as Initialize
+import MediaCopy.Plugin.Protocol.Initialise qualified as Initialise
 import System.IO (hFlush, hSetBinaryMode, isEOF, stdin, stdout)
 
 import MediaCopy.Credits
@@ -32,8 +32,8 @@ serve slots =
       BS8.hGetLine stdin >>= \line -> case Request.decode (BS8.strip line) of
         Left _ -> serve slots
         Right request -> case request.method of
-          "initialize" -> withParams request $ \(params :: Initialize.Params) -> do
-            reply request (Initialize.Result {api = Api.major})
+          "initialise" -> withParams request $ \(params :: Initialise.Params) -> do
+            reply request (Initialise.Result {api = Api.major})
             serve (slotsOf params.settings)
           "contribute" -> withParams request $ \(_ :: Contribute.Params) -> do
             reply request (contribution slots)

@@ -51,7 +51,7 @@ scenes =
   , tweak (\frame -> frame {expand = True}) (still "verify-history" verifyMessages)
   , still "seal-finished" sealMessages
   , tweak (\frame -> frame {action = Just Command.Preferences}) (still "preferences" finishedMessages)
-  , tweak (\frame -> frame {action = Just Command.Plugins}) (still "plugins" [CatalogLoaded pluginCatalog])
+  , tweak (\frame -> frame {action = Just Command.Plugins}) (still "plugins" [CatalogueLoaded pluginCatalogue])
   , tweak (\frame -> frame {scroll = True}) (still "plan-plugins" pluginPlanMessages)
   , still "job-plugins" pluginJobMessages
   , still "close-confirm" (runningMessages <> [EngineEvent first (JobEvent.Progress 8_640_000_000), Ui RequestClose])
@@ -89,7 +89,7 @@ approved jid job toPlan =
 
 pluginPlanMessages :: List Message
 pluginPlanMessages =
-  [ CatalogLoaded pluginCatalog
+  [ CatalogueLoaded pluginCatalogue
   , RequestPlan (offloadJob Offload.UseHistory)
   , Ui (SetJobField "tech.floreal.credits" "authors.1.name" "Sam Roe")
   , PlanComputed spec (Right (pluginPlan spec))
@@ -99,7 +99,7 @@ pluginPlanMessages =
 
 pluginJobMessages :: List Message
 pluginJobMessages =
-  [ CatalogLoaded pluginCatalog
+  [ CatalogueLoaded pluginCatalogue
   , RequestPlan (offloadJob Offload.UseHistory)
   , Ui (SetJobField "tech.floreal.credits" "authors.1.name" "Sam Roe")
   , PlanComputed spec (Right (pluginPlan spec))

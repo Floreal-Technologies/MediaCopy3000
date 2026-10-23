@@ -1,6 +1,6 @@
 {-# LANGUAGE DerivingVia #-}
 
-module MediaCopy.Plugin.Protocol.Initialize
+module MediaCopy.Plugin.Protocol.Initialise
   ( Params (..)
   , Result (..)
   ) where
@@ -34,7 +34,7 @@ data Params = Params
   deriving (FromJSON, ToJSON) via Wire Params
 
 instance Plugin.JsonSchema Params where
-  defName = Just "initializeParams"
+  defName = Just "initialiseParams"
   schema =
     JsonSchema.record @Params
       & JsonSchema.property "job" (JsonSchema.ref "jobKind")
@@ -52,5 +52,5 @@ data Result = Result
   deriving (FromJSON, ToJSON) via Wire Result
 
 instance Plugin.JsonSchema Result where
-  defName = Just "initializeResult"
+  defName = Just "initialiseResult"
   schema = JsonSchema.record @Result & JsonSchema.property "api" (object ["const" .= Api.major])

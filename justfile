@@ -20,7 +20,7 @@ build:
 watch:
     ghcid -c "cabal repl lib:mediacopy3000" -T "MediaCopy.Gtk.Runtime.start Nothing"
 
-# Remove the compilation artifacts
+# Remove the compilation artefacts
 clean:
     cabal clean
 
