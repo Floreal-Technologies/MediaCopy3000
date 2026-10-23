@@ -35,6 +35,62 @@ In case a function takes a significant amount of function arguments that do not 
 it is RECOMMENDED to write a bespoke record that holds those arguments and will be
 passed to the function. For clarity, you MAY give the record the suffix `Props`.
 
+### GTK signal handlers
+
+A signal handler lives as long as the object that emits the signal, or until
+it is disconnected. The Haskell GC cannot see the GObject reference counts,
+so a handler that keeps its emitter alive is never collected.
+
+- A handler MUST NOT capture its own emitter, or an ancestor of it.
+  Use `?self` or the arguments of the signal instead.
+
+  ```haskell
+  -- Bad: the closure holds a reference to `button`, and `button` holds the closure
+  on button #clicked $ set button [#sensitive := False]
+
+  -- Good
+  on button #clicked $ set ?self [#sensitive := False]
+  ```
+
+- A handler connected to a long-lived object (the `Application`, a shared
+  model, a file monitor) MUST be disconnected when the subscriber is destroyed.
+
+  ```haskell
+  -- Bad: `label` stays alive as long as `model` does
+  void $ on model #itemsChanged $ \_ _ _ -> updateCount label
+
+  -- Good
+  handlerId <- on model #itemsChanged $ \_ _ _ -> updateCount label
+  void $ on label #destroy $ disconnectSignalHandler model handlerId
+  ```
+
+- A handler SHOULD capture a small handle (an `IORef`, a `TVar`, an
+  identifier), not the whole application state.
+
+  ```haskell
+  -- Bad: a forgotten handler keeps the whole state alive
+  on entry #changed $ render state
+
+  -- Good
+  on entry #changed $ readIORef stateRef >>= render
+  ```
+
+- A `GLib.timeoutAdd` or `GLib.idleAdd` callback that repeats MUST be removed
+  with `GLib.sourceRemove` when its owner is destroyed. A one-shot callback
+  MUST return `False`.
+
+  ```haskell
+  -- Bad: the callback runs forever, even after `label` is gone
+  void $ GLib.timeoutAdd GLib.PRIORITY_DEFAULT 1000 $ tick label >> pure True
+
+  -- Good
+  sourceId <- GLib.timeoutAdd GLib.PRIORITY_DEFAULT 1000 $ tick label >> pure True
+  void $ on label #destroy $ void (GLib.sourceRemove sourceId)
+  ```
+
+- A list item factory that connects handlers in `#bind` MUST disconnect them
+  in `#unbind`. Recycled rows otherwise accumulate handlers.
+
 ## Pull Requests (PRs)
 
 ### Ticket
