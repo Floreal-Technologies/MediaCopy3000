@@ -1,5 +1,11 @@
 procs := num_cpus()
 
+export XDG_DATA_DIRS := if os() == "macos" {
+        `brew --prefix` + "/share:" + env("XDG_DATA_DIRS", "/usr/local/share:/usr/share")
+    } else {
+        env("XDG_DATA_DIRS", "/usr/local/share:/usr/share")
+    }
+
 [private]
 default:
     @just --list --unsorted
