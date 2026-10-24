@@ -10,6 +10,8 @@
 - Node.js 22 and `npm` for the manual
 - [`uv`](https://docs.astral.sh/uv/), for the conformance tests
 
+## Windows
+
 On native Windows, the GTK stack comes from MSYS2. Install the `ucrt64` packages
 `pkgconf`, `gobject-introspection`, `gtk4`, `libadwaita` and `ntldd` from the
 `mingw-w64-ucrt-x86_64` prefix.
@@ -46,6 +48,14 @@ directories are for a native Windows build only.
 
 In WSL2, `scripts/package.sh` makes Linux packages. To make the Windows installer, use
 `scripts/package.ps1` in a native Windows build.
+
+## macOS
+
+To build MC3K on macOS, `xxhash` and `gobject-introspection` need to be installed from an external package manager.
+```
+   brew install xxhash gobject-introspection
+````
+`
 
 ### Development mode
 

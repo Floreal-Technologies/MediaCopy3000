@@ -18,10 +18,10 @@ hero:
       link: /installation
 
 features:
-  - title: Integrity and completeness
-    details: Ensure the <b>integrity</b> and <b>completeness</b> of your transfers across storage volumes.
-  - title: Plan, Execution, Report
-    details: Data transfers start with a plan and end with a report. Maintain full confidence is what happened and why.
-  - title: An industry standard
-    details: MediaCopy 3000 uses ASC Media Hash Lists. Each folder keeps its transfer history, giving you visibility on the previous tranfers.
+  - title: Integrity and Completeness
+    details: Ensure <b>integrity</b> and <b>completeness</b>  your transfers across storage volumes.
+  - title: Plan, Execute, Report
+    details: All data transfers start with a plan and end with a report. Maintain full confidence as to what happened and why.
+  - title: An Industry Standard
+    details: MediaCopy 3000 uses ASC Media Hash Lists, a format trusted by thousands of industry professionals. Each folder keeps its own transfer history, giving you complete visibility on who transferred what, when.
 ---
