@@ -24,7 +24,7 @@ build:
 
 # Rebuild and start the application on each code change
 watch:
-    ghcid -c "cabal repl lib:mediacopy3000" -T "MediaCopy.Gtk.Runtime.start Nothing"
+    ghcid -c "cabal repl lib:mediacopy3000 --repl-options=-fno-ghci-sandbox" -T "MediaCopy.Gtk.Runtime.start Nothing"
 
 # Remove the compilation artefacts
 clean:
