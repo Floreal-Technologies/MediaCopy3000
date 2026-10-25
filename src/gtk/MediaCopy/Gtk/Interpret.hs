@@ -27,6 +27,7 @@ gtkShell widgets post =
     , destroyWindow = Gtk.windowDestroy widgets.window
     , showChrome = widgets.present
     , showFolder = showFolder widgets.window post
+    , notify = notify widgets.window
     }
 
 toasting :: (Message -> IO ()) -> IO () -> IO ()
@@ -60,9 +61,22 @@ showFolder window post folder = do
   Gtk.fileLauncherLaunch launcher (Just window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
     toasting post (Gtk.fileLauncherLaunchFinish launcher result)
 
+notify :: Adw.ApplicationWindow -> Notification -> IO ()
+notify window notification = do
+  isActive <- Gtk.windowIsActive window
+  case isActive of
+    True -> pure ()
+    False -> do
+      mbApp <- Gtk.windowGetApplication window
+      case mbApp of
+        Nothing -> pure ()
+        Just app -> do
+          notif <- Gio.notificationNew notification.title
+          Gio.applicationSendNotification app Nothing notif
+          
 -- | gi-gio versions disagree on whether the picked file is nullable.
 class PickedFile file where
-  pickedFile :: file -> Maybe Gio.File
+   pickedFile :: file -> Maybe Gio.File
 
 instance PickedFile Gio.File where
   pickedFile = Just

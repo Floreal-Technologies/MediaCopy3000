@@ -47,7 +47,7 @@ import MediaCopy.Domain.JobEvent qualified as JobEvent
 import MediaCopy.Domain.JobId (JobId)
 import MediaCopy.Domain.JobState qualified as JobState
 import MediaCopy.Interface.Theme (Accent (Blue), PaletteMode (LightPalette))
-import MediaCopy.Model (JobEntry (..), Message (..), Model (..), UiMessage, initialModel)
+import MediaCopy.Model (JobEntry (..), Message (..), Model (..), UiMessage, initialModel, Notification (..))
 import MediaCopy.Runtime (Runtime, Shell (..), currentModel, dispatch, inFlight, newRuntime, stopWorkers)
 import MediaCopy.Test.FakeWorld (FakePlugin)
 import MediaCopy.Test.FakeWorld qualified as FakeWorld
@@ -137,6 +137,7 @@ data Harness = Harness
   , closedRef :: IORef Bool
   , chromeRef :: IORef (List Text)
   , modelsRef :: IORef (List Model)
+  , notificationsRef :: IORef (List Notification)
   , violationsRef :: IORef (List Text)
   }
 
@@ -176,7 +177,8 @@ newHarness setup = do
   chromeRef <- newIORef []
   modelsRef <- newIORef []
   violationsRef <- newIORef []
-  pure Harness {loopThread, queue, blocked, stopping, held, diskRef, picksRef, armed, current, shown, eventsRef, closedRef, chromeRef, modelsRef, violationsRef}
+  notificationsRef <- newIORef []
+  pure Harness {loopThread, queue, blocked, stopping, held, diskRef, picksRef, armed, current, shown, eventsRef, closedRef, chromeRef, modelsRef, violationsRef, notificationsRef}
 
 testShell :: Harness -> Shell
 testShell harness =
@@ -187,6 +189,7 @@ testShell harness =
     , destroyWindow = writeIORef harness.closedRef True
     , showChrome = \chrome -> modifyIORef' harness.chromeRef (T.show chrome :)
     , showFolder = \folder -> modifyIORef' harness.chromeRef (("ShowFolder " <> folder) :)
+    , notify = \notif -> modifyIORef' harness.notificationsRef (notif :)
     }
 
 data Placed = Placed

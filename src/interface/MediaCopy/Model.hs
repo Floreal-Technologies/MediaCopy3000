@@ -165,6 +165,15 @@ data AppEffect
   | ApplyChange PluginCatalogue.Change
   | ShowFolder Text
   | ShowChrome Chrome
+  | Notify Notification
+
+data Notification = Notification
+  { notificationId :: JobId
+  , title :: Text
+  , body :: Text
+  , isUrgent :: Bool
+  } deriving stock (Eq, Show)
+
 
 data Scope = App | Win
   deriving stock (Eq, Show)
