@@ -10,6 +10,7 @@ module MediaCopy.Plugin.JsonSchema
 
     -- * Building blocks
   , record
+  , taggedUnion
   , enumOf
   , string
   , describe
@@ -30,6 +31,8 @@ import Data.Text qualified as T
 import Data.Vector (Vector)
 import GHC.Generics
 import GHC.TypeLits (KnownSymbol, symbolVal)
+
+import MediaCopy.Plugin.Internal.Wire qualified as Wire
 
 -- | A type that has a JSON Schema. A type with a name goes into @$defs@, and the other schemas refer to it.
 class JsonSchema a where
@@ -84,6 +87,36 @@ record =
   where
     fields = gproperties @(Rep a)
     required = [name | (name, True, _) <- fields]
+
+-- | The schema of a sum type whose JSON instance is 'Wire.Tagged': one object for each constructor, with its name in @status@.
+taggedUnion :: forall a. (GConstructors (Rep a)) => Value
+taggedUnion = object ["oneOf" .= map variant (gconstructors @(Rep a))]
+  where
+    status = Wire.statusField
+    variant (tag, fields) =
+      object
+        [ "type" .= String "object"
+        , "required" .= (status : [name | (name, True, _) <- fields])
+        , "properties" .= object ((Key.fromText status .= object ["const" .= tag]) : [Key.fromText name .= value | (name, _, value) <- fields])
+        ]
+
+class GConstructors (f :: Type -> Type) where
+  gconstructors :: [(Text, [(Text, Bool, Value)])]
+
+instance (GConstructors f) => GConstructors (M1 D d f) where
+  gconstructors = gconstructors @f
+
+instance (GConstructors f, GConstructors g) => GConstructors (f :+: g) where
+  gconstructors = gconstructors @f <> gconstructors @g
+
+instance (KnownSymbol name) => GConstructors (M1 C ('MetaCons name fx s) U1) where
+  gconstructors = [(tagOf @name, [])]
+
+instance (KnownSymbol name, GProperties (Rep t)) => GConstructors (M1 C ('MetaCons name fx s) (M1 S sel (K1 i t))) where
+  gconstructors = [(tagOf @name, gproperties @(Rep t))]
+
+tagOf :: forall name. (KnownSymbol name) => Text
+tagOf = T.pack (Wire.constructorTag (symbolVal (Proxy @name)))
 
 class GProperties (f :: Type -> Type) where
   gproperties :: [(Text, Bool, Value)]

@@ -28,6 +28,7 @@ common options
     -fwrite-ide-info
 
   default-extensions:
+    DerivingVia
     DuplicateRecordFields
     NoFieldSelectors
     NoStarIsType
@@ -44,12 +45,14 @@ common options
 library
   import: options
   hs-source-dirs: src
+  -- cabal-gild: discover src
   exposed-modules:
     MediaCopy.Plugin.Api
     MediaCopy.Plugin.AuthorSlot
     MediaCopy.Plugin.Capability
     MediaCopy.Plugin.Field
     MediaCopy.Plugin.Id
+    MediaCopy.Plugin.Internal.Wire
     MediaCopy.Plugin.JsonRpc
     MediaCopy.Plugin.JsonRpc.Error
     MediaCopy.Plugin.JsonRpc.Incoming
@@ -63,13 +66,13 @@ library
     MediaCopy.Plugin.Protocol.Initialise
     MediaCopy.Plugin.Protocol.InspectFile
     MediaCopy.Plugin.Protocol.InspectPlan
+    MediaCopy.Plugin.Protocol.JobFinished
     MediaCopy.Plugin.Protocol.JobInfo
     MediaCopy.Plugin.Protocol.LogLine
     MediaCopy.Plugin.Protocol.Method
     MediaCopy.Plugin.Protocol.Progress
     MediaCopy.Plugin.Schema
 
-  other-modules: MediaCopy.Plugin.Internal.Wire
   build-depends:
     aeson,
     aeson-pretty,
@@ -77,6 +80,7 @@ library
     bytestring,
     containers,
     text,
+    text-display ^>=1.0.0.0,
     vector,
 
 test-suite plugin-protocol-test

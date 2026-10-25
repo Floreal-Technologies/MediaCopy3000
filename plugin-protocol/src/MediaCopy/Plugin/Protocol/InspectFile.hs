@@ -1,5 +1,3 @@
-{-# LANGUAGE DerivingVia #-}
-
 module MediaCopy.Plugin.Protocol.InspectFile
   ( Params (..)
   , Result (..)

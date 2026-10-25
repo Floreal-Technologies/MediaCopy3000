@@ -32,6 +32,7 @@ import MediaCopy.Plugin.Protocol.HashValue qualified as Protocol (HashValue)
 import MediaCopy.Plugin.Protocol.Initialise qualified as Initialise
 import MediaCopy.Plugin.Protocol.InspectFile qualified as InspectFile
 import MediaCopy.Plugin.Protocol.InspectPlan qualified as InspectPlan
+import MediaCopy.Plugin.Protocol.JobFinished qualified as JobFinished
 import MediaCopy.Plugin.Protocol.JobInfo qualified as Protocol (JobInfo)
 import MediaCopy.Plugin.Protocol.LogLine qualified as Protocol (LogLine)
 import MediaCopy.Plugin.Protocol.Method qualified as Method
@@ -59,6 +60,7 @@ document
               , method Method.inspectPlan (JsonSchema.embed @InspectPlan.Params) (JsonSchema.embed @InspectPlan.Result)
               , method Method.contribute (JsonSchema.embed @Contribute.Params) (JsonSchema.embed @Contribute.Result)
               , method Method.inspectFile (JsonSchema.embed @InspectFile.Params) (JsonSchema.embed @InspectFile.Result)
+              , method Method.jobFinished (JsonSchema.embed @JobFinished.Params) (JsonSchema.embed @JobFinished.Result)
               , method Method.shutdown (object ["type" .= String "object"]) (object [])
               ]
         , "x-notifications" .= object [Key.fromText Method.progress .= JsonSchema.embed @Protocol.Progress, Key.fromText Method.log .= JsonSchema.embed @Protocol.LogLine]
@@ -84,6 +86,10 @@ document
         , def @Initialise.Result
         , def @InspectPlan.Params
         , def @InspectPlan.Result
+        , def @JobFinished.Params
+        , def @JobFinished.Outcome
+        , def @JobFinished.ManifestInfo
+        , def @JobFinished.Result
         , def @Contribute.Params
         , def @Contribute.Result
         , def @InspectFile.Params
