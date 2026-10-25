@@ -10,6 +10,8 @@ result-with-failures = terminé avec { $count ->
 ## Toasts
 
 toast-no-history = pas d’historique ASC Media Hash List (ascmhl/) dans { $folder }
+notif-job-finished-title = { $label } terminé.
+notif-job-failed-title = { $label } échouée.
 
 ## Durations
 

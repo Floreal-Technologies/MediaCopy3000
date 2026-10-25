@@ -7,6 +7,8 @@ module MediaCopy.Interface.Wording
   , resultText
   , jobFinishedToast
   , jobFailedToast
+  , jobFinishedNotifTitle
+  , jobFailedNotifTitle
   , savePlanTitle
   , saveReportTitle
   , noHistoryText
@@ -198,6 +200,14 @@ resultText wording kind = \case
 jobFinishedToast :: Wording -> Text -> Job.Kind -> JobResult -> Text
 jobFinishedToast wording label kind result =
   getTranslation wording toastJobFinished [("label", str label), ("result", str (resultText wording kind result))]
+
+jobFinishedNotifTitle :: Wording -> Text -> Text
+jobFinishedNotifTitle wording label =
+  getTranslation wording notifJobFinishedTitle [("label", str label)]
+
+jobFailedNotifTitle :: Wording -> Text -> Text
+jobFailedNotifTitle wording label =
+  getTranslation wording notifJobFailedTitle [("label", str label)]
 
 jobFailedToast :: Wording -> Text -> Text -> Text
 jobFailedToast wording label message = getTranslation wording toastJobFailed [("label", str label), ("message", str message)]

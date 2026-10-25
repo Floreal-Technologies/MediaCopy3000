@@ -47,7 +47,7 @@ import MediaCopy.Domain.JobEvent qualified as JobEvent
 import MediaCopy.Domain.JobId (JobId)
 import MediaCopy.Domain.JobState qualified as JobState
 import MediaCopy.Interface.Theme (Accent (Blue), PaletteMode (LightPalette))
-import MediaCopy.Model (JobEntry (..), Message (..), Model (..), UiMessage, initialModel, Notification (..))
+import MediaCopy.Model (JobEntry (..), Message (..), Model (..), Notification (..), UiMessage, initialModel)
 import MediaCopy.Runtime (Runtime, Shell (..), currentModel, dispatch, inFlight, newRuntime, stopWorkers)
 import MediaCopy.Test.FakeWorld (FakePlugin)
 import MediaCopy.Test.FakeWorld qualified as FakeWorld

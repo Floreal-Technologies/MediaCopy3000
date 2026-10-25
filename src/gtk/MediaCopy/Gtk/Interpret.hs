@@ -3,6 +3,7 @@ module MediaCopy.Gtk.Interpret
   ) where
 
 import Control.Exception (displayException)
+import Control.Monad.Extra (unlessM, whenJustM)
 import Data.GI.Base (AttrOp ((:=)), new, set)
 import Data.GI.Base.GError (catchGErrorJustDomain)
 import Data.Text qualified as T
@@ -12,6 +13,7 @@ import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 import System.OsPath (encodeFS)
 
+import MediaCopy.Domain.JobId (getJobIdNumber)
 import MediaCopy.Gtk.View (Widgets (..))
 import MediaCopy.Model
 import MediaCopy.Runtime (Shell (..))
@@ -63,20 +65,19 @@ showFolder window post folder = do
 
 notify :: Adw.ApplicationWindow -> Notification -> IO ()
 notify window notification = do
-  isActive <- Gtk.windowIsActive window
-  case isActive of
-    True -> pure ()
-    False -> do
-      mbApp <- Gtk.windowGetApplication window
-      case mbApp of
-        Nothing -> pure ()
-        Just app -> do
-          notif <- Gio.notificationNew notification.title
-          Gio.applicationSendNotification app Nothing notif
-          
+  unlessM (Gtk.windowIsActive window) $ whenJustM (Gtk.windowGetApplication window) $ \app -> do
+    notif <- Gio.notificationNew notification.title
+    Gio.notificationSetBody notif (Just notification.body)
+    let notifId =
+          notification.notificationId
+            & getJobIdNumber
+            & T.show
+            & Just
+    Gio.applicationSendNotification app notifId notif
+
 -- | gi-gio versions disagree on whether the picked file is nullable.
 class PickedFile file where
-   pickedFile :: file -> Maybe Gio.File
+  pickedFile :: file -> Maybe Gio.File
 
 instance PickedFile Gio.File where
   pickedFile = Just
