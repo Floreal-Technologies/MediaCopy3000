@@ -2,6 +2,7 @@ module MediaCopy.Domain.JobEvent
   ( JobEvent (..)
   , PlannedWork (..)
   , isTerminal
+  , isFailed
   ) where
 
 import Ascmhl.Algo (Algo)
@@ -58,4 +59,9 @@ instance Display JobEvent where
 isTerminal :: JobEvent -> Bool
 isTerminal = \case
   (Finished _; Failed _) -> True
+  _ -> False
+
+isFailed :: JobEvent -> Bool
+isFailed = \case
+  Failed _ -> True
   _ -> False

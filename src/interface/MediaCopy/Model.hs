@@ -172,8 +172,8 @@ data Notification = Notification
   , title :: Text
   , body :: Text
   , isUrgent :: Bool
-  } deriving stock (Eq, Show)
-
+  }
+  deriving stock (Eq, Show)
 
 data Scope = App | Win
   deriving stock (Eq, Show)
@@ -247,7 +247,15 @@ update msg model = case msg of
                          , closeConfirm = False
                          }
                      (model2, cmds) = startNext ended
-                 in (model2, refresh <> cmds)
+                     notif =
+                       [ Notify $
+                           Notification
+                             jid
+                             (fromMaybe "" (terminalJobEventNotifTitle model.wording entry.state.spec.job ev))
+                             (fromMaybe "" (toastMessage model.wording entry.state.spec.job ev))
+                             (JobEvent.isFailed ev)
+                       ]
+                 in (model2, refresh <> notif <> cmds)
                else (model1, [])
   HistoryLoaded jid hist -> case Map.lookup jid model.jobs of
     Nothing -> (model, [])
@@ -520,6 +528,12 @@ toastMessage :: Wording -> Job -> JobEvent -> Maybe Text
 toastMessage wording job = \case
   JobEvent.Finished result -> Just (jobFinishedToast wording (Job.label job) (Job.kind job) result)
   JobEvent.Failed msg' -> Just (jobFailedToast wording (Job.label job) msg')
+  _ -> Nothing
+
+terminalJobEventNotifTitle :: Wording -> Job -> JobEvent -> Maybe Text
+terminalJobEventNotifTitle wording job = \case
+  JobEvent.Finished _ -> Just (jobFinishedNotifTitle wording (Job.label job))
+  JobEvent.Failed _ -> Just (jobFailedNotifTitle wording (Job.label job))
   _ -> Nothing
 
 deleteAt :: Int -> List a -> List a
