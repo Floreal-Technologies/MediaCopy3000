@@ -1,24 +1,22 @@
-{-# LANGUAGE DerivingVia #-}
-
 module MediaCopy.Plugin.Protocol.FileInfo (FileInfo (..)) where
 
-import Data.Aeson
+import Autodocodec
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Int (Int64)
 import Data.Text (Text)
-import GHC.Generics (Generic)
 
-import MediaCopy.Plugin.Internal.Wire (Wire)
-import MediaCopy.Plugin.Internal.Wire qualified as Wire
 import MediaCopy.Plugin.JsonSchema qualified as JsonSchema
-import MediaCopy.Plugin.JsonSchema qualified as Plugin (JsonSchema)
 
 data FileInfo = FileInfo
   { path :: Text
   , size :: Int64
   }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire FileInfo
+  deriving stock (Eq, Show)
+  deriving (FromJSON, ToJSON) via Autodocodec FileInfo
 
-instance Plugin.JsonSchema FileInfo where
-  defName = Just "fileInfo"
-  schema = JsonSchema.record @FileInfo
+instance HasCodec FileInfo where
+  codec =
+    JsonSchema.namedObject "fileInfo" $
+      FileInfo
+        <$> requiredField' "path" .= (.path)
+        <*> requiredField' "size" .= (.size)

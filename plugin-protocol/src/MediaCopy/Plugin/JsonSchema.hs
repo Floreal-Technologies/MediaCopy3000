@@ -1,48 +1,48 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE UndecidableInstances #-}
-
 module MediaCopy.Plugin.JsonSchema
-  ( -- * Class
-    JsonSchema (..)
-  , embed
+  ( -- * Codecs
+    namedObject
+  , describedObject
+  , optionalText
+  , nonEmptyText
+
+    -- * Schema patches
+  , Patch
   , ref
   , defsPrefix
-
-    -- * Building blocks
-  , record
-  , taggedUnion
-  , enumOf
-  , string
   , describe
+  , extend
+  , require
   , property
-  , describeProperty
+  , extendProperty
   ) where
 
-import Data.Aeson
+import Autodocodec (Codec (..), ObjectCodec, ValueCodec, dimapCodec, named, optionalFieldOrNull', (<?>))
+import Control.Monad (mfilter)
+import Data.Aeson (Key, Object, Value (..), object, (.=))
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
-import Data.Int (Int64)
-import Data.Kind (Type)
-import Data.Map.Strict (Map)
 import Data.Maybe (fromMaybe)
-import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Vector (Vector)
-import GHC.Generics
-import GHC.TypeLits (KnownSymbol, symbolVal)
+import Data.Vector qualified as V
 
-import MediaCopy.Plugin.Internal.Wire qualified as Wire
+-- | An object with a name in @$defs@. 'Autodocodec.object' writes its name as a comment, and the schema would show it as a description.
+namedObject :: Text -> ObjectCodec input output -> ValueCodec input output
+namedObject name = named name . ObjectOfCodec Nothing
 
--- | A type that has a JSON Schema. A type with a name goes into @$defs@, and the other schemas refer to it.
-class JsonSchema a where
-  schema :: Value
-  defName :: Maybe Text
-  defName = Nothing
+-- | 'namedObject' with a description.
+describedObject :: Text -> Text -> ObjectCodec input output -> ValueCodec input output
+describedObject name description = named name . (<?> description) . ObjectOfCodec Nothing
 
--- | The schema of @a@ as another schema uses it: a reference when it has a name, the schema itself otherwise.
-embed :: forall a. (JsonSchema a) => Value
-embed = maybe (schema @a) ref (defName @a)
+-- | An optional text. An absent key, @null@ and the empty text decode as 'Nothing'.
+optionalText :: Text -> ObjectCodec (Maybe Text) (Maybe Text)
+optionalText key = dimapCodec (>>= nonEmptyText) id (optionalFieldOrNull' key)
+
+nonEmptyText :: Text -> Maybe Text
+nonEmptyText = mfilter (not . T.null) . Just
+
+-- | A change to one schema in @$defs@, for what autodocodec-schema cannot say.
+type Patch = Value -> Value
 
 ref :: Text -> Value
 ref name = object ["$ref" .= (defsPrefix <> name)]
@@ -50,121 +50,40 @@ ref name = object ["$ref" .= (defsPrefix <> name)]
 defsPrefix :: Text
 defsPrefix = "#/$defs/"
 
-instance JsonSchema Text where
-  schema = string
+describe :: Text -> Patch
+describe text = extend [("description", String text)]
 
-instance JsonSchema Int where
-  schema = typed "integer"
+-- | Adds keywords to a schema.
+extend :: [(Key, Value)] -> Patch
+extend pairs = \case
+  Object o -> Object (KeyMap.union (KeyMap.fromList pairs) o)
+  other -> error ("cannot add " <> show (map fst pairs) <> " to a schema that is not an object: " <> show other)
 
-instance JsonSchema Int64 where
-  schema = typed "integer"
-
-instance JsonSchema Double where
-  schema = typed "number"
-
-instance JsonSchema Value where
-  schema = object []
-
-instance (JsonSchema a) => JsonSchema (Vector a) where
-  schema = object ["type" .= String "array", "items" .= embed @a]
-
-instance (JsonSchema a) => JsonSchema (Map Text a) where
-  schema = object ["type" .= String "object", "additionalProperties" .= embed @a]
-
-string :: Value
-string = typed "string"
-
-typed :: Text -> Value
-typed name = object ["type" .= name]
-
--- | The schema of a record whose JSON instance is generic with @omitNothingFields@: a 'Maybe' field is optional, every other field is required.
-record :: forall a. (GProperties (Rep a)) => Value
-record =
-  object $
-    ["type" .= String "object"]
-      <> ["required" .= required | not (null required)]
-      <> ["properties" .= object [Key.fromText name .= value | (name, _, value) <- fields]]
+-- | Adds a key to the required keys of an object schema.
+require :: Text -> Patch
+require name = \case
+  Object o -> Object (KeyMap.insert "required" (Array (V.snoc (required o) (String name))) o)
+  other -> error ("cannot require " <> show name <> " in a schema that is not an object: " <> show other)
   where
-    fields = gproperties @(Rep a)
-    required = [name | (name, True, _) <- fields]
-
--- | The schema of a sum type whose JSON instance is 'Wire.Tagged': one object for each constructor, with its name in @status@.
-taggedUnion :: forall a. (GConstructors (Rep a)) => Value
-taggedUnion = object ["oneOf" .= map variant (gconstructors @(Rep a))]
-  where
-    status = Wire.statusField
-    variant (tag, fields) =
-      object
-        [ "type" .= String "object"
-        , "required" .= (status : [name | (name, True, _) <- fields])
-        , "properties" .= object ((Key.fromText status .= object ["const" .= tag]) : [Key.fromText name .= value | (name, _, value) <- fields])
-        ]
-
-class GConstructors (f :: Type -> Type) where
-  gconstructors :: [(Text, [(Text, Bool, Value)])]
-
-instance (GConstructors f) => GConstructors (M1 D d f) where
-  gconstructors = gconstructors @f
-
-instance (GConstructors f, GConstructors g) => GConstructors (f :+: g) where
-  gconstructors = gconstructors @f <> gconstructors @g
-
-instance (KnownSymbol name) => GConstructors (M1 C ('MetaCons name fx s) U1) where
-  gconstructors = [(tagOf @name, [])]
-
-instance (KnownSymbol name, GProperties (Rep t)) => GConstructors (M1 C ('MetaCons name fx s) (M1 S sel (K1 i t))) where
-  gconstructors = [(tagOf @name, gproperties @(Rep t))]
-
-tagOf :: forall name. (KnownSymbol name) => Text
-tagOf = T.pack (Wire.constructorTag (symbolVal (Proxy @name)))
-
-class GProperties (f :: Type -> Type) where
-  gproperties :: [(Text, Bool, Value)]
-
-instance (GProperties f) => GProperties (M1 D d f) where
-  gproperties = gproperties @f
-
-instance (GProperties f) => GProperties (M1 C c f) where
-  gproperties = gproperties @f
-
-instance (GProperties f, GProperties g) => GProperties (f :*: g) where
-  gproperties = gproperties @f <> gproperties @g
-
-instance (KnownSymbol name, FieldSchema t) => GProperties (M1 S ('MetaSel ('Just name) su ss ds) (K1 i t)) where
-  gproperties = [(T.pack (symbolVal (Proxy @name)), required, value)]
-    where
-      (required, value) = fieldSchema @t
-
-class FieldSchema t where
-  fieldSchema :: (Bool, Value)
-
-instance {-# OVERLAPPING #-} (JsonSchema a) => FieldSchema (Maybe a) where
-  fieldSchema = (False, embed @a)
-
-instance (JsonSchema a) => FieldSchema a where
-  fieldSchema = (True, embed @a)
-
-enumOf :: forall a. (Bounded a, Enum a, ToJSON a) => Value
-enumOf = object ["enum" .= map toJSON [minBound .. maxBound :: a]]
-
-describe :: Text -> Value -> Value
-describe text = insert "description" (String text)
+    required o = case KeyMap.lookup "required" o of
+      Just (Array names) -> names
+      _ -> V.empty
 
 -- | Replaces the schema of one property of an object schema.
-property :: Text -> Value -> Value -> Value
-property name value = \case
-  Object o -> Object (KeyMap.insert "properties" (insert (Key.fromText name) value (fromMaybe (object []) (KeyMap.lookup "properties" o))) o)
-  other -> error ("cannot add the property " <> show name <> " to a schema that is not an object: " <> show other)
+property :: Text -> Value -> Patch
+property name value = adjustProperties (KeyMap.insert (Key.fromText name) value)
 
-describeProperty :: Text -> Text -> Value -> Value
-describeProperty name text = adjust "properties" (adjust (Key.fromText name) (describe text))
+-- | Adds keywords to the schema of one property of an object schema.
+extendProperty :: Text -> [(Key, Value)] -> Patch
+extendProperty name pairs = adjustProperties $ \properties -> case KeyMap.lookup (Key.fromText name) properties of
+  Just value -> KeyMap.insert (Key.fromText name) (extend pairs value) properties
+  Nothing -> error ("the schema has no property " <> show name)
 
-insert :: Key -> Value -> Value -> Value
-insert key value = \case
-  Object o -> Object (KeyMap.insert key value o)
-  other -> error ("cannot add " <> show key <> " to a schema that is not an object: " <> show other)
-
-adjust :: Key -> (Value -> Value) -> Value -> Value
-adjust key f = \case
-  Object o | Just value <- KeyMap.lookup key o -> Object (KeyMap.insert key (f value) o)
-  other -> error ("the schema has no " <> show key <> ": " <> show other)
+adjustProperties :: (Object -> Object) -> Patch
+adjustProperties f = \case
+  Object o -> Object (KeyMap.insert "properties" (Object (f (fromMaybe mempty (KeyMap.lookup "properties" o >>= asObject)))) o)
+  other -> error ("cannot change the properties of a schema that is not an object: " <> show other)
+  where
+    asObject = \case
+      Object properties -> Just properties
+      _ -> Nothing

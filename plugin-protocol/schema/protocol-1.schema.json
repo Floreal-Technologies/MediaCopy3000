@@ -64,9 +64,9 @@
     "annotation": {
       "type": "object",
       "required": [
-        "key",
+        "value",
         "label",
-        "value"
+        "key"
       ],
       "properties": {
         "key": {
@@ -88,16 +88,37 @@
       ],
       "properties": {
         "email": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
         },
         "name": {
           "type": "string"
         },
         "phone": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
         },
         "role": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
         }
       }
     },
@@ -109,13 +130,34 @@
       ],
       "properties": {
         "email": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
         },
         "name": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
         },
         "phone": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
         },
         "role": {
           "type": "string",
@@ -124,20 +166,32 @@
       }
     },
     "capability": {
-      "enum": [
-        "files.read",
-        "plan.inspect",
-        "files.inspect",
-        "block",
-        "manifest.write",
-        "job.finished"
+      "oneOf": [
+        {
+          "const": "files.read"
+        },
+        {
+          "const": "plan.inspect"
+        },
+        {
+          "const": "files.inspect"
+        },
+        {
+          "const": "block"
+        },
+        {
+          "const": "manifest.write"
+        },
+        {
+          "const": "job.finished"
+        }
       ]
     },
     "contributeParams": {
       "type": "object",
       "required": [
-        "job",
-        "files"
+        "files",
+        "job"
       ],
       "properties": {
         "files": {
@@ -154,8 +208,8 @@
     "contributeResult": {
       "type": "object",
       "required": [
-        "authors",
-        "fileMetadata"
+        "fileMetadata",
+        "authors"
       ],
       "properties": {
         "authors": {
@@ -171,7 +225,14 @@
           }
         },
         "manifestMetadata": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
         }
       }
     },
@@ -179,23 +240,32 @@
       "description": "A setting or a job field. The kind authors is allowed only in settings, only once, only with manifest.write, and without default. Its stored value and its value in initialise are arrays of authorSlot.",
       "type": "object",
       "required": [
-        "key",
+        "kind",
         "label",
-        "kind"
+        "key"
       ],
       "properties": {
         "required": {
           "type": "boolean",
           "default": false
         },
-        "default": {},
+        "default": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {}
+          ]
+        },
         "key": {
           "type": "string"
         },
         "kind": {
+          "type": "string",
           "enum": [
             "text",
             "secret",
+            "email",
             "bool",
             "choice",
             "path",
@@ -248,23 +318,25 @@
     "fileInfo": {
       "type": "object",
       "required": [
-        "path",
-        "size"
+        "size",
+        "path"
       ],
       "properties": {
         "path": {
           "type": "string"
         },
         "size": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
         }
       }
     },
     "fileMetadata": {
       "type": "object",
       "required": [
-        "path",
-        "xml"
+        "xml",
+        "path"
       ],
       "properties": {
         "path": {
@@ -280,10 +352,10 @@
     "finding": {
       "type": "object",
       "required": [
-        "key",
-        "severity",
+        "detail",
         "title",
-        "detail"
+        "severity",
+        "key"
       ],
       "properties": {
         "title": {
@@ -312,8 +384,8 @@
     "hashValue": {
       "type": "object",
       "required": [
-        "algo",
-        "value"
+        "value",
+        "algo"
       ],
       "properties": {
         "algo": {
@@ -327,19 +399,21 @@
     "initialiseParams": {
       "type": "object",
       "required": [
-        "api",
-        "minor",
-        "app",
-        "locale",
-        "job",
-        "settings",
-        "jobFields",
+        "entitlement",
         "grants",
-        "entitlement"
+        "jobFields",
+        "settings",
+        "job",
+        "locale",
+        "app",
+        "minor",
+        "api"
       ],
       "properties": {
         "api": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
         },
         "app": {
           "type": "string"
@@ -365,7 +439,9 @@
           "type": "string"
         },
         "minor": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
         },
         "settings": {
           "description": "One value per setting, by key. A setting of kind authors holds an array of authorSlot.",
@@ -381,17 +457,20 @@
       ],
       "properties": {
         "api": {
-          "const": 1
+          "type": "integer",
+          "const": 1,
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
         }
       }
     },
     "inspectFileParams": {
       "type": "object",
       "required": [
-        "path",
-        "location",
+        "size",
         "hashes",
-        "size"
+        "location",
+        "path"
       ],
       "properties": {
         "hashes": {
@@ -407,15 +486,17 @@
           "type": "string"
         },
         "size": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
         }
       }
     },
     "inspectFileResult": {
       "type": "object",
       "required": [
-        "annotations",
-        "warnings"
+        "warnings",
+        "annotations"
       ],
       "properties": {
         "annotations": {
@@ -435,9 +516,9 @@
     "inspectPlanParams": {
       "type": "object",
       "required": [
-        "job",
+        "readBudgetBytes",
         "files",
-        "readBudgetBytes"
+        "job"
       ],
       "properties": {
         "files": {
@@ -450,7 +531,9 @@
           "$ref": "#/$defs/jobInfo"
         },
         "readBudgetBytes": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
         }
       }
     },
@@ -469,6 +552,7 @@
       }
     },
     "jobFinishedOutcome": {
+      "type": "object",
       "oneOf": [
         {
           "type": "object",
@@ -478,21 +562,6 @@
           "properties": {
             "status": {
               "const": "allOk"
-            }
-          }
-        },
-        {
-          "type": "object",
-          "required": [
-            "status",
-            "count"
-          ],
-          "properties": {
-            "count": {
-              "type": "integer"
-            },
-            "status": {
-              "const": "withFailures"
             }
           }
         },
@@ -510,15 +579,32 @@
               "const": "failed"
             }
           }
+        },
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "count"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": -9223372036854775808,
+              "maximum": 9223372036854775807
+            },
+            "status": {
+              "const": "withFailures"
+            }
+          }
         }
       ]
     },
     "jobFinishedParams": {
       "type": "object",
       "required": [
-        "job",
+        "manifests",
         "outcome",
-        "manifests"
+        "job"
       ],
       "properties": {
         "job": {
@@ -552,9 +638,9 @@
     "jobInfo": {
       "type": "object",
       "required": [
-        "kind",
+        "destinations",
         "source",
-        "destinations"
+        "kind"
       ],
       "properties": {
         "destinations": {
@@ -584,8 +670,8 @@
     "logLine": {
       "type": "object",
       "required": [
-        "level",
-        "message"
+        "message",
+        "level"
       ],
       "properties": {
         "level": {
@@ -600,12 +686,12 @@
     "manifest": {
       "type": "object",
       "required": [
-        "id",
-        "name",
-        "description",
-        "version",
-        "api",
         "executable",
+        "api",
+        "version",
+        "description",
+        "name",
+        "id",
         "capabilities"
       ],
       "properties": {
@@ -615,10 +701,13 @@
           "pattern": "\\S"
         },
         "api": {
-          "const": 1
+          "type": "integer",
+          "const": 1,
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
         },
         "capabilities": {
-          "description": "At least one of plan.inspect, files.inspect and manifest.write.",
+          "description": "At least one of plan.inspect, files.inspect, manifest.write and job.finished.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/capability"
@@ -768,8 +857,8 @@
     "manifestInfo": {
       "type": "object",
       "required": [
-        "destination",
-        "path"
+        "path",
+        "destination"
       ],
       "properties": {
         "destination": {
@@ -792,9 +881,16 @@
       ],
       "properties": {
         "fraction": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          ]
         },
         "message": {
           "type": "string"
@@ -802,9 +898,13 @@
       }
     },
     "severity": {
-      "enum": [
-        "blocker",
-        "warning"
+      "oneOf": [
+        {
+          "const": "blocker"
+        },
+        {
+          "const": "warning"
+        }
       ]
     }
   }

@@ -3,12 +3,10 @@ module MediaCopy.Plugin.Capability
   , hooks
   ) where
 
-import Data.Aeson
+import Autodocodec
+import Data.Aeson (FromJSON, ToJSON)
 import Data.List (List)
 import Data.Text.Display
-
-import MediaCopy.Plugin.JsonSchema qualified as JsonSchema
-import MediaCopy.Plugin.JsonSchema qualified as Plugin (JsonSchema)
 
 data Capability
   = FilesRead
@@ -18,6 +16,7 @@ data Capability
   | ManifestWrite
   | JobFinished
   deriving stock (Bounded, Enum, Eq, Ord, Show)
+  deriving (FromJSON, ToJSON) via Autodocodec Capability
 
 instance Display Capability where
   displayBuilder = \case
@@ -28,8 +27,8 @@ instance Display Capability where
     ManifestWrite -> "manifest.write"
     JobFinished -> "job.finished"
 
-instance ToJSON Capability where
-  toJSON capability = String (display capability)
+instance HasCodec Capability where
+  codec = named "capability" (boundedEnumCodec display)
 
 hooks :: List Capability
 hooks =
@@ -38,12 +37,3 @@ hooks =
   , ManifestWrite
   , JobFinished
   ]
-
-instance FromJSON Capability where
-  parseJSON = withText "capability" $ \found -> case lookup found [(display value, value) | value <- [minBound ..]] of
-    Just value -> pure value
-    Nothing -> fail ("unknown capability " <> show found)
-
-instance Plugin.JsonSchema Capability where
-  defName = Just "capability"
-  schema = JsonSchema.enumOf @Capability

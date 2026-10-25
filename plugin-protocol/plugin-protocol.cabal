@@ -52,7 +52,6 @@ library
     MediaCopy.Plugin.Capability
     MediaCopy.Plugin.Field
     MediaCopy.Plugin.Id
-    MediaCopy.Plugin.Internal.Wire
     MediaCopy.Plugin.JsonRpc
     MediaCopy.Plugin.JsonRpc.Error
     MediaCopy.Plugin.JsonRpc.Incoming
@@ -72,15 +71,20 @@ library
     MediaCopy.Plugin.Protocol.Method
     MediaCopy.Plugin.Protocol.Progress
     MediaCopy.Plugin.Schema
+    MediaCopy.Plugin.Schema.Patch
 
   build-depends:
     aeson,
     aeson-pretty,
+    autodocodec,
+    autodocodec-schema,
     base,
     bytestring,
     containers,
+    scientific,
     text,
     text-display ^>=1.0.0.0,
+    unordered-containers,
     vector,
 
 test-suite plugin-protocol-test

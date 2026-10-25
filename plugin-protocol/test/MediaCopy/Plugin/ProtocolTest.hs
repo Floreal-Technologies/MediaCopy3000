@@ -42,7 +42,7 @@ protocolMessagesRoundTrip = property $ do
   roundTrips (InspectPlan.Params <$> genJob <*> genVector genFile <*> genSize)
   roundTrips (InspectPlan.Result <$> genVector genFinding)
   roundTrips (Contribute.Params <$> genJob <*> genVector genFile)
-  roundTrips (Contribute.Result <$> genVector genAuthor <*> genVector (Contribute.FileMetadata <$> Generators.genText <*> Generators.genText) <*> Gen.maybe Generators.genText)
+  roundTrips (Contribute.Result <$> genVector genAuthor <*> genVector (Contribute.FileMetadata <$> Generators.genText <*> Generators.genText) <*> Generators.genOptionalText)
   roundTrips (InspectFile.Params <$> Generators.genText <*> Generators.genText <*> genVector (HashValue.HashValue <$> Generators.genText <*> Generators.genText) <*> genSize)
   roundTrips (InspectFile.Result <$> genVector (InspectFile.Annotation <$> Generators.genText <*> Generators.genText <*> Generators.genText) <*> genVector genFinding)
   roundTrips (Progress.Progress <$> Generators.genText <*> Gen.maybe (Gen.double (Range.linearFrac 0 1)))
@@ -75,4 +75,4 @@ genFinding :: Gen Protocol.Finding
 genFinding = Finding.Finding <$> Generators.genText <*> Gen.enumBounded <*> Generators.genText <*> Generators.genText
 
 genAuthor :: Gen Contribute.Author
-genAuthor = Contribute.Author <$> Generators.genText <*> Gen.maybe Generators.genText <*> Gen.maybe Generators.genText <*> Gen.maybe Generators.genText
+genAuthor = Contribute.Author <$> Generators.genText <*> Generators.genOptionalText <*> Generators.genOptionalText <*> Generators.genOptionalText

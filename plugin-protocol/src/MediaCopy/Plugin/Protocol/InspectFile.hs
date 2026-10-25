@@ -4,16 +4,13 @@ module MediaCopy.Plugin.Protocol.InspectFile
   , Annotation (..)
   ) where
 
-import Data.Aeson hiding (Result)
+import Autodocodec
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Int (Int64)
 import Data.Text (Text)
 import Data.Vector (Vector)
-import GHC.Generics (Generic)
 
-import MediaCopy.Plugin.Internal.Wire (Wire)
-import MediaCopy.Plugin.Internal.Wire qualified as Wire
 import MediaCopy.Plugin.JsonSchema qualified as JsonSchema
-import MediaCopy.Plugin.JsonSchema qualified as Plugin (JsonSchema)
 import MediaCopy.Plugin.Protocol.Finding qualified as Protocol (Finding)
 import MediaCopy.Plugin.Protocol.HashValue qualified as Protocol (HashValue)
 
@@ -23,32 +20,44 @@ data Params = Params
   , hashes :: Vector Protocol.HashValue
   , size :: Int64
   }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire Params
+  deriving stock (Eq, Show)
+  deriving (FromJSON, ToJSON) via Autodocodec Params
 
-instance Plugin.JsonSchema Params where
-  defName = Just "inspectFileParams"
-  schema = JsonSchema.record @Params
+instance HasCodec Params where
+  codec =
+    JsonSchema.namedObject "inspectFileParams" $
+      Params
+        <$> requiredField' "path" .= (.path)
+        <*> requiredField' "location" .= (.location)
+        <*> requiredField' "hashes" .= (.hashes)
+        <*> requiredField' "size" .= (.size)
 
 data Annotation = Annotation
   { key :: Text
   , label :: Text
   , value :: Text
   }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire Annotation
+  deriving stock (Eq, Show)
+  deriving (FromJSON, ToJSON) via Autodocodec Annotation
+
+instance HasCodec Annotation where
+  codec =
+    JsonSchema.namedObject "annotation" $
+      Annotation
+        <$> requiredField' "key" .= (.key)
+        <*> requiredField' "label" .= (.label)
+        <*> requiredField' "value" .= (.value)
 
 data Result = Result
   { annotations :: Vector Annotation
   , warnings :: Vector Protocol.Finding
   }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire Result
+  deriving stock (Eq, Show)
+  deriving (FromJSON, ToJSON) via Autodocodec Result
 
-instance Plugin.JsonSchema Result where
-  defName = Just "inspectFileResult"
-  schema = JsonSchema.record @Result
-
-instance Plugin.JsonSchema Annotation where
-  defName = Just "annotation"
-  schema = JsonSchema.record @Annotation
+instance HasCodec Result where
+  codec =
+    JsonSchema.namedObject "inspectFileResult" $
+      Result
+        <$> requiredField' "annotations" .= (.annotations)
+        <*> requiredField' "warnings" .= (.warnings)
