@@ -37,6 +37,14 @@
         "$ref": "#/$defs/inspectPlanResult"
       }
     },
+    "job/finished": {
+      "params": {
+        "$ref": "#/$defs/jobFinishedParams"
+      },
+      "result": {
+        "$ref": "#/$defs/jobFinishedResult"
+      }
+    },
     "shutdown": {
       "params": {
         "type": "object"
@@ -121,7 +129,8 @@
         "plan.inspect",
         "files.inspect",
         "block",
-        "manifest.write"
+        "manifest.write",
+        "job.finished"
       ]
     },
     "contributeParams": {
@@ -459,6 +468,87 @@
         }
       }
     },
+    "jobFinishedOutcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "const": "allOk"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "count"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer"
+            },
+            "status": {
+              "const": "withFailures"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "message"
+          ],
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "status": {
+              "const": "failed"
+            }
+          }
+        }
+      ]
+    },
+    "jobFinishedParams": {
+      "type": "object",
+      "required": [
+        "job",
+        "outcome",
+        "manifests"
+      ],
+      "properties": {
+        "job": {
+          "$ref": "#/$defs/jobInfo"
+        },
+        "manifests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/manifestInfo"
+          }
+        },
+        "outcome": {
+          "$ref": "#/$defs/jobFinishedOutcome"
+        }
+      }
+    },
+    "jobFinishedResult": {
+      "type": "object",
+      "required": [
+        "warnings"
+      ],
+      "properties": {
+        "warnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding"
+          }
+        }
+      }
+    },
     "jobInfo": {
       "type": "object",
       "required": [
@@ -537,7 +627,8 @@
             "enum": [
               "plan.inspect",
               "files.inspect",
-              "manifest.write"
+              "manifest.write",
+              "job.finished"
             ]
           }
         },
@@ -673,6 +764,21 @@
           }
         }
       ]
+    },
+    "manifestInfo": {
+      "type": "object",
+      "required": [
+        "destination",
+        "path"
+      ],
+      "properties": {
+        "destination": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      }
     },
     "pluginId": {
       "description": "A reverse domain name in lowercase, for example tech.floreal.c2pa-reader. It holds at least one '.', it does not start or end with '.', and it has no '..'. It is also the name of the folder of the plug-in.",
