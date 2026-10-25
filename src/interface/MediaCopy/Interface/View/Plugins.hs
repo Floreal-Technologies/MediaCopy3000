@@ -20,7 +20,7 @@ answers :: NonEmpty PluginCatalogue.Answer
 answers = PluginCatalogue.Unanswered :| [PluginCatalogue.Granted, PluginCatalogue.Declined]
 
 entrySubtitle :: PluginCatalogue.Entry -> Text
-entrySubtitle entry = T.intercalate " · " (entry.version : T.intercalate ", " (V.toList (V.map (Capability.toText . (.capability)) entry.capabilities)) : maybe [] pure entry.problem)
+entrySubtitle entry = T.intercalate " · " (entry.version : T.intercalate ", " (V.toList (V.map (display . (.capability)) entry.capabilities)) : maybe [] pure entry.problem)
 
 capabilitySubtitle :: PluginCatalogue.CapabilityView -> Text
 capabilitySubtitle view = capabilityText view.capability <> (if view.answer == PluginCatalogue.Unanswered then " – not answered yet" else "")
@@ -38,3 +38,4 @@ capabilityText = \case
   Capability.FilesInspect -> "Add notes about each verified file to the report"
   Capability.Block -> "Stop a job with a blocker"
   Capability.ManifestWrite -> "Add data to the manifest"
+  Capability.JobFinished -> "Act when a job ends"

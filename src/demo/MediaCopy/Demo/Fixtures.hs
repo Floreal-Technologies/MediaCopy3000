@@ -243,7 +243,7 @@ credits :: PluginRef
 credits = PluginRef.PluginRef {id = "tech.floreal.credits", name = "Credits"}
 
 demoSlots :: Vector Plugin.AuthorSlot
-demoSlots = V.fromList [AuthorSlot.AuthorSlot "DIT" "Jane Doe" "jane@example.com" "", AuthorSlot.AuthorSlot "Camera operator" "" "" ""]
+demoSlots = V.fromList [AuthorSlot.AuthorSlot "DIT" (Just "Jane Doe") (Just "jane@example.com") Nothing, AuthorSlot.AuthorSlot "Camera operator" Nothing Nothing Nothing]
 
 pluginCatalogue :: PluginCatalogue
 pluginCatalogue =

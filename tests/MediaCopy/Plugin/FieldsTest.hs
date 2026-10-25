@@ -24,10 +24,10 @@ field :: Text -> Field.Kind -> Plugin.Field
 field key kind = Field.Field {key, label = key, kind, required = True, defaultValue = Nothing}
 
 slots :: Vector Plugin.AuthorSlot
-slots = V.fromList [AuthorSlot.AuthorSlot "DIT" "Jane Doe" "" "", AuthorSlot.AuthorSlot "Camera operator" "" "" ""]
+slots = V.fromList [AuthorSlot.AuthorSlot "DIT" (Just "Jane Doe") Nothing Nothing, AuthorSlot.AuthorSlot "Camera operator" Nothing Nothing Nothing]
 
-authorJson :: Text -> Text -> Value
-authorJson role name = object ["email" .= ("" :: Text), "name" .= name, "phone" .= ("" :: Text), "role" .= role]
+authorJson :: Text -> Maybe Text -> Value
+authorJson role name = object (["role" .= role] <> maybe [] (\given -> ["name" .= given]) name)
 
 valuesKeepsValuesThatFit :: Assertion
 valuesKeepsValuesThatFit =
@@ -63,7 +63,7 @@ valuesKeepsValuesThatFit =
       ,
         ( V.singleton (field "authors" Field.AuthorsField)
         , Map.singleton "authors" (Array (V.fromList [object ["role" .= ("DIT" :: Text), "name" .= ("Jane Doe" :: Text)], object ["role" .= ("Camera operator" :: Text)]]))
-        , Right (Map.singleton "authors" (Array (V.fromList [authorJson "DIT" "Jane Doe", authorJson "Camera operator" ""])))
+        , Right (Map.singleton "authors" (Array (V.fromList [authorJson "DIT" (Just "Jane Doe"), authorJson "Camera operator" Nothing])))
         )
       ,
         ( V.singleton (field "authors" Field.AuthorsField)
@@ -97,7 +97,7 @@ mergeAuthorSettingsFillsAuthors =
         ( V.singleton (field "authors" Field.AuthorsField)
         , Map.singleton "authors.1.name" "Sam Roe"
         , Map.singleton "authors" (toJSON slots)
-        , Right (Map.singleton "authors" (Array (V.fromList [authorJson "DIT" "Jane Doe", authorJson "Camera operator" "Sam Roe"])))
+        , Right (Map.singleton "authors" (Array (V.fromList [authorJson "DIT" (Just "Jane Doe"), authorJson "Camera operator" (Just "Sam Roe")])))
         )
       ,
         ( V.singleton (field "authors" Field.AuthorsField)

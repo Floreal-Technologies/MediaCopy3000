@@ -26,12 +26,15 @@ import Data.Text.Encoding qualified as TE
 import Data.Vector qualified as V
 import Effectful.Error.Static (Error, runErrorNoCallStack)
 import Effectful.Reader.Static (Reader, ask)
+import Effectful.State.Static.Local (State, modify)
 import System.OsPath (takeFileName)
 
 import MediaCopy.Domain.Contributions (Contributions)
 import MediaCopy.Domain.Contributions qualified as Contributions
 import MediaCopy.Domain.DirectoryHash (DirectoryHashError)
 import MediaCopy.Domain.DirectoryHash qualified as DirectoryHash
+import MediaCopy.Domain.JobEnd (WrittenManifest)
+import MediaCopy.Domain.JobEnd qualified as JobEnd
 import MediaCopy.Domain.JobEvent qualified as JobEvent
 import MediaCopy.Domain.PlannedGeneration (PlannedGeneration)
 import MediaCopy.Domain.PlannedGeneration qualified as PlannedGeneration
@@ -53,7 +56,7 @@ require folder number = do
   pure chain
 
 write
-  :: (FileSystem :> es, Hasher :> es, Emit :> es, Error PlanViolation :> es, Reader Algo :> es, Reader Creator :> es, Reader Contributions :> es)
+  :: (FileSystem :> es, Hasher :> es, Emit :> es, Error PlanViolation :> es, Reader Algo :> es, Reader Creator :> es, Reader Contributions :> es, State (Vector WrittenManifest) :> es)
   => PlannedGeneration
   -> Vector Text
   -> Vector FileEntry
@@ -95,6 +98,7 @@ write planned patterns files = do
   let chain' = Chain.append Chain.Chain {entries = V.fromList backfilled} planned.number nameRel mh
   FileSystem.writeTextAtomically (Layout.chainFile planned.folder) (Chain.render chain')
   Emit.event (JobEvent.MhlWritten planned.manifest)
+  modify (\written -> V.snoc written JobEnd.WrittenManifest {folder = planned.folder, path = planned.manifest})
 
 requireNextGeneration :: OsPath -> Int -> Chain -> Either PlanViolation ()
 requireNextGeneration folder number chain

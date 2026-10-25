@@ -21,7 +21,6 @@ import Data.Vector qualified as V
 import Effectful.Exception qualified as Exception
 import Floreal.Commons.Environment (Environment)
 import Floreal.Commons.Xdg (Xdg)
-import MediaCopy.Plugin.Capability qualified as Capability
 import MediaCopy.Plugin.Field qualified as Field
 import MediaCopy.Plugin.Field qualified as Plugin (Field)
 import MediaCopy.Plugin.Id qualified as Id
@@ -134,7 +133,7 @@ editGrants (PluginCatalogue.Change pluginId edit) = \case
       PluginCatalogue.SetEnabled on -> KeyMap.insert "enabled" (Bool on) entry
       PluginCatalogue.SetTrace on -> KeyMap.insert "trace" (Bool on) entry
       PluginCatalogue.SetAnswer capability answer ->
-        let name = Capability.toText capability
+        let name = display capability
             grants = filter (/= name) (texts "grants" entry)
             declined = filter (/= name) (texts "declined" entry)
         in case answer of

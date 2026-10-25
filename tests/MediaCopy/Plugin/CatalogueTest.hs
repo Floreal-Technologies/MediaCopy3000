@@ -49,7 +49,7 @@ editGrantsChangesOnlyTheEditedPart =
         , Left "is not a JSON object"
         )
       ,
-        ( PluginCatalogue.Change "tech.floreal.credits" (PluginCatalogue.SetSetting "authors" (PluginCatalogue.SettingAuthors (V.singleton (AuthorSlot.AuthorSlot "DIT" "Jane Doe" "" ""))))
+        ( PluginCatalogue.Change "tech.floreal.credits" (PluginCatalogue.SetSetting "authors" (PluginCatalogue.SettingAuthors (V.singleton (AuthorSlot.AuthorSlot "DIT" (Just "Jane Doe") Nothing Nothing))))
         , object []
         , Right
             ( plugins
@@ -57,7 +57,7 @@ editGrantsChangesOnlyTheEditedPart =
                 [ "settings"
                     .= object
                       [ "authors"
-                          .= [object ["email" .= ("" :: Text), "name" .= ("Jane Doe" :: Text), "phone" .= ("" :: Text), "role" .= ("DIT" :: Text)]]
+                          .= [object ["name" .= ("Jane Doe" :: Text), "role" .= ("DIT" :: Text)]]
                       ]
                 ]
             )
