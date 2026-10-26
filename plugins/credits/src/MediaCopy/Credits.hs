@@ -15,6 +15,7 @@ import Data.Vector (Vector)
 import Data.Vector qualified as V
 import MediaCopy.Plugin.AuthorSlot qualified as AuthorSlot
 import MediaCopy.Plugin.AuthorSlot qualified as Plugin (AuthorSlot)
+import MediaCopy.Plugin.JsonSchema qualified as JsonSchema
 import MediaCopy.Plugin.Protocol.Contribute qualified as Contribute
 
 -- $setup
@@ -32,9 +33,9 @@ slotsOf settings = case Map.lookup "authors" settings of
   where
     authorOf :: Plugin.AuthorSlot -> Maybe Contribute.Author
     authorOf slot = do
-      name <- present slot.name
-      Just Contribute.Author {name, email = present slot.email, phone = present slot.phone, role = present slot.role}
-    present raw = let cleaned = clean raw in if T.null cleaned then Nothing else Just cleaned
+      name <- slot.name >>= present
+      Just Contribute.Author {name, email = slot.email >>= present, phone = slot.phone >>= present, role = present slot.role}
+    present raw = JsonSchema.nonEmptyText (clean raw)
 
 clean :: Text -> Text
 clean text = text & T.filter xmlChar & T.map (\c -> if isControl c then ' ' else c) & T.words & T.unwords

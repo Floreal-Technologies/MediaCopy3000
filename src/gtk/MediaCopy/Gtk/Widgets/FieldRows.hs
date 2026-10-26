@@ -8,6 +8,7 @@ module MediaCopy.Gtk.Widgets.FieldRows
   ) where
 
 import Control.Monad (zipWithM_)
+import Data.Foldable (fold)
 import Data.GI.Base (AttrOp (On, (:=)), new, set)
 import Data.Text qualified as T
 import Data.Vector qualified as V
@@ -19,6 +20,7 @@ import GI.Gtk qualified as Gtk
 import MediaCopy.Plugin.AuthorSlot qualified as AuthorSlot
 import MediaCopy.Plugin.AuthorSlot qualified as Plugin (AuthorSlot)
 import MediaCopy.Plugin.Field qualified as Field
+import MediaCopy.Plugin.JsonSchema qualified as JsonSchema
 
 import MediaCopy.Domain.FieldView (FieldView)
 import MediaCopy.Domain.FieldView qualified as FieldView
@@ -111,7 +113,7 @@ authorsRow setAuthors field = do
           , current = readIORef applied
           }
   paintSlots <- bind control setAuthors
-  void $ onSelf add #clicked (commitWith (`V.snoc` AuthorSlot.AuthorSlot "" "" "" ""))
+  void $ onSelf add #clicked (commitWith (`V.snoc` AuthorSlot.AuthorSlot "" Nothing Nothing Nothing))
   forM_ (zip [0 ..] edited) $ \(index, slot) ->
     void $ onSelf slot.remove #clicked (commitWith (V.ifilter (\i _ -> i /= index)))
   headerShown <- Adw.toPreferencesRow header
@@ -119,7 +121,7 @@ authorsRow setAuthors field = do
   pure FieldRow {rows = headerShown : slotsShown, refresh = paintSlots . FieldView.authorSlots}
 
 validSlots :: Vector Plugin.AuthorSlot -> Bool
-validSlots = all (\slot -> FieldView.emailAccepted slot.email)
+validSlots = all (\slot -> all FieldView.emailAccepted slot.email)
 
 fieldTitle :: Text -> FieldView -> Text
 fieldTitle prefix field = prefix <> field.label <> (if field.required then " (required)" else "")
@@ -166,12 +168,12 @@ data SlotRows = SlotRows
 slotRows :: Plugin.AuthorSlot -> IO SlotRows
 slotRows slot = do
   expander <- new Adw.ExpanderRow [#useMarkup := False]
-  set expander [#title := slotTitle slot, #subtitle := slot.name]
+  set expander [#title := slotTitle slot, #subtitle := fold slot.name]
   role <- newEntryRow "Role (required)" slot.role
-  name <- newEntryRow "Name" slot.name
-  email <- newEntryRow "Email" slot.email
+  name <- newEntryRow "Name" (fold slot.name)
+  email <- newEntryRow "Email" (fold slot.email)
   emailRow email
-  phone <- newEntryRow "Phone" slot.phone
+  phone <- newEntryRow "Phone" (fold slot.phone)
   let entries = [role, name, email, phone]
   forM_ entries (Adw.expanderRowAddRow expander)
   remove <- new Gtk.Button [#label := "Remove", #valign := Gtk.AlignCenter]
@@ -182,16 +184,16 @@ slotRows slot = do
   Adw.expanderRowAddRow expander removeRow
   let paint fresh = do
         Adw.preferencesRowSetTitle expander (slotTitle fresh)
-        Adw.expanderRowSetSubtitle expander fresh.name
-        zipWithM_ paintEditable entries [fresh.role, fresh.name, fresh.email, fresh.phone]
+        Adw.expanderRowSetSubtitle expander (fold fresh.name)
+        zipWithM_ paintEditable entries [fresh.role, fold fresh.name, fold fresh.email, fold fresh.phone]
   pure SlotRows {expander, entries, remove, paint}
 
 slotFields :: List (Text -> Plugin.AuthorSlot -> Plugin.AuthorSlot)
 slotFields =
   [ \text slot -> slot {AuthorSlot.role = text}
-  , \text slot -> slot {AuthorSlot.name = text}
-  , \text slot -> slot {AuthorSlot.email = text}
-  , \text slot -> slot {AuthorSlot.phone = text}
+  , \text slot -> slot {AuthorSlot.name = JsonSchema.nonEmptyText text}
+  , \text slot -> slot {AuthorSlot.email = JsonSchema.nonEmptyText text}
+  , \text slot -> slot {AuthorSlot.phone = JsonSchema.nonEmptyText text}
   ]
 
 slotTitle :: Plugin.AuthorSlot -> Text

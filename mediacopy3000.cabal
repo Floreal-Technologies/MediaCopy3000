@@ -80,6 +80,7 @@ library domain
     MediaCopy.Domain.HashFormat
     MediaCopy.Domain.HistoryError
     MediaCopy.Domain.Job
+    MediaCopy.Domain.JobEnd
     MediaCopy.Domain.JobEvent
     MediaCopy.Domain.JobId
     MediaCopy.Domain.JobResult

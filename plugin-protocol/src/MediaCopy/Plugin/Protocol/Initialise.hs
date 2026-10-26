@@ -1,23 +1,17 @@
-{-# LANGUAGE DerivingVia #-}
-
 module MediaCopy.Plugin.Protocol.Initialise
   ( Params (..)
   , Result (..)
   ) where
 
-import Data.Aeson hiding (Result)
-import Data.Function ((&))
+import Autodocodec
+import Data.Aeson (FromJSON, ToJSON, Value)
 import Data.Map.Strict (Map)
 import Data.Text (Text)
 import Data.Vector (Vector)
-import GHC.Generics (Generic)
 
-import MediaCopy.Plugin.Api qualified as Api
 import MediaCopy.Plugin.Capability qualified as Plugin (Capability)
-import MediaCopy.Plugin.Internal.Wire (Wire)
-import MediaCopy.Plugin.Internal.Wire qualified as Wire
 import MediaCopy.Plugin.JsonSchema qualified as JsonSchema
-import MediaCopy.Plugin.JsonSchema qualified as Plugin (JsonSchema)
+import MediaCopy.Plugin.Protocol.JobInfo qualified as JobInfo
 
 data Params = Params
   { api :: Int
@@ -30,16 +24,22 @@ data Params = Params
   , grants :: Vector Plugin.Capability
   , entitlement :: Value
   }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire Params
+  deriving stock (Eq, Show)
+  deriving (FromJSON, ToJSON) via Autodocodec Params
 
-instance Plugin.JsonSchema Params where
-  defName = Just "initialiseParams"
-  schema =
-    JsonSchema.record @Params
-      & JsonSchema.property "job" (JsonSchema.ref "jobKind")
-      & JsonSchema.describeProperty "settings" "One value per setting, by key. A setting of kind authors holds an array of authorSlot."
-      & JsonSchema.property "entitlement" (object ["type" .= String "null"] & JsonSchema.describe "Always null in API 1.0.")
+instance HasCodec Params where
+  codec =
+    JsonSchema.namedObject "initialiseParams" $
+      Params
+        <$> requiredField' "api" .= (.api)
+        <*> requiredField' "minor" .= (.minor)
+        <*> requiredField' "app" .= (.app)
+        <*> requiredField' "locale" .= (.locale)
+        <*> requiredFieldWith' "job" JobInfo.kindCodec .= (.job)
+        <*> requiredField "settings" "One value per setting, by key. A setting of kind authors holds an array of authorSlot." .= (.settings)
+        <*> requiredField' "jobFields" .= (.jobFields)
+        <*> requiredField' "grants" .= (.grants)
+        <*> requiredField' "entitlement" .= (.entitlement)
 
 -- |
 -- >>> import Data.Aeson (eitherDecode)
@@ -48,9 +48,11 @@ instance Plugin.JsonSchema Params where
 data Result = Result
   { api :: Int
   }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire Result
+  deriving stock (Eq, Show)
+  deriving (FromJSON, ToJSON) via Autodocodec Result
 
-instance Plugin.JsonSchema Result where
-  defName = Just "initialiseResult"
-  schema = JsonSchema.record @Result & JsonSchema.property "api" (object ["const" .= Api.major])
+instance HasCodec Result where
+  codec =
+    JsonSchema.namedObject "initialiseResult" $
+      Result
+        <$> requiredField' "api" .= (.api)

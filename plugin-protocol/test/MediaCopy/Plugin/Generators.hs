@@ -1,5 +1,6 @@
 module MediaCopy.Plugin.Generators
   ( genText
+  , genOptionalText
   , genValue
   ) where
 
@@ -14,6 +15,10 @@ import Hedgehog.Range qualified as Range
 
 genText :: Gen Text
 genText = Gen.text (Range.linear 0 20) Gen.unicode
+
+-- | An optional text is never empty: the empty text decodes as 'Nothing'.
+genOptionalText :: Gen (Maybe Text)
+genOptionalText = Gen.maybe (Gen.text (Range.linear 1 20) Gen.unicode)
 
 genValue :: Gen Value
 genValue =
