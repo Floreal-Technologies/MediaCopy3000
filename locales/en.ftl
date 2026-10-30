@@ -108,6 +108,8 @@ toast-job-finished = { $label }: { $result }
 toast-job-failed = { $label }: failed – { $message }
 dialog-save-plan = Save Plan
 dialog-save-report = Save Report
+notif-job-finished-title = { $label } finished.
+notif-job-failed-title = { $label } failed.
 
 ## Plug-ins
 

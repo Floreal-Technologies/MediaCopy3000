@@ -60,6 +60,7 @@ data Shell = Shell
   , destroyWindow :: IO ()
   , showChrome :: Chrome -> IO ()
   , showFolder :: Text -> IO ()
+  , notify :: Notification -> IO ()
   }
 
 newtype Runner = Runner (forall a. Eff AppStack a -> IO a)
@@ -176,6 +177,7 @@ runEffect runtime model effect = toasting runtime $ case effect of
   ApplyChange change -> changeWorker runtime change
   ShowFolder folder -> runtime.shell.showFolder folder
   ShowChrome chrome -> runtime.shell.showChrome chrome
+  Notify notification -> runtime.shell.notify notification
   where
     wording = model.wording
 
