@@ -108,7 +108,6 @@ library domain
     ascmhl,
     bytestring,
     containers,
-    directory,
     effectful-core,
     filepath,
     plugin-protocol,
