@@ -50,6 +50,7 @@ import MediaCopy.Model (PlanPhase (..))
 data SealView = SealView
   { shown :: Bool
   , sealing :: Bool
+  , sealable :: Bool
   , anyway :: Bool
   , subtitle :: Text
   , policyShown :: Bool
@@ -68,13 +69,14 @@ sealView wording plan = case plan.spec.job of
     in SealView
          { shown = True
          , sealing
+         , sealable = plan.sourceIsWritable
          , anyway
          , subtitle = sealSubtitle wording plan
          , policyShown = sealing
          , existing = oj.existingCopy
          , existingShown = V.any (\target -> target.state == Target.Partial) plan.targets
          }
-  _ -> SealView {shown = False, sealing = False, anyway = False, subtitle = "", policyShown = False, existing = Nothing, existingShown = False}
+  _ -> SealView {shown = False, sealing = False, sealable = False, anyway = False, subtitle = "", policyShown = False, existing = Nothing, existingShown = False}
 
 sealChoice :: Bool -> Bool -> Offload.SealFirst
 sealChoice sealing anyway
@@ -86,6 +88,7 @@ sealSubtitle :: Wording -> Plan -> Text
 sealSubtitle wording plan = case plan.sealPass of
   Just pass -> "reads " <> humanBytes wording pass.bytes <> " first, then writes generation " <> count (plan.generations + 1) <> "."
   Nothing
+    | plan.sourceIsWritable == False -> "the media source is read-only"
     | plan.generations == 0 -> "the media source has no history, consider sealing first."
     | otherwise -> "the media source already holds " <> Prose.plural "generation" plan.generations <> "."
 

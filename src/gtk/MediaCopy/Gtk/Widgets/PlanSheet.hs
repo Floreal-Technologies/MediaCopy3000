@@ -205,7 +205,7 @@ newSealGroup dispatch = do
 
 renderSealChoice :: SealControls -> SealView -> IO ()
 renderSealChoice seal view = do
-  set seal.sealSwitch [#subtitle := view.subtitle]
+  set seal.sealSwitch [#subtitle := view.subtitle, #sensitive := view.sealable]
   set seal.sealAnywaySwitch [#visible := view.policyShown]
   seal.paintChoice (view.sealing, view.anyway)
   seal.paintExisting view.existing

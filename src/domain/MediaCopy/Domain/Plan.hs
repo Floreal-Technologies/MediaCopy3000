@@ -74,6 +74,7 @@ data Plan = Plan
   , sealPass :: Maybe SealPass
   , generations :: Int
   , plugins :: PluginPlan
+  , sourceIsWritable :: Bool
   }
   deriving stock (Eq, Show)
 

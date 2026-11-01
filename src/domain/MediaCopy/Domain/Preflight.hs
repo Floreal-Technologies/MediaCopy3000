@@ -59,12 +59,14 @@ data OffloadFacts = OffloadFacts
   , targets :: Vector Destination
   , originals :: Either HistoryError (Maybe (Map RelPath Hash))
   , sourceHistory :: Either HistoryError (Maybe (Chain, Map RelPath Hash))
+  , sourceIsWritable :: Bool
   }
 
 data GenerationFacts = GenerationFacts
   { tree :: Maybe Tree
   , freeBytes :: Maybe Int64
   , history :: Either HistoryError (Maybe (Chain, Map RelPath Hash))
+  , sourceIsWritable :: Bool
   }
 
 data SourceRead = SourceRead
@@ -116,11 +118,12 @@ offload spec job facts =
     , sealPass = sealing
     , generations = Chain.highestGeneration src.chain
     , plugins = PluginPlan.empty
+    , sourceIsWritable = facts.sourceIsWritable
     }
   where
     source = job.source
     src = readSource facts
-    sealing = planSealPass spec.createdAt source src.dirs src.chain (sealPolicy src.chain job.sealFirst) src.recorded src.files
+    sealing = planSealPass spec.createdAt source src.dirs src.chain (sealPolicy facts.sourceIsWritable src.chain job.sealFirst) src.recorded src.files
     dests = V.map (.root) facts.targets
     classified = V.map (Destination.classify job.existingCopy src.fileSet src.dirSet src.byPath) facts.targets
     targets = V.map (.target) classified
@@ -150,13 +153,15 @@ originsUsedText sealing expected = case sealing of
   Just _ -> "sealing starts first"
   Nothing -> Plan.originsDescription expected
 
-sealPolicy :: Chain -> Offload.SealFirst -> Maybe Offload.OnSealFailure
-sealPolicy chain = \case
-  Offload.UseHistory -> Nothing
-  Offload.SealBeforeCopy policy -> Just policy
-  Offload.SealIfNoHistory
-    | V.null chain.entries -> Just Offload.StopBeforeCopy
-    | otherwise -> Nothing
+sealPolicy :: Bool -> Chain -> Offload.SealFirst -> Maybe Offload.OnSealFailure
+sealPolicy sourceIsWritable chain sealFirstOption
+  | sourceIsWritable == False = Nothing
+  | otherwise = case sealFirstOption of
+      Offload.UseHistory -> Nothing
+      Offload.SealBeforeCopy policy -> Just policy
+      Offload.SealIfNoHistory
+        | V.null chain.entries -> Just Offload.StopBeforeCopy
+        | otherwise -> Nothing
 
 createdFolders :: OsPath -> Vector OsPath -> Maybe Plan.SealPass -> Vector OsPath
 createdFolders source dests sealing =
@@ -233,6 +238,7 @@ generation spec rule facts =
     , sealPass = Nothing
     , generations = Chain.highestGeneration chain
     , plugins = PluginPlan.empty
+    , sourceIsWritable = facts.sourceIsWritable
     }
   where
     folder = Job.root spec.job

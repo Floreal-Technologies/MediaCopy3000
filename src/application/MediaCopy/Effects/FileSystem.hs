@@ -19,6 +19,7 @@ module MediaCopy.Effects.FileSystem
   , readBytes
   , appendBytes
   , writeBytes
+  , getPermissions
   , runIO
   ) where
 
@@ -35,6 +36,7 @@ import Data.Vector qualified as V
 import Effectful
 import Effectful.Dispatch.Dynamic (interpret, localSeqUnliftIO, send)
 import Effectful.Exception (trySync)
+import System.Directory.OsPath (Permissions)
 import System.Directory.OsPath qualified as Dir
 import System.DiskSpace (getAvailSpace)
 import System.File.OsPath qualified as FileIO
@@ -73,6 +75,7 @@ data FileSystem :: Effect where
   ReadBytes :: OsPath -> FileSystem m ByteString
   AppendBytes :: OsPath -> ByteString -> FileSystem m ()
   WriteBytes :: OsPath -> ByteString -> FileSystem m ()
+  GetPermissions :: OsPath -> FileSystem m Permissions
 
 type instance DispatchOf FileSystem = Dynamic
 
@@ -127,6 +130,9 @@ appendBytes p bytes = send (AppendBytes p bytes)
 writeBytes :: (FileSystem :> es) => OsPath -> ByteString -> Eff es ()
 writeBytes p bytes = send (WriteBytes p bytes)
 
+getPermissions :: (FileSystem :> es) => OsPath -> Eff es Permissions
+getPermissions p = send (GetPermissions p)
+
 runIO :: (IOE :> es) => Int -> Eff (FileSystem : es) a -> Eff es a
 runIO chunkSize =
   interpret $ \env -> \case
@@ -153,6 +159,7 @@ runIO chunkSize =
     ReadBytes p -> liftIO (FileIO.readFile' p)
     AppendBytes p bytes -> liftIO (FileIO.appendFile' p bytes)
     WriteBytes p bytes -> liftIO (FileIO.writeFile' p bytes)
+    GetPermissions p -> liftIO (Dir.getPermissions p)
 
 walkIO :: OsPath -> IO (Maybe Tree)
 walkIO root = do
