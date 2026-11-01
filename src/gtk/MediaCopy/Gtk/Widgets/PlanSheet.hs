@@ -173,7 +173,7 @@ renderReadyBody body view = do
 data SealControls = SealControls
   { group :: Adw.PreferencesGroup
   , sealSwitch :: Adw.SwitchRow
-  , policySwitch :: Adw.SwitchRow
+  , sealAnywaySwitch :: Adw.SwitchRow
   , existingRow :: Adw.ActionRow
   , paintChoice :: (Bool, Bool) -> IO ()
   , paintExisting :: Maybe Offload.ExistingCopy -> IO ()
@@ -183,7 +183,7 @@ newSealGroup :: (UiMessage -> IO ()) -> IO SealControls
 newSealGroup dispatch = do
   group <- new Adw.PreferencesGroup [#title := "Before Copying"]
   sealSwitch <- new Adw.SwitchRow [#title := "Seal the media source first", #active := True]
-  policySwitch <- new Adw.SwitchRow [#title := "Copy anyway if the seal finds a problem", #active := False]
+  sealAnywaySwitch <- new Adw.SwitchRow [#title := "Copy anyway if the seal finds a problem", #active := False]
   resumeButton <- new Gtk.CheckButton [#label := "Resume", #valign := Gtk.AlignCenter]
   replaceButton <- new Gtk.CheckButton [#label := "Replace", #valign := Gtk.AlignCenter]
   Gtk.checkButtonSetGroup replaceButton (Just resumeButton)
@@ -192,21 +192,21 @@ newSealGroup dispatch = do
   Adw.actionRowAddSuffix existingRow replaceButton
   Adw.preferencesGroupAdd group existingRow
   Adw.preferencesGroupAdd group sealSwitch
-  Adw.preferencesGroupAdd group policySwitch
+  Adw.preferencesGroupAdd group sealAnywaySwitch
   paintChoice <-
     bind
-      (pair (switchRow sealSwitch) (switchRow policySwitch))
+      (pair (switchRow sealSwitch) (switchRow sealAnywaySwitch))
       (\(sealing, anyway) -> dispatch (SetSealFirst (sealChoice sealing anyway)))
   paintExisting <-
     bind
       (checkRadio [(Offload.Resume, resumeButton), (Offload.Replace, replaceButton)])
       (mapM_ (dispatch . SetExistingCopy))
-  pure SealControls {group, sealSwitch, policySwitch, existingRow, paintChoice, paintExisting}
+  pure SealControls {group, sealSwitch, sealAnywaySwitch, existingRow, paintChoice, paintExisting}
 
 renderSealChoice :: SealControls -> SealView -> IO ()
 renderSealChoice seal view = do
   set seal.sealSwitch [#subtitle := view.subtitle]
-  set seal.policySwitch [#visible := view.policyShown]
+  set seal.sealAnywaySwitch [#visible := view.policyShown]
   seal.paintChoice (view.sealing, view.anyway)
   seal.paintExisting view.existing
   Gtk.widgetSetVisible seal.existingRow view.existingShown
