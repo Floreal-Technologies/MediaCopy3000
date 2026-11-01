@@ -172,8 +172,6 @@ renderReadyBody body view = do
 
 data SealControls = SealControls
   { group :: Adw.PreferencesGroup
-  , sealSwitch :: Adw.SwitchRow
-  , sealAnywaySwitch :: Adw.SwitchRow
   , existingRow :: Adw.ActionRow
   , paintChoice :: (Bool, Bool) -> IO ()
   , paintExisting :: Maybe Offload.ExistingCopy -> IO ()
@@ -182,8 +180,6 @@ data SealControls = SealControls
 newSealGroup :: (UiMessage -> IO ()) -> IO SealControls
 newSealGroup dispatch = do
   group <- new Adw.PreferencesGroup [#title := "Before Copying"]
-  sealSwitch <- new Adw.SwitchRow [#title := "Seal the media source first"]
-  sealAnywaySwitch <- new Adw.SwitchRow [#title := "Copy anyway if the seal finds a problem", #active := False]
   resumeButton <- new Gtk.CheckButton [#label := "Resume", #valign := Gtk.AlignCenter]
   replaceButton <- new Gtk.CheckButton [#label := "Replace", #valign := Gtk.AlignCenter]
   Gtk.checkButtonSetGroup replaceButton (Just resumeButton)
@@ -191,8 +187,7 @@ newSealGroup dispatch = do
   Adw.actionRowAddSuffix existingRow resumeButton
   Adw.actionRowAddSuffix existingRow replaceButton
   Adw.preferencesGroupAdd group existingRow
-  Adw.preferencesGroupAdd group sealSwitch
-  Adw.preferencesGroupAdd group sealAnywaySwitch
+
   paintChoice <-
     bind
       (pair (switchRow sealSwitch) (switchRow sealAnywaySwitch))
@@ -201,7 +196,7 @@ newSealGroup dispatch = do
     bind
       (checkRadio [(Offload.Resume, resumeButton), (Offload.Replace, replaceButton)])
       (mapM_ (dispatch . SetExistingCopy))
-  pure SealControls {group, sealSwitch, sealAnywaySwitch, existingRow, paintChoice, paintExisting}
+  pure SealControls {group, existingRow, paintChoice, paintExisting}
 
 renderSealChoice :: SealControls -> SealView -> IO ()
 renderSealChoice seal view = do

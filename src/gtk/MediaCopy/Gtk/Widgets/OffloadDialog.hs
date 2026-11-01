@@ -25,9 +25,13 @@ newOffloadDialog :: Adw.ApplicationWindow -> (UiMessage -> IO ()) -> IO OffloadD
 newOffloadDialog window dispatch = do
   (sourceGroup, sourceRow) <- newSourceGroup dispatch
   (destGroup, addRow) <- newDestGroup dispatch
+  sealSwitch <- new Adw.SwitchRow [#title := "Seal the media source first"]
+  sealAnywaySwitch <- new Adw.SwitchRow [#title := "Copy anyway if the seal finds a problem", #active := False]
   body <- paddedBox Gtk.OrientationVertical 18 12
   Gtk.boxAppend body sourceGroup
   Gtk.boxAppend body destGroup
+  Adw.preferencesGroupAdd group sealSwitch
+  Adw.preferencesGroupAdd group sealAnywaySwitch
   shell <-
     newDialogShell
       [#title := "New Offload", #contentWidth := 480]
@@ -38,7 +42,11 @@ newOffloadDialog window dispatch = do
       []
       body
   destRows <- newIORef V.empty
-  let form = DraftForm {sourceRow, destGroup, addRow, destRows, reviewButton = shell.primaryButton}
+  let form = DraftForm {
+        sourceRow, destGroup, addRow, destRows, reviewButton = shell.primaryButton
+        , sealSwitch
+        , sealAnyaySwitch
+        }
   draftCell <- newCell (renderDraft form dispatch)
   openControl <- dialog shell.dialog window (pure ())
   paintOpen <- bind openControl (closing (dispatch CloseOffloadDialog))
@@ -50,6 +58,8 @@ data DraftForm = DraftForm
   , addRow :: Adw.ActionRow
   , destRows :: IORef (Vector Adw.ActionRow)
   , reviewButton :: Gtk.Button
+  , sealSwitch :: Adw.SwitchRow
+  , sealAnywaySwitch :: Adw.SwitchRow
   }
 
 newSourceGroup :: (UiMessage -> IO ()) -> IO (Adw.PreferencesGroup, Adw.ActionRow)
