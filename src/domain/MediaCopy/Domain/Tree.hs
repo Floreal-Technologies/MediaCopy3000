@@ -20,6 +20,7 @@ import MediaCopy.Domain.FileSize (FileSize)
 data Tree = Tree
   { files :: Vector (RelPath, FileSize)
   , dirs :: Vector RelPath
+  , writable :: Bool
   }
   deriving stock (Eq, Show)
 
