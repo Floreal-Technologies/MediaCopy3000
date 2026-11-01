@@ -31,8 +31,7 @@ gatherOffload job = do
   targets <- V.mapM (gatherTarget job.source) (V.fromList (toList job.destinations))
   originals <- Store.resolveOriginals job.source
   sourceHistory <- Store.historyHashes job.source
-  sourcePermissions <- FileSystem.getPermissions job.source
-  let sourceIsWritable = Directory.writable sourcePermissions
+  sourceIsWritable <- writableIfPresent job.source sourceTree
   pure Preflight.OffloadFacts {sourceTree, targets, originals, sourceHistory, sourceIsWritable}
 
 gatherTarget :: (FileSystem :> es) => OsPath -> OsPath -> Eff es Destination
@@ -54,6 +53,8 @@ gatherGeneration folder = do
   tree <- FileSystem.walk folder
   freeBytes <- maybe (pure Nothing) (\_ -> FileSystem.freeSpaceOf folder) tree
   history <- Store.historyHashes folder
-  permissions <- FileSystem.getPermissions folder
-  let sourceIsWritable = Directory.writable permissions
+  sourceIsWritable <- writableIfPresent folder tree
   pure Preflight.GenerationFacts {tree, freeBytes, history, sourceIsWritable}
+
+writableIfPresent :: (FileSystem :> es) => OsPath -> Maybe tree -> Eff es (Maybe Bool)
+writableIfPresent path = traverse (\_ -> FileSystem.getPermissions path <&> Directory.writable)

@@ -178,7 +178,7 @@ offloadFactsReady =
           ]
     , originals = Right (Just recordedHashes)
     , sourceHistory = Right (Just (sourceChain, recordedHashes))
-    , sourceIsWritable = True
+    , sourceIsWritable = Just True
     }
 
 offloadFactsBlocked :: Preflight.OffloadFacts
@@ -197,7 +197,7 @@ verifyFacts =
     { tree = Just mediaSourceTree
     , freeBytes = Just 812_004_000_000
     , history = Right (Just (verifyChain, recordedHashes))
-    , sourceIsWritable = True
+    , sourceIsWritable = Just True
     }
 
 sealFacts :: Preflight.GenerationFacts
@@ -206,7 +206,7 @@ sealFacts =
     { tree = Just mediaSourceTree
     , freeBytes = Just 24_000_000_000
     , history = Right Nothing
-    , sourceIsWritable = True
+    , sourceIsWritable = Just True
     }
 
 offloadFactsPartial :: Preflight.OffloadFacts

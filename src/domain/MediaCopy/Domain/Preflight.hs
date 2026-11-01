@@ -59,14 +59,14 @@ data OffloadFacts = OffloadFacts
   , targets :: Vector Destination
   , originals :: Either HistoryError (Maybe (Map RelPath Hash))
   , sourceHistory :: Either HistoryError (Maybe (Chain, Map RelPath Hash))
-  , sourceIsWritable :: Bool
+  , sourceIsWritable :: Maybe Bool
   }
 
 data GenerationFacts = GenerationFacts
   { tree :: Maybe Tree
   , freeBytes :: Maybe Int64
   , history :: Either HistoryError (Maybe (Chain, Map RelPath Hash))
-  , sourceIsWritable :: Bool
+  , sourceIsWritable :: Maybe Bool
   }
 
 data SourceRead = SourceRead
@@ -153,9 +153,9 @@ originsUsedText sealing expected = case sealing of
   Just _ -> "sealing starts first"
   Nothing -> Plan.originsDescription expected
 
-sealPolicy :: Bool -> Chain -> Offload.SealFirst -> Maybe Offload.OnSealFailure
+sealPolicy :: Maybe Bool -> Chain -> Offload.SealFirst -> Maybe Offload.OnSealFailure
 sealPolicy sourceIsWritable chain sealFirstOption
-  | sourceIsWritable == False = Nothing
+  | sourceIsWritable /= Just True = Nothing
   | otherwise = case sealFirstOption of
       Offload.UseHistory -> Nothing
       Offload.SealBeforeCopy policy -> Just policy

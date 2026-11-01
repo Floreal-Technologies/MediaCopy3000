@@ -69,7 +69,7 @@ sealView wording plan = case plan.spec.job of
     in SealView
          { shown = True
          , sealing
-         , sealable = plan.sourceIsWritable
+         , sealable = plan.sourceIsWritable == Just True
          , anyway
          , subtitle = sealSubtitle wording plan
          , policyShown = sealing
@@ -88,7 +88,7 @@ sealSubtitle :: Wording -> Plan -> Text
 sealSubtitle wording plan = case plan.sealPass of
   Just pass -> "reads " <> humanBytes wording pass.bytes <> " first, then writes generation " <> count (plan.generations + 1) <> "."
   Nothing
-    | plan.sourceIsWritable == False -> "the media source is read-only"
+    | plan.sourceIsWritable == Just False -> "the media source is read-only"
     | plan.generations == 0 -> "the media source has no history, consider sealing first."
     | otherwise -> "the media source already holds " <> Prose.plural "generation" plan.generations <> "."
 
