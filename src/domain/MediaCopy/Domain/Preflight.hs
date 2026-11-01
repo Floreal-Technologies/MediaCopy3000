@@ -258,6 +258,7 @@ generation spec rule facts =
 generationFindings :: HistoryRule -> OsPath -> GenerationFacts -> Chain -> Either FormatError Algo -> Vector Finding
 generationFindings rule folder facts chain formatResult =
   [ Finding.onlyIf (not exists) Finding.Finding {severity = Severity.Blocker, code = Finding.SourceMissing, detail = OsPath.toText folder}
+  , Finding.onlyIf (facts.sourceIsWritable == Just False) Finding.Finding {severity = Severity.Blocker, code = Finding.SourceReadOnly, detail = OsPath.toText folder}
   , case rule of
       RequireHistory
         | exists && not sealed && isRight facts.history ->

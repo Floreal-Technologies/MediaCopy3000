@@ -20,6 +20,7 @@ Le blocage `la destination contient des fichiers absents de la source` en illust
 | Message affiché | Signification | Action requise |
 |---|---|---|
 | `source introuvable` | La source est introuvable au chemin indiqué. | Montez le volume ou sélectionnez à nouveau le chemin. |
+| `la source multimédia est en lecture seule` | Une tâche de vérification ou de scellement doit écrire une nouvelle génération dans le dossier, mais le dossier n’est pas accessible en écriture. | Rendez le dossier accessible en écriture, ou montez le volume avec les droits d’écriture, puis relancez la planification. |
 | `la destination contient une copie partielle` | La destination contient déjà certains fichiers provenant de cette source. | Choisissez **Resume** ou **Replace** dans le groupe **Before Copying**. La page [Décharger une source multimédia](offload.md) explique ces deux options. |
 | `la destination contient des fichiers absents de la source` | La destination contient un fichier, un dossier ou une génération absents de la source. | Sélectionnez un dossier vide ou un dossier qui n’existe pas encore. Les détails indiquent le premier élément (fichier, dossier ou génération) concerné, dans l’ordre de tri. |
 | `la destination a été copiée depuis une autre source` | La destination contient un historique dont une génération ne correspond pas à celle, portant le même nom, de la source multimédia. | Choisissez une autre destination ou vérifiez ce dossier avec la commande **Vérifier le dossier…**. |
