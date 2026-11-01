@@ -210,7 +210,7 @@ FPM_COMMON=(
   -v "$VERSION"
   --license "GPL-3.0-only"
   --maintainer "Feriel Choutri de Tarlé <feriel@choutri.eu>"
-  --description "Verified media offload and ASC MHL verification for videographers"
+  --description "Verified media offloads with ASC Media Hash Lists"
   --url "https://github.com/Floreal-Technologies/MediaCopy3000"
   -a native
   -C "$STAGING"
