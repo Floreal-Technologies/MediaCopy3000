@@ -14,7 +14,6 @@ import Data.Text qualified as T
 import Effectful.Exception qualified as Exception
 import Floreal.Commons.Environment (Environment, getHomeDirectory)
 import Floreal.Commons.Xdg (Xdg, XdgDirectory (XdgConfig), getXdgDirectory)
-import MediaCopy.Plugin.Capability qualified as Capability
 import MediaCopy.Plugin.Capability qualified as Plugin (Capability)
 import MediaCopy.Plugin.Id qualified as Plugin (Id)
 import System.Info (os)
@@ -46,7 +45,7 @@ instance FromJSON Grant where
     pure Grant {enabled, trace, grants, declined, settings}
     where
       known :: Maybe (Set Text) -> Set Plugin.Capability
-      known names = Set.fromList [capability | capability <- [minBound ..], Set.member (Capability.toText capability) (fold names)]
+      known names = Set.fromList [capability | capability <- [minBound ..], Set.member (display capability) (fold names)]
 
 path :: (Environment :> es, Xdg :> es) => Eff es OsPath
 path = do

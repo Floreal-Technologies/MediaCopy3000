@@ -18,6 +18,7 @@ L’utilisateur peut accorder ou refuser l’usage de ces capacités.
 | `files.inspect` | Après la vérification de chaque fichier | Ajoute au rapport des notes sur chaque fichier vérifié. |
 | `block` | Avec `plan.inspect` | Arrête une tâche par un blocage. Sans elle, un blocage de l’extension devient un avertissement. |
 | `manifest.write` | Quand le plan est fait | Ajoute des auteurs et des métadonnées à chaque manifeste que la tâche écrit. |
+| `job.finished` | Quand la tâche se termine | Agit sur le résultat de la tâche et sur les manifestes qu’elle a écrits. |
 
 ## Installer une extension
 
@@ -150,6 +151,7 @@ Credits refuse une tâche quand aucun emplacement n’a de nom.
 | `files.inspect` | Recevoir `inspect/file` après chaque fichier vérifié | Sans cette capacité, MediaCopy 3000 n’envoie pas la requête. |
 | `block` | Arrêter une tâche par un blocage | Sans cette capacité, un blocage de l’extension devient un avertissement. |
 | `manifest.write` | Recevoir `contribute` et ajouter des données au manifeste | Sans cette capacité, MediaCopy 3000 ne demande pas de données à l’extension. |
+| `job.finished` | Recevoir `job/finished` quand la tâche se termine | Sans cette capacité, MediaCopy 3000 n’envoie pas la requête. |
 
 Une extension est un programme qui tourne avec vos droits. MediaCopy 3000 ne peut pas l’empêcher de
 lire un fichier ou d’ouvrir une connexion réseau. N’installez que des extensions d’une source de
@@ -188,9 +190,10 @@ Une tâche longue n’échoue pas tant que l’extension signale son avancement.
 | Le plan est fait | Toute autre extension | Un avertissement. L’extension ne prend pas part à la tâche. |
 | Le plan est bloqué | Toutes | Aucune extension ne démarre pour la tâche. |
 | Un fichier est inspecté | Une extension avec `files.inspect` | MediaCopy 3000 redémarre l’extension et renvoie le même fichier. Après un second échec, les fichiers restants ne sont pas inspectés. Le résultat de la tâche ne change pas. |
+| La tâche se termine | Une extension avec `job.finished` | Un avertissement. Le résultat de la tâche ne change pas. |
 
 Quand vous annulez une tâche, MediaCopy 3000 arrête chaque extension, et les programmes qu’elle a
-lancés, en 3 secondes au plus.
+lancés, en 3 secondes au plus. Il n’envoie pas `job/finished`.
 
 ## Écrire une extension
 
@@ -204,6 +207,7 @@ envoie ces requêtes :
 | `inspect/plan` | Quand le plan est fait, à une extension avec `plan.inspect` |
 | `contribute` | Quand le plan est fait, à une extension avec `manifest.write` |
 | `inspect/file` | Après chaque fichier vérifié, à une extension avec `files.inspect` |
+| `job/finished` | Quand la tâche se termine, après le dernier `inspect/file`, à une extension avec `job.finished` |
 | `shutdown` | En dernier |
 
 L’extension peut envoyer les notifications `$/progress` et `$/log`. Les lignes de sa sortie
@@ -223,7 +227,7 @@ Le fichier `plugin.json` a ces clés :
 | `api` | Oui | La version majeure de l’API des extensions. Elle doit être `1`. |
 | `executable` | Oui | Un chemin pour chaque système : `linux-x86_64`, `linux-aarch64`, `macos-x86_64`, `macos-aarch64` et `windows-x86_64`. Les règles d’un chemin sont dans la liste qui suit. |
 | `namespace` | Avec `manifest.write` | Le seul espace de noms XML que l’extension écrit. Voir « Écrire dans le manifeste ». |
-| `capabilities` | Oui | Les capacités que l’extension demande : `files.read`, `plan.inspect`, `files.inspect`, `block` ou `manifest.write`. Au moins une parmi `plan.inspect`, `files.inspect` et `manifest.write`. `block` demande `plan.inspect`. `manifest.write` demande `namespace`. |
+| `capabilities` | Oui | Les capacités que l’extension demande : `files.read`, `plan.inspect`, `files.inspect`, `block`, `manifest.write` ou `job.finished`. Au moins une parmi `plan.inspect`, `files.inspect`, `manifest.write` et `job.finished`. `block` demande `plan.inspect`. `manifest.write` demande `namespace`. |
 | `settings` | Non | Les réglages que les préférences montrent. Chaque réglage a une `key`, un `label`, un `kind`, et peut avoir `required` et `default`. Un `choice` a aussi `options`. |
 | `jobFields` | Non | Les champs que la fiche du plan demande pour chaque tâche. Ils ont la même forme que les réglages. |
 
@@ -296,8 +300,8 @@ sequenceDiagram
 
 ### Étape du plan
 
-Quand le plan est fait, MediaCopy 3000 ouvre une session avec chaque extension qui a un point
-d’entrée :
+Quand le plan est fait, MediaCopy 3000 ouvre une session avec chaque extension qui a `plan.inspect`,
+`files.inspect` ou `manifest.write` :
 
 ```mermaid
 sequenceDiagram
@@ -329,8 +333,8 @@ sequenceDiagram
 
 ### Étape d’exécution
 
-Quand la tâche s’exécute, MediaCopy 3000 redémarre seulement les extensions avec `files.inspect`
-qui sont actives dans le plan :
+Quand la tâche s’exécute, MediaCopy 3000 redémarre seulement les extensions avec `files.inspect` ou
+`job.finished` qui sont actives dans le plan :
 
 ```mermaid
 sequenceDiagram
@@ -351,10 +355,21 @@ sequenceDiagram
         MC3K->>Plugin: redémarre, renvoie le même fichier
         note right of MC3K: Après un second échec, les fichiers restants ne sont pas inspectés.
     end
+    opt job.finished accordée
+        MC3K->>Plugin: job/finished {job, outcome, manifests}
+        Plugin-->>MC3K: avertissements
+    end
     MC3K->>Plugin: shutdown
     MC3K->>Plugin: ferme l’entrée standard
     MC3K-->>User: Rapport avec les notes de chaque fichier
 ```
+
+`job/finished` donne l’issue de la tâche (`allOk`, `withFailures` avec le nombre d’échecs, ou
+`failed` avec un message) et le chemin de chaque manifeste que la tâche a écrit. La requête ne
+contient ni les empreintes, ni les tailles, ni les actions des fichiers. Pour les obtenir,
+l’extension doit lire les manifestes. MediaCopy 3000 envoie la requête à toutes les extensions en
+même temps. La tâche ne se termine pas avant que chaque extension réponde ou échoue. Une extension
+qui travaille longtemps doit envoyer `$/progress`.
 
 ### À tout moment
 

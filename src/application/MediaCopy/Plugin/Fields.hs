@@ -3,6 +3,7 @@ module MediaCopy.Plugin.Fields
   , mergeAuthorSettings
   ) where
 
+import Control.Applicative ((<|>))
 import Data.Aeson (Value (..), toJSON)
 import Data.Aeson.Types (parseJSON, parseMaybe)
 import Data.Char (isControl, isSpace)
@@ -36,11 +37,11 @@ values fields given = foldl' step (Right Map.empty) fields
       (Field.BoolField, String "true") -> Just (Bool True)
       (Field.BoolField, String "false") -> Just (Bool False)
       (Field.ChoiceField choices, String text) | text `elem` choices -> Just (String text)
-      (Field.AuthorsField, json) | Just slots <- parseMaybe parseJSON json :: Maybe (Vector Plugin.AuthorSlot), all (\slot -> isJust (nonBlank slot.role) && FieldView.emailAccepted slot.email) slots -> Just (toJSON slots)
+      (Field.AuthorsField, json) | Just slots <- parseMaybe parseJSON json :: Maybe (Vector Plugin.AuthorSlot), all (\slot -> isJust (nonBlank slot.role) && all FieldView.emailAccepted slot.email) slots -> Just (toJSON slots)
       _ -> Nothing
 
 mergeAuthors :: Text -> Map Text Text -> Vector Plugin.AuthorSlot -> Vector Plugin.AuthorSlot
-mergeAuthors key given slots = V.filter (\slot -> slot.name & nonBlank & isJust) (V.imap merge slots)
+mergeAuthors key given slots = V.filter (\slot -> isJust (slot.name >>= nonBlank)) (V.imap merge slots)
   where
     merge index slot =
       AuthorSlot.AuthorSlot
@@ -49,7 +50,7 @@ mergeAuthors key given slots = V.filter (\slot -> slot.name & nonBlank & isJust)
         , email = pick index "email" slot.email
         , phone = pick index "phone" slot.phone
         }
-    pick index part stored = fromMaybe stored (Map.lookup (FieldView.slotKey key index part) given >>= nonBlank)
+    pick index part stored = (Map.lookup (FieldView.slotKey key index part) given >>= nonBlank) <|> stored
 
 nonBlank :: Text -> Maybe Text
 nonBlank text = if T.all (\c -> isSpace c || isControl c) text then Nothing else Just text

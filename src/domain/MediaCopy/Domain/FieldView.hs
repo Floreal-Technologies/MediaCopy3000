@@ -27,7 +27,7 @@ data FieldView = FieldView
   deriving stock (Eq, Show)
 
 -- |
--- >>> map (\field -> (field.key, field.label, field.value)) (V.toList (authorFields "authors" (V.fromList [AuthorSlot.AuthorSlot "DIT" "Jane Doe" "" "", AuthorSlot.AuthorSlot "Camera operator" "" "" ""])))
+-- >>> map (\field -> (field.key, field.label, field.value)) (V.toList (authorFields "authors" (V.fromList [AuthorSlot.AuthorSlot "DIT" (Just "Jane Doe") Nothing Nothing, AuthorSlot.AuthorSlot "Camera operator" Nothing Nothing Nothing])))
 -- [("authors.0.name","DIT: Name",Value "Jane Doe"),("authors.0.email","DIT: Email",NoValue),("authors.0.phone","DIT: Phone",NoValue),("authors.1.name","Camera operator: Name",NoValue),("authors.1.email","Camera operator: Email",NoValue),("authors.1.phone","Camera operator: Phone",NoValue)]
 authorFields :: Text -> Vector Plugin.AuthorSlot -> Vector FieldView
 authorFields key slots =
@@ -37,7 +37,7 @@ authorFields key slots =
         , label = slot.role <> ": " <> label
         , kind = if part == "email" then Field.EmailField else Field.TextField
         , required = False
-        , value = if T.null text then NoValue else Value text
+        , value = maybe NoValue Value text
         }
     | (index, slot) <- zip [0 ..] (V.toList slots)
     , (part, label, text) <- [("name", "Name", slot.name), ("email", "Email", slot.email), ("phone", "Phone", slot.phone)]
@@ -67,7 +67,7 @@ emailAccepted :: Text -> Bool
 emailAccepted text = T.null text || validEmail text
 
 -- |
--- >>> V.length (authorSlots (AuthorList (V.singleton (AuthorSlot.AuthorSlot "DIT" "" "" ""))))
+-- >>> V.length (authorSlots (AuthorList (V.singleton (AuthorSlot.AuthorSlot "DIT" Nothing Nothing Nothing))))
 -- 1
 -- >>> V.length (authorSlots (Value "x"))
 -- 0

@@ -12,7 +12,6 @@ import Data.Text qualified as T
 import Data.Vector qualified as V
 import Floreal.Commons.Environment (Environment)
 import Floreal.Commons.Xdg (Xdg)
-import MediaCopy.Plugin.Capability qualified as Capability
 import MediaCopy.Plugin.Id qualified as Plugin (Id)
 import MediaCopy.Plugin.Manifest qualified as Manifest
 
@@ -61,7 +60,7 @@ activate grantMap installed = case Map.lookup installed.manifest.id grantMap of
   Just grant
     | grant.enabled -> case unanswered grant of
         [] -> Right Ready.Ready {installed, granted = Set.intersection grant.grants declared, settings = grant.settings, trace = grant.trace}
-        missing -> Left Inactive {installed, reason = "asks for " <> T.intercalate ", " (map Capability.toText missing) <> ", which is neither granted nor declined"}
+        missing -> Left Inactive {installed, reason = "asks for " <> T.intercalate ", " (map display missing) <> ", which is neither granted nor declined"}
   _ -> Left Inactive {installed, reason = "is not enabled"}
   where
     declared = Set.fromList (V.toList installed.manifest.capabilities)

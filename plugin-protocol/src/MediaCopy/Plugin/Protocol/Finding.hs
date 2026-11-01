@@ -1,32 +1,23 @@
-{-# LANGUAGE DerivingVia #-}
-
 module MediaCopy.Plugin.Protocol.Finding
   ( Finding (..)
   , Severity (..)
   ) where
 
-import Data.Aeson
+import Autodocodec
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Text (Text)
-import GHC.Generics (Generic)
 
-import MediaCopy.Plugin.Internal.Wire (Wire)
-import MediaCopy.Plugin.Internal.Wire qualified as Wire
 import MediaCopy.Plugin.JsonSchema qualified as JsonSchema
-import MediaCopy.Plugin.JsonSchema qualified as Plugin (JsonSchema)
 
 data Severity = Blocker | Warning
   deriving stock (Bounded, Enum, Eq, Ord, Show)
+  deriving (FromJSON, ToJSON) via Autodocodec Severity
 
-instance ToJSON Severity where
-  toJSON = \case
-    Blocker -> String "blocker"
-    Warning -> String "warning"
-
-instance FromJSON Severity where
-  parseJSON = withText "severity" $ \case
-    "blocker" -> pure Blocker
-    "warning" -> pure Warning
-    other -> fail ("unknown severity " <> show other)
+instance HasCodec Severity where
+  codec =
+    named "severity" $ boundedEnumCodec $ \case
+      Blocker -> "blocker"
+      Warning -> "warning"
 
 data Finding = Finding
   { key :: Text
@@ -34,13 +25,14 @@ data Finding = Finding
   , title :: Text
   , detail :: Text
   }
-  deriving stock (Eq, Show, Generic)
-  deriving (FromJSON, ToJSON) via Wire Finding
+  deriving stock (Eq, Show)
+  deriving (FromJSON, ToJSON) via Autodocodec Finding
 
-instance Plugin.JsonSchema Severity where
-  defName = Just "severity"
-  schema = JsonSchema.enumOf @Severity
-
-instance Plugin.JsonSchema Finding where
-  defName = Just "finding"
-  schema = JsonSchema.record @Finding
+instance HasCodec Finding where
+  codec =
+    JsonSchema.namedObject "finding" $
+      Finding
+        <$> requiredField' "key" .= (.key)
+        <*> requiredField' "severity" .= (.severity)
+        <*> requiredField' "title" .= (.title)
+        <*> requiredField' "detail" .= (.detail)

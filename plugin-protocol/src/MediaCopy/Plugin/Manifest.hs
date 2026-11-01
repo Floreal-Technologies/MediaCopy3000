@@ -2,17 +2,18 @@ module MediaCopy.Plugin.Manifest
   ( Manifest (..)
   , validate
   , platformKey
+  , reservedNamespaces
   ) where
 
+import Autodocodec
 import Control.Monad (unless, when)
-import Data.Aeson
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Char (isAsciiLower, isDigit)
 import Data.Foldable (for_)
-import Data.Function ((&))
 import Data.List (List, nub)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe, isNothing)
+import Data.Maybe (isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Vector (Vector)
@@ -27,7 +28,6 @@ import MediaCopy.Plugin.Field qualified as Plugin (Field)
 import MediaCopy.Plugin.Id qualified as Id
 import MediaCopy.Plugin.Id qualified as Plugin (Id)
 import MediaCopy.Plugin.JsonSchema qualified as JsonSchema
-import MediaCopy.Plugin.JsonSchema qualified as Plugin (JsonSchema)
 
 data Manifest = Manifest
   { id :: Plugin.Id
@@ -42,20 +42,22 @@ data Manifest = Manifest
   , jobFields :: Vector Plugin.Field
   }
   deriving stock (Eq, Show)
+  deriving (FromJSON, ToJSON) via Autodocodec Manifest
 
-instance FromJSON Manifest where
-  parseJSON = withObject "plugin.json" $ \o -> do
-    pluginId <- o .: "id"
-    name <- o .: "name"
-    description <- o .: "description"
-    version <- o .: "version"
-    api <- o .: "api"
-    namespace <- o .:? "namespace"
-    executable <- o .: "executable"
-    capabilities <- fromMaybe V.empty <$> o .:? "capabilities"
-    settings <- fromMaybe V.empty <$> o .:? "settings"
-    jobFields <- fromMaybe V.empty <$> o .:? "jobFields"
-    pure Manifest {id = pluginId, name, description, version, api, namespace, executable, capabilities, settings, jobFields}
+instance HasCodec Manifest where
+  codec =
+    JsonSchema.namedObject "manifest" $
+      Manifest
+        <$> requiredField' "id" .= (.id)
+        <*> requiredField' "name" .= (.name)
+        <*> requiredField "description" "One or two short sentences that tell what the plug-in does. The preferences page shows it under the name." .= (.description)
+        <*> requiredField' "version" .= (.version)
+        <*> requiredField' "api" .= (.api)
+        <*> optionalField "namespace" "The only XML namespace that a plug-in with manifest.write can write. It cannot be empty, a namespace of ASC MHL, or a namespace that XML reserves." .= (.namespace)
+        <*> requiredFieldWith "executable" (mapCodec stringCodec) "Keys: linux-x86_64, linux-aarch64, macos-aarch64, macos-x86_64, windows-x86_64. Values: paths relative to the plug-in folder. A path does not start with '/' or '\\', holds no ':', and has no '..' part. One bad path, for any platform, rejects the plug-in on every platform." .= (.executable)
+        <*> optionalFieldWithOmittedDefault "capabilities" V.empty "At least one of plan.inspect, files.inspect, manifest.write and job.finished." .= (.capabilities)
+        <*> optionalFieldWithOmittedDefault "settings" V.empty "Keys are unique. At most one setting has the kind authors." .= (.settings)
+        <*> optionalFieldWithOmittedDefault "jobFields" V.empty "Keys are unique. No job field has the kind authors." .= (.jobFields)
 
 validate :: Manifest -> Either Text Manifest
 validate m = do
@@ -119,48 +121,3 @@ platformKey = T.pack (system <> "-" <> arch)
       "darwin" -> "macos"
       "mingw32" -> "windows"
       other -> other
-
-instance Plugin.JsonSchema Manifest where
-  defName = Just "manifest"
-  schema =
-    object
-      [ "type" .= String "object"
-      , "required" .= (["id", "name", "description", "version", "api", "executable", "capabilities"] :: [Text])
-      , "properties"
-          .= object
-            [ "id" .= JsonSchema.embed @Plugin.Id
-            , "name" .= JsonSchema.string
-            , "description"
-                .= (object ["type" .= String "string", "pattern" .= String "\\S"] & JsonSchema.describe "One or two short sentences that tell what the plug-in does. The preferences page shows it under the name.")
-            , "version" .= JsonSchema.string
-            , "api" .= object ["const" .= Api.major]
-            , "namespace"
-                .= ( object ["type" .= String "string", "not" .= object ["enum" .= reservedNamespaces]]
-                       & JsonSchema.describe "The only XML namespace that a plug-in with manifest.write can write. It cannot be empty, a namespace of ASC MHL, or a namespace that XML reserves."
-                   )
-            , "executable"
-                .= ( object ["type" .= String "object", "additionalProperties" .= object ["type" .= String "string", "pattern" .= String "^(?![/\\\\])(?!.*:)(?!(?:.*[/\\\\])?\\.\\.(?:[/\\\\]|$)).+$"]]
-                       & JsonSchema.describe "Keys: linux-x86_64, linux-aarch64, macos-aarch64, macos-x86_64, windows-x86_64. Values: paths relative to the plug-in folder. A path does not start with '/' or '\\', holds no ':', and has no '..' part. One bad path, for any platform, rejects the plug-in on every platform."
-                   )
-            , "capabilities"
-                .= ( object ["type" .= String "array", "items" .= JsonSchema.embed @Plugin.Capability, "contains" .= object ["enum" .= Capability.hooks]]
-                       & JsonSchema.describe "At least one of plan.inspect, files.inspect and manifest.write."
-                   )
-            , "settings"
-                .= ( object ["type" .= String "array", "items" .= JsonSchema.embed @Plugin.Field, "contains" .= authors, "minContains" .= (0 :: Int), "maxContains" .= (1 :: Int)]
-                       & JsonSchema.describe "Keys are unique. At most one setting has the kind authors."
-                   )
-            , "jobFields"
-                .= ( object ["type" .= String "array", "items" .= (JsonSchema.embed @Plugin.Field & JsonSchema.property "kind" (object ["not" .= object ["const" .= String "authors"]]))]
-                       & JsonSchema.describe "Keys are unique. No job field has the kind authors."
-                   )
-            ]
-      , "allOf"
-          .= [ object ["if" .= declares Capability.Block, "then" .= declares Capability.PlanInspect]
-             , object ["if" .= declares Capability.ManifestWrite, "then" .= object ["required" .= ["namespace" :: Text]]]
-             , object ["if" .= object ["properties" .= object ["settings" .= object ["contains" .= authors]], "required" .= ["settings" :: Text]], "then" .= declares Capability.ManifestWrite]
-             ]
-      ]
-    where
-      authors = object ["properties" .= object ["kind" .= object ["const" .= String "authors"]], "required" .= ["kind" :: Text]]
-      declares capability = object ["properties" .= object ["capabilities" .= object ["contains" .= object ["const" .= capability]]]]

@@ -6,6 +6,7 @@ module MediaCopy.Plugin.Wire
   , contributionOf
   , inspectFileParams
   , annotationsOf
+  , jobFinishedParams
   ) where
 
 import Ascmhl.Author qualified as Author
@@ -29,12 +30,16 @@ import MediaCopy.Plugin.Protocol.Finding qualified as Protocol (Finding)
 import MediaCopy.Plugin.Protocol.HashValue qualified as HashValue
 import MediaCopy.Plugin.Protocol.HashValue qualified as Protocol (HashValue)
 import MediaCopy.Plugin.Protocol.InspectFile qualified as InspectFile
+import MediaCopy.Plugin.Protocol.JobFinished qualified as JobFinished
 import MediaCopy.Plugin.Protocol.JobInfo qualified as JobInfo
 import MediaCopy.Plugin.Protocol.JobInfo qualified as Protocol (JobInfo)
 
 import MediaCopy.Domain.Contributions (Contributions)
 import MediaCopy.Domain.Contributions qualified as Contributions
 import MediaCopy.Domain.Job qualified as Job
+import MediaCopy.Domain.JobEnd (JobEnd)
+import MediaCopy.Domain.JobEnd qualified as JobEnd
+import MediaCopy.Domain.JobResult qualified as JobResult
 import MediaCopy.Domain.JobSpec qualified as JobSpec
 import MediaCopy.Domain.Plan (Plan)
 import MediaCopy.Domain.Plan qualified as Plan
@@ -64,6 +69,17 @@ jobInfo plan =
         Job.Offload _ -> V.map (\target -> OsPath.toText target.root) plan.targets
         _ -> V.empty
     , hashFormat = fmap display plan.format
+    }
+
+jobFinishedParams :: Plan -> JobEnd -> JobFinished.Params
+jobFinishedParams plan jobEnd =
+  JobFinished.Params
+    { job = jobInfo plan
+    , outcome = case jobEnd.result of
+        Left message -> JobFinished.Failed message
+        Right JobResult.AllOk -> JobFinished.AllOk
+        Right (JobResult.WithFailures count) -> JobFinished.WithFailures count
+    , manifests = V.map (\written -> JobFinished.ManifestInfo {destination = OsPath.toText written.folder, path = OsPath.toText written.path}) jobEnd.manifests
     }
 
 fileInfos :: Plan -> Vector Protocol.FileInfo

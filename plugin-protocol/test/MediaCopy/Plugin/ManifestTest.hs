@@ -24,7 +24,7 @@ tests =
     "Manifest"
     [ testCase "valid manifests are accepted" validManifestsAreAccepted
     , testCase "each broken rule refuses the manifest" manifestRules
-    , testCase "an author slot needs a role, fills the other fields with empty text, and writes every field" authorSlotsRoundTrip
+    , testCase "an author slot needs a role, reads null and empty text as absent, and leaves absent fields out" authorSlotsRoundTrip
     ]
 
 base :: Plugin.Manifest
@@ -90,8 +90,8 @@ refused =
 authorSlotsRoundTrip :: Assertion
 authorSlotsRoundTrip = do
   decode "[{\"role\": \"DIT\", \"name\": \"Jane Doe\"}, {\"role\": \"Camera operator\"}]"
-    @?= Just (V.fromList [AuthorSlot.AuthorSlot "DIT" "Jane Doe" "" "", AuthorSlot.AuthorSlot "Camera operator" "" "" ""])
+    @?= Just (V.fromList [AuthorSlot.AuthorSlot "DIT" (Just "Jane Doe") Nothing Nothing, AuthorSlot.AuthorSlot "Camera operator" Nothing Nothing Nothing])
   decode "[{\"name\": \"Jane\"}]" @?= (Nothing :: Maybe (V.Vector Plugin.AuthorSlot))
-  decode "[{\"role\": \"DIT\", \"email\": null}]" @?= (Nothing :: Maybe (V.Vector Plugin.AuthorSlot))
-  toJSON (AuthorSlot.AuthorSlot "DIT" "Jane Doe" "" "")
-    @?= object ["email" .= String "", "name" .= String "Jane Doe", "phone" .= String "", "role" .= String "DIT"]
+  decode "[{\"role\": \"DIT\", \"email\": null, \"phone\": \"\"}]" @?= Just (V.singleton (AuthorSlot.AuthorSlot "DIT" Nothing Nothing Nothing))
+  toJSON (AuthorSlot.AuthorSlot "DIT" (Just "Jane Doe") Nothing Nothing)
+    @?= object ["name" .= String "Jane Doe", "role" .= String "DIT"]

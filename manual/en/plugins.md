@@ -18,6 +18,7 @@ The user can approve or decline the usage of those capabilities.
 | `files.inspect` | After each file is verified | Adds notes about each verified file to the report. |
 | `block` | With `plan.inspect` | Stops a job with a blocker. Without it, a blocker from the plug-in becomes a warning. |
 | `manifest.write` | When the plan is made | Adds authors and metadata to each manifest that the job writes. |
+| `job.finished` | When the job ends | Acts on the result of the job and on the manifests that it wrote. |
 
 ## Install a plug-in
 
@@ -145,6 +146,7 @@ Credits refuses a job when no slot has a name.
 | `files.inspect` | Receive `inspect/file` after each verified file | Without this grant, MediaCopy 3000 does not send the request. |
 | `block` | Stop a job with a blocker | Without this grant, a blocker from the plug-in becomes a warning. |
 | `manifest.write` | Receive `contribute` and add data to the manifest | Without this grant, MediaCopy 3000 does not ask the plug-in for data. |
+| `job.finished` | Receive `job/finished` when the job ends | Without this grant, MediaCopy 3000 does not send the request. |
 
 A plug-in is a program that runs with your rights. MediaCopy 3000 cannot stop it from reading a file
 or from opening a network connection. Install only plug-ins from a source that you trust.
@@ -181,9 +183,10 @@ the plug-in reports its progress.
 | The plan is made | Any other plug-in | A warning. The plug-in does not take part in the job. |
 | The plan is blocked | All | No plug-in starts for the job. |
 | A file is inspected | A plug-in with `files.inspect` | MediaCopy 3000 starts the plug-in again and sends the same file again. After a second failure, the files that are left are `not inspected`. The job result does not change. |
+| The job ends | A plug-in with `job.finished` | A warning. The job result does not change. |
 
 When you cancel a job, MediaCopy 3000 stops each plug-in, and the programs that it started, in 3
-seconds or less.
+seconds or less. It does not send `job/finished`.
 
 ## Write a plug-in
 
@@ -196,6 +199,7 @@ message is one [JSON-RPC 2.0](https://www.jsonrpc.org/) object on one line. Medi
 | `inspect/plan` | When the plan is made, to a plug-in with `plan.inspect` |
 | `contribute` | When the plan is made, to a plug-in with `manifest.write` |
 | `inspect/file` | After each verified file, to a plug-in with `files.inspect` |
+| `job/finished` | When the job ends, after the last `inspect/file`, to a plug-in with `job.finished` |
 | `shutdown` | Last |
 
 The plug-in can send the notifications `$/progress` and `$/log`. Lines on its error output go into
@@ -215,13 +219,13 @@ The file `plugin.json` has these keys:
 | `api` | Yes | The major version of the plug-in API. It must be `1`. |
 | `executable` | Yes | One path for each system: `linux-x86_64`, `linux-aarch64`, `macos-x86_64`, `macos-aarch64` and `windows-x86_64`. The rules for a path are in the list that follows. |
 | `namespace` | With `manifest.write` | The only XML namespace that the plug-in writes. Refer to "Write into the manifest". |
-| `capabilities` | Yes | The capabilities that the plug-in asks for: `files.read`, `plan.inspect`, `files.inspect`, `block` or `manifest.write`. At least one of `plan.inspect`, `files.inspect` and `manifest.write`. `block` needs `plan.inspect`. `manifest.write` needs `namespace`. |
+| `capabilities` | Yes | The capabilities that the plug-in asks for: `files.read`, `plan.inspect`, `files.inspect`, `block`, `manifest.write` or `job.finished`. At least one of `plan.inspect`, `files.inspect`, `manifest.write` and `job.finished`. `block` needs `plan.inspect`. `manifest.write` needs `namespace`. |
 | `settings` | No | The settings that the preferences show. Each setting has a `key`, a `label`, a `kind`, and can have `required` and `default`. A `choice` also has `options`. |
 | `jobFields` | No | The fields that the plan sheet asks for each job. They have the same shape as the settings. |
 
 A plug-in that breaks one of these rules is not valid. The group **Not Valid** shows the reason.
 
-A setting has a kind: `text`, `secret`, `bool`, `choice`, `path` or `authors`. The kind `authors`
+A setting has a kind: `text`, `secret`, `email`, `bool`, `choice`, `path` or `authors`. The kind `authors`
 is a list of author slots that the user edits in the preferences. MediaCopy 3000 accepts it only
 in `settings`, only once, only with `manifest.write`, and without `default`. The plan sheet asks for
 the name, the email and the phone of each slot. `initialise` gives the merged list in `settings`,
@@ -284,7 +288,8 @@ sequenceDiagram
 
 ### Plan stage
 
-When the plan is made, MediaCopy 3000 starts one session with each plug-in that has a hook:
+When the plan is made, MediaCopy 3000 starts one session with each plug-in that has `plan.inspect`,
+`files.inspect` or `manifest.write`:
 
 ```mermaid
 sequenceDiagram
@@ -316,8 +321,8 @@ sequenceDiagram
 
 ### Run stage
 
-When the job runs, MediaCopy 3000 starts again only the plug-ins with `files.inspect` that are
-active in the plan:
+When the job runs, MediaCopy 3000 starts again only the plug-ins with `files.inspect` or
+`job.finished` that are active in the plan:
 
 ```mermaid
 sequenceDiagram
@@ -338,10 +343,21 @@ sequenceDiagram
         MC3K->>Plugin: start again, send the same file again
         note right of MC3K: After a second failure, the files that are left are `not inspected`.
     end
+    opt job.finished granted
+        MC3K->>Plugin: job/finished {job, outcome, manifests}
+        Plugin-->>MC3K: warnings
+    end
     MC3K->>Plugin: shutdown
     MC3K->>Plugin: close standard input
     MC3K-->>User: Report with the notes for each file
 ```
+
+`job/finished` gives the outcome of the job (`allOk`, `withFailures` with the number of failures,
+or `failed` with a message) and the path of each manifest that the job wrote. The request does not
+hold the hashes, the sizes or the actions of the files. To get them, the plug-in must parse the
+manifests. MediaCopy 3000 sends the request to all the plug-ins at the same time. The job does not
+end until each plug-in answers or fails. A plug-in that works for a long time must send
+`$/progress`.
 
 ### At any time
 

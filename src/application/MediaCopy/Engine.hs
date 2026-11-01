@@ -23,7 +23,7 @@ import Effectful
 import Effectful.Error.Static (Error, runErrorNoCallStack, throwError)
 import Effectful.Exception (displayException, finally, throwIO, trySync)
 import Effectful.Reader.Static (Reader, ask, asks, runReader)
-import Effectful.State.Static.Local (State, evalState, get, modify)
+import Effectful.State.Static.Local (State, evalState, get, modify, runState)
 import Effectful.Time (Time, currentTime)
 import Prelude hiding (finally, throwIO)
 
@@ -34,7 +34,8 @@ import MediaCopy.Domain.FileOutcome qualified as FileOutcome
 import MediaCopy.Domain.FileSize (FileSize)
 import MediaCopy.Domain.FileStatus qualified as FileStatus
 import MediaCopy.Domain.Finding qualified as Finding
-import MediaCopy.Domain.JobEvent (JobEvent)
+import MediaCopy.Domain.JobEnd (JobEnd, WrittenManifest)
+import MediaCopy.Domain.JobEnd qualified as JobEnd
 import MediaCopy.Domain.JobEvent qualified as JobEvent
 import MediaCopy.Domain.JobResult (JobResult)
 import MediaCopy.Domain.JobResult qualified as JobResult
@@ -74,7 +75,7 @@ type Hashing es =
 
 type Copying es = (Hashing es, Reader Creator :> es, Reader Contributions :> es, Plugins :> es)
 
-type Pass es = (Copying es, Error PlanViolation :> es)
+type Pass es = (Copying es, Error PlanViolation :> es, State (Vector WrittenManifest) :> es)
 
 data JobProgress = JobProgress
   { readSoFar :: Int64
@@ -119,18 +120,19 @@ execute hostname plan
           & Emit.event
   | otherwise = do
       startTime <- currentTime
-      result <- trySync (runErrorNoCallStack @PlanViolation (evalState (start startTime) (runPlan hostname plan)))
-      endJob $ case result of
-        Left e -> JobEvent.Failed (T.pack (displayException e))
-        Right (Left violation) -> JobEvent.Failed (display violation)
-        Right (Right terminal) -> terminal
+      (attempt, manifests) <- runState V.empty (trySync (runErrorNoCallStack @PlanViolation (evalState (start startTime) (runPlan hostname plan))))
+      let result = case attempt of
+            Left e -> Left (T.pack (displayException e))
+            Right (Left violation) -> Left (display violation)
+            Right (Right outcome) -> outcome
+      endJob JobEnd.JobEnd {result, manifests}
   where
     start t = JobProgress {readSoFar = 0, lastEmit = t}
 
-endJob :: (Emit :> es, Plugins :> es) => JobEvent -> Eff es ()
-endJob terminal = do
-  Plugins.settle
-  trySync (Emit.event terminal) >>= \case
+endJob :: (Emit :> es, Plugins :> es) => JobEnd -> Eff es ()
+endJob jobEnd = do
+  Plugins.settle jobEnd
+  trySync (Emit.event (either JobEvent.Failed JobEvent.Finished jobEnd.result)) >>= \case
     Left e -> Emit.event (JobEvent.Failed (T.pack (displayException e)))
     Right () -> pure ()
 
@@ -311,10 +313,10 @@ verifyDestinations writes srcHash = go (V.toList writes)
       if actual == srcHash then go ws else pure (FileOutcome.HashMismatch (FileOutcome.Mismatch srcHash actual))
 
 runPlan
-  :: (FileSystem :> es, Hasher :> es, Time :> es, Emit :> es, Plugins :> es, Error PlanViolation :> es, State JobProgress :> es)
+  :: (FileSystem :> es, Hasher :> es, Time :> es, Emit :> es, Plugins :> es, Error PlanViolation :> es, State JobProgress :> es, State (Vector WrittenManifest) :> es)
   => Text
   -> Plan
-  -> Eff es JobEvent
+  -> Eff es (Either Text JobResult)
 runPlan hostname plan = do
   fmt <- maybe (throwError PlanViolation.PlanFormatMissing) pure plan.format
   forM_ (Plan.raceChecks plan) (\check -> Generation.require (fst check) (snd check))
@@ -329,14 +331,14 @@ runOffloadPlan
   :: (Pass es)
   => Plan
   -> Plan.CopyPass
-  -> Eff es JobEvent
+  -> Eff es (Either Text JobResult)
 runOffloadPlan plan copy = do
   sealed <- case plan.sealPass of
     Nothing -> pure (Right PassTally {entries = V.empty, failedPaths = Set.empty})
     Just pass -> runSealPass plan.ignorePatterns copy.source pass
-  either pure (copyAfter plan copy) sealed
+  either (pure . Left) (copyAfter plan copy) sealed
 
-copyAfter :: (Pass es) => Plan -> Plan.CopyPass -> PassTally -> Eff es JobEvent
+copyAfter :: (Pass es) => Plan -> Plan.CopyPass -> PassTally -> Eff es (Either Text JobResult)
 copyAfter plan copy sealTally = do
   recorded <- originsForCopy plan copy
   copied <- runSteps (inspectVerified copy.source) copy.source recorded plan.steps
@@ -346,7 +348,7 @@ copyAfter plan copy sealTally = do
     when (copy.carried > 0) $
       void (Store.carryHistory copy.source planned.folder >>= PlanViolation.orThrow . first (PlanViolation.HistoryFaultAt copy.source))
     Generation.write planned plan.ignorePatterns copied.entries
-  pure (JobEvent.Finished (resultOf (sealTally.failedPaths <> copied.failedPaths)))
+  pure (Right (resultOf (sealTally.failedPaths <> copied.failedPaths)))
 
 originsForCopy
   :: (FileSystem :> es, Emit :> es, Error PlanViolation :> es, Reader Algo :> es)
@@ -373,7 +375,7 @@ runSealPass
   => Vector Text
   -> OsPath
   -> Plan.SealPass
-  -> Eff es (Either JobEvent PassTally)
+  -> Eff es (Either Text PassTally)
 runSealPass patterns source pass = do
   tally <- runSteps (\_ _ -> pure ()) source Map.empty pass.steps
   Emit.event JobEvent.ManifestWriting
@@ -382,18 +384,18 @@ runSealPass patterns source pass = do
     Offload.CopyAnyway -> pure (Right tally)
     Offload.StopBeforeCopy
       | Set.null tally.failedPaths -> pure (Right tally)
-      | otherwise -> pure (Left (JobEvent.Failed (display SealStopped {failed = Set.size tally.failedPaths, total = V.length pass.steps})))
+      | otherwise -> pure (Left (display SealStopped {failed = Set.size tally.failedPaths, total = V.length pass.steps}))
 
 runGenerationPlan
   :: (Pass es)
   => Plan
   -> Plan.RecordPass
-  -> Eff es JobEvent
+  -> Eff es (Either Text JobResult)
 runGenerationPlan plan record = do
   tally <- runSteps (inspectVerified record.folder) record.folder Map.empty plan.steps
   Emit.event JobEvent.ManifestWriting
   Generation.write record.generation plan.ignorePatterns tally.entries
-  pure (JobEvent.Finished (resultOf tally.failedPaths))
+  pure (Right (resultOf tally.failedPaths))
 
 runStep
   :: (Copying es)

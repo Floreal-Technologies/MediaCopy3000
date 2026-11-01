@@ -4,6 +4,7 @@ module MediaCopy.Plugin.Protocol.Method
   , contribute
   , inspectFile
   , shutdown
+  , jobFinished
   , progress
   , log
   ) where
@@ -11,12 +12,13 @@ module MediaCopy.Plugin.Protocol.Method
 import Data.Text (Text)
 import Prelude hiding (log)
 
-initialise, inspectPlan, contribute, inspectFile, shutdown :: Text
+initialise, inspectPlan, contribute, inspectFile, shutdown, jobFinished :: Text
 initialise = "initialise"
 inspectPlan = "inspect/plan"
 contribute = "contribute"
 inspectFile = "inspect/file"
 shutdown = "shutdown"
+jobFinished = "job/finished"
 
 progress, log :: Text
 progress = "$/progress"

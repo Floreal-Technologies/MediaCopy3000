@@ -22,7 +22,7 @@ import Data.Version (showVersion)
 import Effectful (Persistence (Persistent), UnliftStrategy (ConcUnlift), withUnliftStrategy)
 import Effectful qualified
 import Effectful.Concurrent (throwTo)
-import Effectful.Concurrent.Async (Async, AsyncCancelled (..), asyncThreadId, asyncWithUnmask, cancel, forConcurrently, waitCatch, waitCatchSTM)
+import Effectful.Concurrent.Async (Async, AsyncCancelled (..), asyncThreadId, asyncWithUnmask, cancel, forConcurrently, forConcurrently_, waitCatch, waitCatchSTM)
 import Effectful.Concurrent.STM
 import Effectful.Exception qualified as E
 import Effectful.Timeout (timeout)
@@ -32,14 +32,17 @@ import MediaCopy.Plugin.Capability qualified as Plugin (Capability)
 import MediaCopy.Plugin.Id qualified as Id
 import MediaCopy.Plugin.Manifest qualified as Manifest
 import MediaCopy.Plugin.Protocol.Contribute qualified as Contribute
+import MediaCopy.Plugin.Protocol.Finding qualified as Protocol (Finding)
 import MediaCopy.Plugin.Protocol.Initialise qualified as Initialise
 import MediaCopy.Plugin.Protocol.InspectFile qualified as InspectFile
 import MediaCopy.Plugin.Protocol.InspectPlan qualified as InspectPlan
+import MediaCopy.Plugin.Protocol.JobFinished qualified as JobFinished
 import MediaCopy.Plugin.Protocol.JobInfo qualified as JobInfo
 import MediaCopy.Plugin.Protocol.Method qualified as Method
 
 import MediaCopy.Domain.Contributions (Contributions)
 import MediaCopy.Domain.Contributions qualified as Contributions
+import MediaCopy.Domain.JobEnd (JobEnd)
 import MediaCopy.Domain.JobSpec qualified as JobSpec
 import MediaCopy.Domain.Plan (Plan)
 import MediaCopy.Domain.Plan qualified as Plan
@@ -121,7 +124,7 @@ with config stage plan use = withUnliftStrategy (ConcUnlift Persistent Effectful
       vanished = V.filter (\ref -> not (Set.member ref.id present)) plan.plugins.active
       unneeded = if stage == PlanStage then idle else []
   when (stage == RunStage) $
-    forM_ vanished (\ref -> config.report (PluginReport.Warned PluginFinding.PluginFinding {plugin = ref, severity = Severity.Warning, about = PluginFinding.Faulted (PluginFinding.Unavailable "is no longer installed and enabled")}))
+    forM_ vanished (\ref -> config.report (faultWarning ref (PluginFinding.Unavailable "is no longer installed and enabled")))
   registry <- newTVarIO []
   flip E.finally (stopWorkers registry) $ do
     (members, startFaults, crashes) <- startAll registry config stage plan wanted
@@ -138,9 +141,16 @@ stopWorkers registry = E.uninterruptibleMask_ $ do
   atomically $ traverse_ waitCatchSTM workers `orElse` (readTVar expired >>= check)
 
 neededAt :: Stage -> Set Plugin.Capability -> Bool
-neededAt stage granted = case stage of
-  PlanStage -> any (`elem` Capability.hooks) granted
-  RunStage -> Set.member Capability.FilesInspect granted
+neededAt stage = any (elem stage . stagesOf)
+
+stagesOf :: Plugin.Capability -> List Stage
+stagesOf = \case
+  Capability.FilesRead -> []
+  Capability.PlanInspect -> [PlanStage]
+  Capability.FilesInspect -> [PlanStage, RunStage]
+  Capability.Block -> []
+  Capability.ManifestWrite -> [PlanStage]
+  Capability.JobFinished -> [RunStage]
 
 mayBlock :: Set Plugin.Capability -> Bool
 mayBlock granted = Set.member Capability.Block granted && Set.member Capability.PlanInspect granted
@@ -296,7 +306,7 @@ runWorker config launch params ref mailbox queued skippedFiles broken started = 
             Left callFault -> pure (Just (file, callFault))
             Right result -> do
               config.report (PluginReport.Annotated file.path (Wire.annotationsOf ref result))
-              forM_ result.warnings (\warning -> warning & Wire.pluginSaid ref False & PluginReport.Warned & config.report)
+              reportSaid config.report ref result.warnings
               atomically (modifyTVar' queued (subtract 1))
               serve conn
         Stop done -> do
@@ -307,7 +317,7 @@ runWorker config launch params ref mailbox queued skippedFiles broken started = 
       firstTime <- atomically (tryPutTMVar started (Left callFault))
       unless firstTime $ do
         atomically (writeTVar broken (Just (faultText callFault)))
-        config.report (PluginReport.Warned PluginFinding.PluginFinding {plugin = ref, severity = Severity.Warning, about = PluginFinding.Faulted (PluginFinding.Unavailable (faultText callFault))})
+        config.report (faultWarning ref (PluginFinding.Unavailable (faultText callFault)))
       drain callFault
     drain callFault =
       atomically (readTQueue mailbox) >>= \case
@@ -405,15 +415,20 @@ queuedFiles :: Session es -> STM Int
 queuedFiles session = sum <$> traverse (\member -> readTVar member.queued) (V.toList (inspectors session))
 
 inspectors :: Session es -> Vector Member
-inspectors session = V.filter (\member -> Set.member Capability.FilesInspect member.ready.granted) session.members
+inspectors = holding Capability.FilesInspect
 
-finish :: (Connection.Host es) => Session es -> Eff es ()
-finish session = do
+holding :: Plugin.Capability -> Session es -> Vector Member
+holding capability session = V.filter (\member -> Set.member capability member.ready.granted) session.members
+
+finish :: (Connection.Host es) => Session es -> JobEnd -> Eff es ()
+finish session jobEnd = do
   left <- atomically (queuedFiles session)
   when (left > 0) (loop left)
   forM_ (inspectors session) $ \member -> do
     skipped <- readTVarIO member.skippedFiles
     when (skipped > 0) (session.config.report (PluginReport.NotInspected member.ref skipped))
+  let params = Wire.jobFinishedParams session.plan jobEnd
+  forConcurrently_ (holding Capability.JobFinished session) (jobFinished session params)
   where
     loop shown = do
       session.config.report (PluginReport.InspectionsLeft shown)
@@ -423,8 +438,23 @@ finish session = do
         pure now
       if next <= 0 then session.config.report (PluginReport.InspectionsLeft 0) else loop next
 
+jobFinished :: (Concurrent :> es) => Session es -> JobFinished.Params -> Member -> Eff es ()
+jobFinished session params member =
+  readTVarIO member.broken >>= \case
+    Just _ -> pure ()
+    Nothing ->
+      request member Method.jobFinished params >>= \case
+        Left callFault -> session.config.report (faultWarning member.ref (faultAbout callFault))
+        Right (result :: JobFinished.Result) -> reportSaid session.config.report member.ref result.warnings
+
+faultWarning :: PluginRef -> PluginFinding.Fault -> PluginReport
+faultWarning plugin fault = PluginReport.Warned PluginFinding.PluginFinding {plugin, severity = Severity.Warning, about = PluginFinding.Faulted fault}
+
+reportSaid :: (PluginReport -> Eff es ()) -> PluginRef -> Vector Protocol.Finding -> Eff es ()
+reportSaid report ref = traverse_ (\warning -> warning & Wire.pluginSaid ref False & PluginReport.Warned & report)
+
 logFault :: Session es -> Text -> Eff es ()
-logFault session problem = session.config.report (PluginReport.Warned PluginFinding.PluginFinding {plugin = PluginRef.PluginRef {id = "mediacopy3000", name = "MediaCopy 3000"}, severity = Severity.Warning, about = PluginFinding.Faulted (PluginFinding.Unavailable problem)})
+logFault session problem = session.config.report (faultWarning PluginRef.PluginRef {id = "mediacopy3000", name = "MediaCopy 3000"} (PluginFinding.Unavailable problem))
 
 inspectPlan :: (Connection.Host es) => Config es -> Plan -> Eff es Plan
 inspectPlan config plan = do

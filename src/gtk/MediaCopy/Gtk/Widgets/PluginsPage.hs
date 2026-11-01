@@ -11,7 +11,6 @@ import Floreal.Commons.Gtk.Common (Cell, newCell)
 import Floreal.Commons.Gtk.Signal (onSelf)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
-import MediaCopy.Plugin.Capability qualified as Capability
 import MediaCopy.Plugin.Capability qualified as Plugin (Capability)
 import MediaCopy.Plugin.Field qualified as Field
 
@@ -235,7 +234,7 @@ refreshDetail rows entry = do
 capabilityRow :: (PluginCatalogue.Edit -> IO ()) -> PluginCatalogue.CapabilityView -> IO (Adw.ComboRow, PluginCatalogue.Answer -> IO ())
 capabilityRow change view = do
   row <- new Adw.ComboRow [#useMarkup := False]
-  set row [#title := Capability.toText view.capability, #subtitle := capabilitySubtitle view]
+  set row [#title := display view.capability, #subtitle := capabilitySubtitle view]
   choices <- choiceRow answerText answers row
   paintAnswer <- bind choices (change . PluginCatalogue.SetAnswer view.capability)
   paintAnswer view.answer
