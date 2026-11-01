@@ -60,8 +60,8 @@ data SealView = SealView
   deriving stock (Eq, Show)
 
 sealView :: Wording -> Plan -> SealView
-sealView wording plan = case plan.spec.job of
-  Job.Offload oj ->
+sealView wording plan = case (plan.spec.job, plan.execution) of
+  (Job.Offload oj, Plan.CopyInto copy) ->
     let sealing = isJust plan.sealPass
         anyway = case plan.sealPass of
           Just pass | pass.onFailure == Offload.CopyAnyway -> True
@@ -69,9 +69,9 @@ sealView wording plan = case plan.spec.job of
     in SealView
          { shown = True
          , sealing
-         , sealable = plan.sourceIsWritable == Just True
+         , sealable = copy.sourceWritable
          , anyway
-         , subtitle = sealSubtitle wording plan
+         , subtitle = sealSubtitle wording copy plan
          , policyShown = sealing
          , existing = oj.existingCopy
          , existingShown = V.any (\target -> target.state == Target.Partial) plan.targets
@@ -84,12 +84,12 @@ sealChoice sealing anyway
   | anyway = Offload.SealBeforeCopy Offload.CopyAnyway
   | otherwise = Offload.SealBeforeCopy Offload.StopBeforeCopy
 
-sealSubtitle :: Wording -> Plan -> Text
-sealSubtitle wording plan = case plan.sealPass of
+sealSubtitle :: Wording -> Plan.CopyPass -> Plan -> Text
+sealSubtitle wording copy plan = case plan.sealPass of
   Just pass -> "reads " <> humanBytes wording pass.bytes <> " first, then writes generation " <> count (plan.generations + 1) <> "."
   Nothing
-    | isNothing plan.sourceIsWritable -> "the media source cannot be found."
-    | plan.sourceIsWritable == Just False -> "the media source is read-only."
+    | V.any (\finding -> finding.code == Finding.SourceMissing) plan.findings -> "the media source cannot be found."
+    | not copy.sourceWritable -> "the media source is read-only."
     | plan.generations == 0 -> "the media source has no history, consider sealing first."
     | otherwise -> "the media source already holds " <> Prose.plural "generation" plan.generations <> "."
 

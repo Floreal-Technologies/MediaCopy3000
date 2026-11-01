@@ -103,7 +103,7 @@ offload :: JobSpec -> Offload -> OffloadFacts -> Plan
 offload spec job facts =
   Plan.Plan
     { spec
-    , execution = Plan.CopyInto Plan.CopyPass {source, generations = plannedDests, carried}
+    , execution = Plan.CopyInto Plan.CopyPass {source, generations = plannedDests, carried, sourceWritable = sourceIsWritable == Just True}
     , targets
     , format = settledOf formatResult
     , originsUsed = originsUsedText sealing src.expected
@@ -116,7 +116,6 @@ offload spec job facts =
     , sealPass = sealing
     , generations = Chain.highestGeneration src.chain
     , plugins = PluginPlan.empty
-    , sourceIsWritable
     }
   where
     source = job.source
@@ -243,7 +242,6 @@ generation spec rule facts =
     , sealPass = Nothing
     , generations = Chain.highestGeneration chain
     , plugins = PluginPlan.empty
-    , sourceIsWritable = facts.tree <&> (.writable)
     }
   where
     folder = Job.root spec.job
