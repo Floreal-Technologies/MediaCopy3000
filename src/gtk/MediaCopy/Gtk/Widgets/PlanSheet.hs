@@ -86,7 +86,7 @@ newStackPages ready = do
   pure (stack, errorPage)
 
 renderPhase :: Sheet -> Maybe PhaseView -> IO ()
-renderPhase sheet = mapM_ $ \view -> do
+renderPhase sheet mPhaseView = forM_ mPhaseView $ \view -> do
   forM_ view.title (\title -> set sheet.dialog [#title := title])
   forM_ view.body (renderReadyBody sheet.body)
   escaped <- GLib.markupEscapeText view.problem (-1)
@@ -182,7 +182,7 @@ data SealControls = SealControls
 newSealGroup :: (UiMessage -> IO ()) -> IO SealControls
 newSealGroup dispatch = do
   group <- new Adw.PreferencesGroup [#title := "Before Copying"]
-  sealSwitch <- new Adw.SwitchRow [#title := "Seal the media source first", #active := True]
+  sealSwitch <- new Adw.SwitchRow [#title := "Seal the media source first"]
   sealAnywaySwitch <- new Adw.SwitchRow [#title := "Copy anyway if the seal finds a problem", #active := False]
   resumeButton <- new Gtk.CheckButton [#label := "Resume", #valign := Gtk.AlignCenter]
   replaceButton <- new Gtk.CheckButton [#label := "Replace", #valign := Gtk.AlignCenter]
