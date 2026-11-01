@@ -73,6 +73,7 @@ target-partial = partial copy
 
 finding-source-missing = source not found
 finding-source-empty = source is empty
+finding-source-read-only = media source is read-only
 finding-destination-partial = destination holds a partial copy
 finding-destination-foreign = destination holds files that are not on the media source
 finding-destination-other-source = destination was copied from another media source

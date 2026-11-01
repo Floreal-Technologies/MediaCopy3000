@@ -273,6 +273,7 @@ findingText wording code = getTranslation wording reference []
     reference = case code of
       Finding.SourceMissing -> findingSourceMissing
       Finding.SourceEmpty -> findingSourceEmpty
+      Finding.SourceReadOnly -> findingSourceReadOnly
       Finding.DestinationPartial -> findingDestinationPartial
       Finding.DestinationForeign -> findingDestinationForeign
       Finding.DestinationOtherSource -> findingDestinationOtherSource

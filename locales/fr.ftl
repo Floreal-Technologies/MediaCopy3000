@@ -73,6 +73,7 @@ target-partial = copie partielle
 
 finding-source-missing = source introuvable
 finding-source-empty = la source est vide
+finding-source-read-only = la source multimédia est en lecture seule
 finding-destination-partial = la destination contient une copie partielle
 finding-destination-foreign = la destination contient des fichiers absents de la source
 finding-destination-other-source = la destination a été copiée depuis une autre source

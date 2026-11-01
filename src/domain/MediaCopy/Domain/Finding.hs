@@ -20,6 +20,7 @@ import MediaCopy.Domain.Severity qualified as Severity
 data Code
   = SourceMissing
   | SourceEmpty
+  | SourceReadOnly
   | DestinationPartial
   | DestinationForeign
   | DestinationOtherSource
@@ -38,6 +39,7 @@ instance Display Code where
   displayBuilder = \case
     SourceMissing -> "source not found"
     SourceEmpty -> "source is empty"
+    SourceReadOnly -> "media source is read-only"
     DestinationPartial -> "destination holds a partial copy"
     DestinationForeign -> "destination holds files that are not on the media source"
     DestinationOtherSource -> "destination was copied from another media source"

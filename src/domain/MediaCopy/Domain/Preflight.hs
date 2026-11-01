@@ -59,12 +59,14 @@ data OffloadFacts = OffloadFacts
   , targets :: Vector Destination
   , originals :: Either HistoryError (Maybe (Map RelPath Hash))
   , sourceHistory :: Either HistoryError (Maybe (Chain, Map RelPath Hash))
+  , sourceIsWritable :: Maybe Bool
   }
 
 data GenerationFacts = GenerationFacts
   { tree :: Maybe Tree
   , freeBytes :: Maybe Int64
   , history :: Either HistoryError (Maybe (Chain, Map RelPath Hash))
+  , sourceIsWritable :: Maybe Bool
   }
 
 data SourceRead = SourceRead
@@ -116,11 +118,12 @@ offload spec job facts =
     , sealPass = sealing
     , generations = Chain.highestGeneration src.chain
     , plugins = PluginPlan.empty
+    , sourceIsWritable = facts.sourceIsWritable
     }
   where
     source = job.source
     src = readSource facts
-    sealing = planSealPass spec.createdAt source src.dirs src.chain (sealPolicy src.chain job.sealFirst) src.recorded src.files
+    sealing = planSealPass spec.createdAt source src.dirs src.chain (sealPolicy facts.sourceIsWritable src.chain job.sealFirst) src.recorded src.files
     dests = V.map (.root) facts.targets
     classified = V.map (Destination.classify job.existingCopy src.fileSet src.dirSet src.byPath) facts.targets
     targets = V.map (.target) classified
@@ -133,6 +136,7 @@ offload spec job facts =
     findings =
       [ Finding.onlyIf (not src.exists) Finding.Finding {severity = Severity.Blocker, code = Finding.SourceMissing, detail = OsPath.toText source}
       , Finding.onlyIf (src.exists && V.null src.files) Finding.Finding {severity = Severity.Warning, code = Finding.SourceEmpty, detail = OsPath.toText source}
+      , sealReadOnlyWarning source facts.sourceIsWritable job.sealFirst
       , Finding.blockerFor Finding.historyCode facts.sourceHistory
       , Finding.blockerFor Finding.historyCode facts.originals
       , Finding.blockerFor Finding.formatCode formatResult
@@ -150,13 +154,15 @@ originsUsedText sealing expected = case sealing of
   Just _ -> "sealing starts first"
   Nothing -> Plan.originsDescription expected
 
-sealPolicy :: Chain -> Offload.SealFirst -> Maybe Offload.OnSealFailure
-sealPolicy chain = \case
-  Offload.UseHistory -> Nothing
-  Offload.SealBeforeCopy policy -> Just policy
-  Offload.SealIfNoHistory
-    | V.null chain.entries -> Just Offload.StopBeforeCopy
-    | otherwise -> Nothing
+sealPolicy :: Maybe Bool -> Chain -> Offload.SealFirst -> Maybe Offload.OnSealFailure
+sealPolicy sourceIsWritable chain sealFirstOption
+  | sourceIsWritable /= Just True = Nothing
+  | otherwise = case sealFirstOption of
+      Offload.UseHistory -> Nothing
+      Offload.SealBeforeCopy policy -> Just policy
+      Offload.SealIfNoHistory
+        | V.null chain.entries -> Just Offload.StopBeforeCopy
+        | otherwise -> Nothing
 
 createdFolders :: OsPath -> Vector OsPath -> Maybe Plan.SealPass -> Vector OsPath
 createdFolders source dests sealing =
@@ -193,6 +199,11 @@ expectationOf :: Maybe Plan.SealPass -> Map RelPath Hash -> RelPath -> PlanStep.
 expectationOf sealing expected path = case sealing of
   Just _ -> PlanStep.FromSealPass
   Nothing -> maybe PlanStep.NoOriginal PlanStep.Recorded (Map.lookup path expected)
+
+sealReadOnlyWarning :: OsPath -> Maybe Bool -> Offload.SealFirst -> List Finding
+sealReadOnlyWarning source sourceIsWritable = \case
+  Offload.SealBeforeCopy _ | sourceIsWritable == Just False -> [Finding.Finding {severity = Severity.Warning, code = Finding.SourceReadOnly, detail = OsPath.toText source}]
+  _ -> []
 
 sealOverHistoryWarning :: Maybe Plan.SealPass -> Chain -> List Finding
 sealOverHistoryWarning sealing chain = case sealing of
@@ -233,6 +244,7 @@ generation spec rule facts =
     , sealPass = Nothing
     , generations = Chain.highestGeneration chain
     , plugins = PluginPlan.empty
+    , sourceIsWritable = facts.sourceIsWritable
     }
   where
     folder = Job.root spec.job
@@ -246,6 +258,7 @@ generation spec rule facts =
 generationFindings :: HistoryRule -> OsPath -> GenerationFacts -> Chain -> Either FormatError Algo -> Vector Finding
 generationFindings rule folder facts chain formatResult =
   [ Finding.onlyIf (not exists) Finding.Finding {severity = Severity.Blocker, code = Finding.SourceMissing, detail = OsPath.toText folder}
+  , Finding.onlyIf (facts.sourceIsWritable == Just False) Finding.Finding {severity = Severity.Blocker, code = Finding.SourceReadOnly, detail = OsPath.toText folder}
   , case rule of
       RequireHistory
         | exists && not sealed && isRight facts.history ->

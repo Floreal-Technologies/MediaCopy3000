@@ -4,6 +4,7 @@ module MediaCopy.Engine.Planner
 
 import Data.Foldable (toList)
 import Data.Vector qualified as V
+import System.Directory.OsPath qualified as Directory
 
 import MediaCopy.Domain.Destination (Destination)
 import MediaCopy.Domain.Destination qualified as Destination
@@ -30,7 +31,8 @@ gatherOffload job = do
   targets <- V.mapM (gatherTarget job.source) (V.fromList (toList job.destinations))
   originals <- Store.resolveOriginals job.source
   sourceHistory <- Store.historyHashes job.source
-  pure Preflight.OffloadFacts {sourceTree, targets, originals, sourceHistory}
+  sourceIsWritable <- writableIfPresent job.source sourceTree
+  pure Preflight.OffloadFacts {sourceTree, targets, originals, sourceHistory, sourceIsWritable}
 
 gatherTarget :: (FileSystem :> es) => OsPath -> OsPath -> Eff es Destination
 gatherTarget source parent = do
@@ -51,4 +53,8 @@ gatherGeneration folder = do
   tree <- FileSystem.walk folder
   freeBytes <- maybe (pure Nothing) (\_ -> FileSystem.freeSpaceOf folder) tree
   history <- Store.historyHashes folder
-  pure Preflight.GenerationFacts {tree, freeBytes, history}
+  sourceIsWritable <- writableIfPresent folder tree
+  pure Preflight.GenerationFacts {tree, freeBytes, history, sourceIsWritable}
+
+writableIfPresent :: (FileSystem :> es) => OsPath -> Maybe tree -> Eff es (Maybe Bool)
+writableIfPresent path = traverse (\_ -> FileSystem.getPermissions path <&> Directory.writable)

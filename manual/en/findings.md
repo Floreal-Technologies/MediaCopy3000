@@ -26,6 +26,7 @@ of the media source. A file it does not know can be lost, so the sheet refuses t
 | The sheet says | What it means | What to do |
 |---|---|---|
 | `source not found` | The media source is not at that path. | Mount it, or pick the path again. |
+| `media source is read-only` | A verify or seal job must write a new generation into the folder, but the folder cannot be written to. | Make the folder writable, or mount the volume with write access, and plan again. |
 | `destination holds a partial copy` | The destination already holds some files of this media source. | Choose **Resume** or **Replace** under **Before Copying**. The page [Offloading a media source](offload.md) explains both. |
 | `destination holds files that are not on the media source` | The destination holds a file, a folder or a generation that the media source does not hold. | Pick an empty folder, or a folder that does not exist yet. The detail names the first such file, folder or generation, in sorted order. |
 | `destination was copied from another media source` | The destination carries a history whose generation does not agree with the media source's generation of the same name. | Pick another destination, or verify this folder with **Verify Folder…**. |
@@ -43,6 +44,7 @@ of the media source. A file it does not know can be lost, so the sheet refuses t
 | The sheet says | What it means | What to do |
 |---|---|---|
 | `source is empty` | The media source holds no files. | Check that you picked the right folder. The job can run and will record nothing. |
+| `media source is read-only` | You asked to seal the media source first, but the media source cannot be written to. The copy runs without the seal. | Make the media source writable and plan again, or accept the copy without a seal. |
 | `folder is already sealed` | The media source already holds a generation, and this job would write another. | Turn off **Seal the media source first**, or use **Verify Folder…**. |
 
 ## Findings from plug-ins
