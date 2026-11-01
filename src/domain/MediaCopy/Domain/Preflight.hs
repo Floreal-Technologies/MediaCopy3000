@@ -59,14 +59,12 @@ data OffloadFacts = OffloadFacts
   , targets :: Vector Destination
   , originals :: Either HistoryError (Maybe (Map RelPath Hash))
   , sourceHistory :: Either HistoryError (Maybe (Chain, Map RelPath Hash))
-  , sourceIsWritable :: Maybe Bool
   }
 
 data GenerationFacts = GenerationFacts
   { tree :: Maybe Tree
   , freeBytes :: Maybe Int64
   , history :: Either HistoryError (Maybe (Chain, Map RelPath Hash))
-  , sourceIsWritable :: Maybe Bool
   }
 
 data SourceRead = SourceRead
@@ -105,7 +103,7 @@ offload :: JobSpec -> Offload -> OffloadFacts -> Plan
 offload spec job facts =
   Plan.Plan
     { spec
-    , execution = Plan.CopyInto Plan.CopyPass {source, generations = plannedDests, carried}
+    , execution = Plan.CopyInto Plan.CopyPass {source, generations = plannedDests, carried, sourceWritable = sourceIsWritable == Just True}
     , targets
     , format = settledOf formatResult
     , originsUsed = originsUsedText sealing src.expected
@@ -118,12 +116,12 @@ offload spec job facts =
     , sealPass = sealing
     , generations = Chain.highestGeneration src.chain
     , plugins = PluginPlan.empty
-    , sourceIsWritable = facts.sourceIsWritable
     }
   where
     source = job.source
+    sourceIsWritable = facts.sourceTree <&> (.writable)
     src = readSource facts
-    sealing = planSealPass spec.createdAt source src.dirs src.chain (sealPolicy facts.sourceIsWritable src.chain job.sealFirst) src.recorded src.files
+    sealing = planSealPass spec.createdAt source src.dirs src.chain (sealPolicy sourceIsWritable src.chain job.sealFirst) src.recorded src.files
     dests = V.map (.root) facts.targets
     classified = V.map (Destination.classify job.existingCopy src.fileSet src.dirSet src.byPath) facts.targets
     targets = V.map (.target) classified
@@ -136,7 +134,7 @@ offload spec job facts =
     findings =
       [ Finding.onlyIf (not src.exists) Finding.Finding {severity = Severity.Blocker, code = Finding.SourceMissing, detail = OsPath.toText source}
       , Finding.onlyIf (src.exists && V.null src.files) Finding.Finding {severity = Severity.Warning, code = Finding.SourceEmpty, detail = OsPath.toText source}
-      , sealReadOnlyWarning source facts.sourceIsWritable job.sealFirst
+      , sealReadOnlyWarning source sourceIsWritable job.sealFirst
       , Finding.blockerFor Finding.historyCode facts.sourceHistory
       , Finding.blockerFor Finding.historyCode facts.originals
       , Finding.blockerFor Finding.formatCode formatResult
@@ -244,7 +242,6 @@ generation spec rule facts =
     , sealPass = Nothing
     , generations = Chain.highestGeneration chain
     , plugins = PluginPlan.empty
-    , sourceIsWritable = facts.sourceIsWritable
     }
   where
     folder = Job.root spec.job
@@ -258,7 +255,7 @@ generation spec rule facts =
 generationFindings :: HistoryRule -> OsPath -> GenerationFacts -> Chain -> Either FormatError Algo -> Vector Finding
 generationFindings rule folder facts chain formatResult =
   [ Finding.onlyIf (not exists) Finding.Finding {severity = Severity.Blocker, code = Finding.SourceMissing, detail = OsPath.toText folder}
-  , Finding.onlyIf (facts.sourceIsWritable == Just False) Finding.Finding {severity = Severity.Blocker, code = Finding.SourceReadOnly, detail = OsPath.toText folder}
+  , Finding.onlyIf ((facts.tree <&> (.writable)) == Just False) Finding.Finding {severity = Severity.Blocker, code = Finding.SourceReadOnly, detail = OsPath.toText folder}
   , case rule of
       RequireHistory
         | exists && not sealed && isRight facts.history ->

@@ -112,7 +112,7 @@ mediaSourceDirs :: Vector RelPath
 mediaSourceDirs = V.fromList [rel "Clips", rel "Sidecar"]
 
 mediaSourceTree :: Tree
-mediaSourceTree = Tree.Tree {files = V.fromList (sortOn fst (V.toList mediaSourceFiles)), dirs = mediaSourceDirs}
+mediaSourceTree = Tree.Tree {files = V.fromList (sortOn fst (V.toList mediaSourceFiles)), dirs = mediaSourceDirs, writable = True}
 
 totalBytes :: FileSize
 totalBytes = V.sum (V.map snd mediaSourceFiles)
@@ -173,12 +173,11 @@ offloadFactsReady =
     { sourceTree = Just mediaSourceTree
     , targets =
         V.fromList
-          [ targetFacts shuttle (destinationFacts 812_004_000_000) (Just Tree.Tree {files = V.empty, dirs = V.empty})
+          [ targetFacts shuttle (destinationFacts 812_004_000_000) (Just Tree.Tree {files = V.empty, dirs = V.empty, writable = True})
           , targetFacts archive (destinationFacts 3_010_000_000_000) Nothing
           ]
     , originals = Right (Just recordedHashes)
     , sourceHistory = Right (Just (sourceChain, recordedHashes))
-    , sourceIsWritable = Just True
     }
 
 offloadFactsBlocked :: Preflight.OffloadFacts
@@ -186,8 +185,8 @@ offloadFactsBlocked =
   offloadFactsReady
     { Preflight.targets =
         V.fromList
-          [ targetFacts shuttle (destinationFacts 812_004_000_000) (Just Tree.Tree {files = V.singleton (rel "DCIM/other.mov", 1_200_000), dirs = V.singleton (rel "DCIM")})
-          , targetFacts archive (destinationFacts 12_000_000_000) (Just Tree.Tree {files = V.empty, dirs = V.empty})
+          [ targetFacts shuttle (destinationFacts 812_004_000_000) (Just Tree.Tree {files = V.singleton (rel "DCIM/other.mov", 1_200_000), dirs = V.singleton (rel "DCIM"), writable = True})
+          , targetFacts archive (destinationFacts 12_000_000_000) (Just Tree.Tree {files = V.empty, dirs = V.empty, writable = True})
           ]
     }
 
@@ -197,7 +196,6 @@ verifyFacts =
     { tree = Just mediaSourceTree
     , freeBytes = Just 812_004_000_000
     , history = Right (Just (verifyChain, recordedHashes))
-    , sourceIsWritable = Just True
     }
 
 sealFacts :: Preflight.GenerationFacts
@@ -206,7 +204,6 @@ sealFacts =
     { tree = Just mediaSourceTree
     , freeBytes = Just 24_000_000_000
     , history = Right Nothing
-    , sourceIsWritable = Just True
     }
 
 offloadFactsPartial :: Preflight.OffloadFacts
@@ -225,6 +222,7 @@ offloadFactsPartial =
       Tree.Tree
         { files = held <> maybe V.empty (\p -> V.singleton (rel (display p <> Part.suffix), 400_000_000)) partName
         , dirs = mediaSourceDirs
+        , writable = True
         }
 
 readyPlan :: JobSpec -> Plan

@@ -45,7 +45,6 @@ import Data.Time (UTCTime (..), fromGregorian)
 import Data.Vector qualified as V
 import Effectful.Dispatch.Dynamic (interpret, localSeqUnlift)
 import Effectful.Exception (onException)
-import System.Directory qualified as Directory
 import System.OsPath (dropTrailingPathSeparator, makeRelative, splitDirectories)
 import splice System.OsPath (osp)
 import System.OsString (OsChar, isPrefixOf, isSuffixOf, unsafeFromChar)
@@ -180,7 +179,6 @@ runFileSystemMem fsRef =
     FileSystem.ReadBytes (slashedPath -> p) -> liftIO (readWholeMem fsRef p)
     FileSystem.AppendBytes (slashedPath -> p) bytes -> liftIO (failIfInjected fsRef p >> alter fsRef (appendMem p bytes))
     FileSystem.WriteBytes p bytes -> liftIO (alter fsRef (withFile p bytes))
-    FileSystem.GetPermissions _ -> pure (Directory.emptyPermissions & Directory.setOwnerReadable True & Directory.setOwnerWritable True & Directory.setOwnerSearchable True)
 
 failIfInjected :: IORef MemFS -> OsPath -> IO ()
 failIfInjected fsRef p = do
@@ -255,7 +253,7 @@ walkMem fsRef root = do
     else do
       files <- traverse toEntry (filter underRoot (Map.toList fs.files))
       let sorted = V.fromList (sortOn fst files)
-      pure (Just Tree.Tree {files = sorted, dirs = dirsBelow root fs})
+      pure (Just Tree.Tree {files = sorted, dirs = dirsBelow root fs, writable = True})
   where
     prefix = withTrailingSlash root
     underRoot (p, _) =
