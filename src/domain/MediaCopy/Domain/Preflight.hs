@@ -147,7 +147,7 @@ offload spec job facts =
 
 originsUsedText :: Offload.SealFirst -> Map RelPath Hash -> Text
 originsUsedText sealFirst expected = case sealFirst of
-  Offload.SealBeforeCopy _ -> "the seal this job takes first"
+  Offload.SealBeforeCopy _ -> "sealing starts first"
   Offload.UseHistory -> Plan.originsDescription expected
 
 createdFolders :: OsPath -> Vector OsPath -> Maybe Plan.SealPass -> Vector OsPath
