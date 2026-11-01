@@ -106,7 +106,7 @@ offload spec job facts =
     , execution = Plan.CopyInto Plan.CopyPass {source, generations = plannedDests, carried}
     , targets
     , format = settledOf formatResult
-    , originsUsed = originsUsedText job.sealFirst src.expected
+    , originsUsed = originsUsedText sealing src.expected
     , steps
     , totalBytes = src.totalBytes
     , bytesToRead = V.sum (V.map PlanStep.bytesToRead steps) + maybe 0 (.bytes) sealing
@@ -120,7 +120,7 @@ offload spec job facts =
   where
     source = job.source
     src = readSource facts
-    sealing = planSealPass spec.createdAt source src.dirs src.chain job.sealFirst src.recorded src.files
+    sealing = planSealPass spec.createdAt source src.dirs src.chain (sealPolicy src.chain job.sealFirst) src.recorded src.files
     dests = V.map (.root) facts.targets
     classified = V.map (Destination.classify job.existingCopy src.fileSet src.dirSet src.byPath) facts.targets
     targets = V.map (.target) classified
@@ -145,10 +145,18 @@ offload spec job facts =
         & nubOrd
         & V.fromList
 
-originsUsedText :: Offload.SealFirst -> Map RelPath Hash -> Text
-originsUsedText sealFirst expected = case sealFirst of
-  Offload.SealBeforeCopy _ -> "sealing starts first"
-  Offload.UseHistory -> Plan.originsDescription expected
+originsUsedText :: Maybe Plan.SealPass -> Map RelPath Hash -> Text
+originsUsedText sealing expected = case sealing of
+  Just _ -> "sealing starts first"
+  Nothing -> Plan.originsDescription expected
+
+sealPolicy :: Chain -> Offload.SealFirst -> Maybe Offload.OnSealFailure
+sealPolicy chain = \case
+  Offload.UseHistory -> Nothing
+  Offload.SealBeforeCopy policy -> Just policy
+  Offload.SealIfNoHistory
+    | V.null chain.entries -> Just Offload.StopBeforeCopy
+    | otherwise -> Nothing
 
 createdFolders :: OsPath -> Vector OsPath -> Maybe Plan.SealPass -> Vector OsPath
 createdFolders source dests sealing =
@@ -255,18 +263,17 @@ generationFindings rule folder facts chain formatResult =
     exists = isJust facts.tree
     sealed = not (V.null chain.entries)
 
-planSealPass :: UTCTime -> OsPath -> Vector RelPath -> Chain -> Offload.SealFirst -> Map RelPath Hash -> Vector (RelPath, FileSize) -> Maybe Plan.SealPass
-planSealPass t source dirs chain sealFirst recorded files = case sealFirst of
-  Offload.UseHistory -> Nothing
-  Offload.SealBeforeCopy policy ->
-    let steps = generationSteps recorded files
-    in Just
-         Plan.SealPass
-           { steps
-           , bytes = sum (V.map (.size) steps)
-           , onFailure = policy
-           , generation = generationAt t source dirs chain
-           }
+planSealPass :: UTCTime -> OsPath -> Vector RelPath -> Chain -> Maybe Offload.OnSealFailure -> Map RelPath Hash -> Vector (RelPath, FileSize) -> Maybe Plan.SealPass
+planSealPass t source dirs chain policy recorded files =
+  policy <&> \onFailure ->
+    Plan.SealPass
+      { steps
+      , bytes = sum (V.map (.size) steps)
+      , onFailure
+      , generation = generationAt t source dirs chain
+      }
+  where
+    steps = generationSteps recorded files
 
 sealedWarning :: Chain -> Finding
 sealedWarning chain =

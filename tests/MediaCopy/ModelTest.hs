@@ -60,7 +60,7 @@ offloadFlow' n =
   , DestinationPicked shuttle
   , DestinationPicked archive
   , Ui ReviewPlan
-  , planned (JobId.JobId n) (offloadJob Offload.UseHistory)
+  , planned (JobId.JobId n) (offloadJob Offload.SealIfNoHistory)
   ]
 
 offloadFlow :: Int -> List Message

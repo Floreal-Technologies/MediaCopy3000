@@ -8,6 +8,7 @@ module MediaCopy.Domain.Offload
 data SealFirst
   = UseHistory
   | SealBeforeCopy OnSealFailure
+  | SealIfNoHistory
   deriving stock (Eq, Show)
 
 data OnSealFailure = StopBeforeCopy | CopyAnyway

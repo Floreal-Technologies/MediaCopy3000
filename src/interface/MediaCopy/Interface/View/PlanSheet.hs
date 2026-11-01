@@ -61,7 +61,7 @@ data SealView = SealView
 sealView :: Wording -> Plan -> SealView
 sealView wording plan = case plan.spec.job of
   Job.Offload oj ->
-    let (sealing, subtitle) = sealSubtitle wording plan
+    let sealing = isJust plan.sealPass
         anyway = case plan.sealPass of
           Just pass | pass.onFailure == Offload.CopyAnyway -> True
           _ -> False
@@ -69,7 +69,7 @@ sealView wording plan = case plan.spec.job of
          { shown = True
          , sealing
          , anyway
-         , subtitle
+         , subtitle = sealSubtitle wording plan
          , policyShown = sealing
          , existing = oj.existingCopy
          , existingShown = V.any (\target -> target.state == Target.Partial) plan.targets
@@ -82,12 +82,12 @@ sealChoice sealing anyway
   | anyway = Offload.SealBeforeCopy Offload.CopyAnyway
   | otherwise = Offload.SealBeforeCopy Offload.StopBeforeCopy
 
-sealSubtitle :: Wording -> Plan -> (Bool, Text)
+sealSubtitle :: Wording -> Plan -> Text
 sealSubtitle wording plan = case plan.sealPass of
-  Just pass -> (True, "reads " <> humanBytes wording pass.bytes <> " first, then writes generation " <> count (plan.generations + 1))
+  Just pass -> "reads " <> humanBytes wording pass.bytes <> " first, then writes generation " <> count (plan.generations + 1) <> "."
   Nothing
-    | plan.generations == 0 -> (True, "the media source has no history")
-    | otherwise -> (False, "the media source already holds " <> Prose.plural "generation" plan.generations <> ".")
+    | plan.generations == 0 -> "the media source has no history, consider sealing first."
+    | otherwise -> "the media source already holds " <> Prose.plural "generation" plan.generations <> "."
 
 data SheetPage = PlanningPage | ReadyPage | ErrorPage
   deriving stock (Eq, Show)
