@@ -87,10 +87,12 @@ withPlugins pluginPlan plan = plan {plugins = pluginPlan}
 blocked :: Plan -> Bool
 blocked plan = not (V.null (blockers plan)) || not (V.null (PluginPlan.blockers plan.plugins))
 
+-- | When comparing two plans, reset the free space of the destinations and the
+-- writability of the source because they do not matter in this case.
 equivalent :: Plan -> Plan -> Bool
 equivalent a b = blankFree a == blankFree b
   where
-    blankFree plan = plan {targets = V.map (\target -> target {Target.freeBytes = Nothing}) plan.targets}
+    blankFree plan = plan {targets = V.map (\target -> target {Target.freeBytes = Nothing}) plan.targets, sourceIsWritable = Nothing}
 
 raceChecks :: Plan -> Vector (OsPath, Int)
 raceChecks plan = case plan.execution of
