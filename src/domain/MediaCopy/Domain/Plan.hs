@@ -106,5 +106,5 @@ plannedGenerations plan = sealed <> executed
 
 originsDescription :: Map RelPath Hash -> Text
 originsDescription resolved
-  | Map.null resolved = "none found, so every file is recorded as original"
+  | Map.null resolved = "the media source has no history"
   | otherwise = "the media source's own history, " <> Prose.plural "file" (Map.size resolved)

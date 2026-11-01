@@ -318,7 +318,7 @@ reviewPlan model
   | Just draft <- model.draft
   , Just src <- draft.mediaSource
   , dest : dests <- draft.destinations =
-      let job = Job.Offload Offload.Offload {source = src, destinations = dest :| dests, sealFirst = Offload.UseHistory, existingCopy = Nothing}
+      let job = Job.Offload Offload.Offload {source = src, destinations = dest :| dests, sealFirst = Offload.SealIfNoHistory, existingCopy = Nothing}
       in update (RequestPlan job) model {draft = Nothing}
   | otherwise = (model, [])
 

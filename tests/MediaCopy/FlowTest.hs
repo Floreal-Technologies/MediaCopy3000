@@ -85,12 +85,14 @@ offloadToTwoDestinations = do
     forM_ copied $ \rel ->
       bytesAt (joined root rel) done.disk @?= bytesAt (joined card rel) cardFS
     Map.member (joined root [osp|.DS_Store|]) done.disk.files @?= False
-    length (manifestsIn root done.disk) @?= 1
-    actionsIn root done.disk @?= Just [FileEntry.Original, FileEntry.Original, FileEntry.Original]
-    chainIn root done.disk @?= Right [1]
-  Map.filterWithKey (\path _ -> under card path) done.disk.files @?= cardFS.files
+    length (manifestsIn root done.disk) @?= 2
+    actionsIn root done.disk @?= Just [FileEntry.Verified, FileEntry.Verified, FileEntry.Verified]
+    chainIn root done.disk @?= Right [1, 2]
+  Map.filterWithKey (\path _ -> under card path && not (under (joined card [osp|ascmhl|]) path)) done.disk.files @?= cardFS.files
+  actionsIn card done.disk @?= Just [FileEntry.Original, FileEntry.Original, FileEntry.Original]
+  chainIn card done.disk @?= Right [1]
   phaseOf (JobId.JobId 1) done @?= Just (JobState.Finished JobResult.AllOk)
-  fmap (\entry -> V.length entry.state.mhlPaths) (Map.lookup (JobId.JobId 1) done.model.jobs) @?= Just 2
+  fmap (\entry -> V.length entry.state.mhlPaths) (Map.lookup (JobId.JobId 1) done.model.jobs) @?= Just 3
   done.model.running @?= Nothing
   done.model.queue @?= []
   assertBool "a toast is set" (isJust done.model.toast)
@@ -382,13 +384,17 @@ faults =
       , statuses = [(RelPath.RelPath "a.mxf", isMismatch)]
       }
   , (fresh "one source file of two cannot be read" (\fs -> fs & InMemoryFS.withFile [osp|/card/b.mxf|] "2" & InMemoryFS.withFailOnOpen [osp|/card/a.mxf|]))
-      { finals = [([osp|/ssd1/card/b.mxf|], Just "2")]
-      , manifests = [([osp|/ssd1/card|], Just [FileEntry.Original])]
+      { finals = [([osp|/ssd1/card/b.mxf|], Nothing)]
+      , manifests = [([osp|/ssd1/card|], Nothing)]
+      , empty = [ssd1]
+      , ended = \case
+          JobState.Failed _ -> True
+          _ -> False
       }
   , (fresh "the manifest cannot be written" InMemoryFS.withFailOnManifestWrite)
-      { finals = [(newA, Just "data")]
+      { finals = [(newA, Nothing)]
       , manifests = [([osp|/ssd1/card|], Nothing)]
-      , empty = [[osp|/ssd1/card/ascmhl|]]
+      , empty = [ssd1, [osp|/card/ascmhl|]]
       , ended = \case
           JobState.Failed _ -> True
           _ -> False
@@ -557,7 +563,7 @@ aFailedCopyNeverPassesALaterVerify = do
   case status of
     Just (FileStatus.Done (FileOutcome.HashMismatch _)) -> pure ()
     other -> assertFailure ("a.mxf at the second verify: " <> show other)
-  chainIn copy settled.disk @?= Right [1, 2, 3]
+  chainIn copy settled.disk @?= Right [1, 2, 3, 4]
   actionsIn copy settled.disk @?= Just [FileEntry.Failed]
   where
     copy = [osp|/ssd1/card|]
