@@ -136,6 +136,7 @@ offload spec job facts =
     findings =
       [ Finding.onlyIf (not src.exists) Finding.Finding {severity = Severity.Blocker, code = Finding.SourceMissing, detail = OsPath.toText source}
       , Finding.onlyIf (src.exists && V.null src.files) Finding.Finding {severity = Severity.Warning, code = Finding.SourceEmpty, detail = OsPath.toText source}
+      , sealReadOnlyWarning source facts.sourceIsWritable job.sealFirst
       , Finding.blockerFor Finding.historyCode facts.sourceHistory
       , Finding.blockerFor Finding.historyCode facts.originals
       , Finding.blockerFor Finding.formatCode formatResult
@@ -198,6 +199,11 @@ expectationOf :: Maybe Plan.SealPass -> Map RelPath Hash -> RelPath -> PlanStep.
 expectationOf sealing expected path = case sealing of
   Just _ -> PlanStep.FromSealPass
   Nothing -> maybe PlanStep.NoOriginal PlanStep.Recorded (Map.lookup path expected)
+
+sealReadOnlyWarning :: OsPath -> Maybe Bool -> Offload.SealFirst -> List Finding
+sealReadOnlyWarning source sourceIsWritable = \case
+  Offload.SealBeforeCopy _ | sourceIsWritable == Just False -> [Finding.Finding {severity = Severity.Warning, code = Finding.SourceReadOnly, detail = OsPath.toText source}]
+  _ -> []
 
 sealOverHistoryWarning :: Maybe Plan.SealPass -> Chain -> List Finding
 sealOverHistoryWarning sealing chain = case sealing of

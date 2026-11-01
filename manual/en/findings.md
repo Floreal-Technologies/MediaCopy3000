@@ -43,6 +43,7 @@ of the media source. A file it does not know can be lost, so the sheet refuses t
 | The sheet says | What it means | What to do |
 |---|---|---|
 | `source is empty` | The media source holds no files. | Check that you picked the right folder. The job can run and will record nothing. |
+| `media source is read-only` | You asked to seal the media source first, but the media source cannot be written to. The copy runs without the seal. | Make the media source writable and plan again, or accept the copy without a seal. |
 | `folder is already sealed` | The media source already holds a generation, and this job would write another. | Turn off **Seal the media source first**, or use **Verify Folder…**. |
 
 ## Findings from plug-ins

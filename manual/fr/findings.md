@@ -37,6 +37,7 @@ Le blocage `la destination contient des fichiers absents de la source` en illust
 | Message affiché | Signification | Action recommandée |
 |---|---|---|
 | `la source est vide` | La source multimédia ne contient aucun fichier. | Vérifiez que vous avez sélectionné le bon dossier. La tâche peut s’exécuter mais n’enregistrera rien. |
+| `la source multimédia est en lecture seule` | Vous avez demandé de sceller d’abord la source multimédia, mais elle n’est pas accessible en écriture. La copie s’exécute sans scellement. | Rendez la source multimédia accessible en écriture et relancez la planification, ou acceptez la copie sans scellement. |
 | `le dossier est déjà scellé` | La source multimédia contient déjà une génération, et cette tâche en créerait une autre. | Désactivez l’option **Seal the media source first** ou utilisez **Vérifier le dossier…**. |
 
 ## Constats des extensions
