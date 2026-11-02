@@ -110,6 +110,7 @@ data UiMessage
   | CloseOffloadDialog
   | SetBase Base
   | SetAccent (Maybe Accent)
+  | SetLanguage SupportedLanguage
   | ReviewPlan
   | SetSealFirst Offload.SealFirst
   | SetExistingCopy Offload.ExistingCopy
@@ -215,7 +216,7 @@ update msg model = case msg of
         (model & #draft % _Just % #destinations %~ (\dests -> dests <> [p]), [])
   ReportTargetPicked jid p -> case Map.lookup jid model.jobs of
     Nothing -> (model, [])
-    Just entry -> (model, [WriteFile p (renderReport model.wording entry.state entry.plan entry.history)])
+    Just entry -> (model, [WriteFile p (renderReport (embeddedWording English) entry.state entry.plan entry.history)])
   PlanTargetPicked plan p -> (model, [WriteFile p (renderPlanText plan.spec plan)])
   RequestPlan job ->
     let jid = model.nextId
@@ -260,6 +261,7 @@ updateUi msg model = case msg of
   CloseOffloadDialog -> (model {draft = Nothing}, [])
   SetBase wanted -> (model {appearance = model.appearance {base = wanted}}, [])
   SetAccent wanted -> (model {appearance = model.appearance {accent = wanted}}, [])
+  SetLanguage language -> (model {wording = embeddedWording language}, [])
   ReviewPlan -> reviewPlan model
   SetSealFirst choice -> replanIfChanged (\oj -> oj.sealFirst /= choice) (\oj -> oj {Offload.sealFirst = choice}) model
   SetExistingCopy choice -> replanIfChanged (\oj -> oj.existingCopy /= Just choice) (\oj -> oj {Offload.existingCopy = Just choice}) model
