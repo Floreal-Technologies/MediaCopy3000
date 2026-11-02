@@ -3,7 +3,6 @@ module MediaCopy.Gtk.Environment
   , Mode (..)
   , withEnvironment
   , runIn
-  , logWith
   ) where
 
 import Effectful.Log (Logger)
@@ -35,6 +34,3 @@ withEnvironment use = withStderrLogger $ \logger -> do
 
 runIn :: Environment -> Eff AppStack a -> IO a
 runIn Environment {runner = Runner run} = run
-
-logWith :: Environment -> Eff AppStack a -> IO a
-logWith = runIn

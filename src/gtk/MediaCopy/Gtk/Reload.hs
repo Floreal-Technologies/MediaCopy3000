@@ -24,7 +24,7 @@ import Prelude hiding (display)
 
 import MediaCopy.Effects.FileSystem qualified as FileSystem
 import MediaCopy.Gtk.Assets (resolveAsset)
-import MediaCopy.Gtk.Environment (Environment (..), Mode (..), logWith, runIn)
+import MediaCopy.Gtk.Environment (Environment (..), Mode (..), runIn)
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.Translation.Coverage
 
@@ -36,7 +36,7 @@ loadCss environment = do
   when (environment.mode == Development) $ do
     watchFile environment "CSS" path $ do
       Gtk.cssProviderLoadFromPath provider path
-      logWith environment (logInfo_ ("reload " <> T.pack path))
+      runIn environment (logInfo_ ("reload " <> T.pack path))
   Gdk.displayGetDefault
     >>= mapM_ (\display -> Gtk.styleContextAddProviderForDisplay display provider (fromIntegral Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION))
 
@@ -50,14 +50,14 @@ loadFonts environment widget =
         path <- runIn environment (resolveAsset environment.mode relative)
         Pango.fontMapAddFontFile fontMap path `catch` \(err :: GError) -> do
           message <- gerrorMessage err
-          logWith environment (logAttention_ ("cannot add font " <> T.pack path <> ": " <> message))
+          runIn environment (logAttention_ ("cannot add font " <> T.pack path <> ": " <> message))
 
 loadWording :: Environment -> SupportedLanguage -> (Wording -> IO ()) -> (Text -> IO ()) -> IO ()
 loadWording environment language publish warn =
   when (environment.mode == Development) $ do
     wordingPath <- OsPath.decodeUtf (localeFile language)
     runIn environment (FileSystem.doesFileExist (localeFile language)) >>= \case
-      False -> logWith environment (logAttention_ ("wording live-reload disabled: no " <> T.pack wordingPath))
+      False -> runIn environment (logAttention_ ("wording live-reload disabled: no " <> T.pack wordingPath))
       True -> do
         revision <- newIORef 0
         streak <- newIORef False
@@ -81,12 +81,12 @@ reloadWording environment language publish warn revision streak = do
               writeIORef revision next
               writeIORef streak False
               publish wording
-              logWith environment (logInfo_ ("reloaded " <> T.pack wordingPath <> " (revision " <> T.show next <> ")"))
+              runIn environment (logInfo_ ("reloaded " <> T.pack wordingPath <> " (revision " <> T.show next <> ")"))
             faults -> fault wordingPath faults
   where
     fault :: FilePath -> List Text -> IO ()
     fault wordingPath faults = do
-      forM_ faults (\message -> logWith environment (logAttention_ (T.pack wordingPath <> ": " <> message)))
+      forM_ faults (\message -> runIn environment (logAttention_ (T.pack wordingPath <> ": " <> message)))
       shown <- readIORef streak
       unless shown (warn (summary wordingPath faults))
       writeIORef streak True
@@ -98,12 +98,12 @@ watchFile :: Environment -> Text -> FilePath -> IO () -> IO ()
 watchFile environment label path action =
   startWatch `catch` \(err :: GError) -> do
     message <- gerrorMessage err
-    logWith environment (logAttention_ (label <> " live-reload disabled: " <> message))
+    runIn environment (logAttention_ (label <> " live-reload disabled: " <> message))
   where
     startWatch = do
       file <- Gio.fileNewForPath path
       monitor <- Gio.fileMonitorFile file [Gio.FileMonitorFlagsWatchMoves] (Nothing @Gio.Cancellable)
-      logWith environment (logInfo_ ("watching " <> T.pack path))
+      runIn environment (logInfo_ ("watching " <> T.pack path))
       reload <- debounced 200
       onSelf monitor #changed $ \_file _otherFile eventType ->
         when (eventType `elem` reloadEvents) (reload (runIn environment (guardedLog (label <> " reload") (liftIO action))))
