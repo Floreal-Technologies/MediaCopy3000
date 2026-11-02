@@ -24,7 +24,6 @@ import Floreal.Commons.Xdg (Xdg)
 import MediaCopy.Plugin.Capability qualified as Capability
 import MediaCopy.Plugin.Field qualified as Field
 import MediaCopy.Plugin.Field qualified as Plugin (Field)
-import MediaCopy.Plugin.Id qualified as Id
 import MediaCopy.Plugin.Id qualified as Plugin (Id)
 import MediaCopy.Plugin.Manifest qualified as Manifest
 import System.OsPath (takeDirectory)
@@ -33,7 +32,6 @@ import MediaCopy.Domain.FieldView (FieldView)
 import MediaCopy.Domain.FieldView qualified as FieldView
 import MediaCopy.Domain.PluginCatalogue (PluginCatalogue)
 import MediaCopy.Domain.PluginCatalogue qualified as PluginCatalogue
-import MediaCopy.Domain.PluginRef qualified as PluginRef
 import MediaCopy.Effects.FileSystem (FileSystem)
 import MediaCopy.Effects.FileSystem qualified as FileSystem
 import MediaCopy.Plugin.Discovery qualified as Discovery
@@ -43,6 +41,7 @@ import MediaCopy.Plugin.Grant qualified as Plugin (Grant)
 import MediaCopy.Plugin.Installed qualified as Installed
 import MediaCopy.Plugin.Installed qualified as Plugin (Installed)
 import MediaCopy.Plugin.Setup qualified as Setup
+import MediaCopy.Plugin.Wire qualified as Wire
 
 load :: (FileSystem :> es, Environment :> es, Xdg :> es) => Eff es PluginCatalogue
 load = do
@@ -57,7 +56,7 @@ load = do
 entryOf :: Map.Map Plugin.Id Plugin.Grant -> Plugin.Installed -> PluginCatalogue.Entry
 entryOf grantMap installed =
   PluginCatalogue.Entry
-    { plugin = PluginRef.PluginRef {id = pluginId, name = manifest.name}
+    { plugin = Wire.pluginRef installed
     , version = manifest.version
     , description = manifest.description
     , folder = OsPath.toText installed.folder
@@ -71,7 +70,6 @@ entryOf grantMap installed =
     }
   where
     manifest = installed.manifest
-    Id.Id pluginId = manifest.id
     grant = Map.lookup manifest.id grantMap
     enabled = maybe False (.enabled) grant
     answerOf capability = case grant of
