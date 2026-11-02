@@ -162,8 +162,8 @@ stopWorkers runtime = readIORef runtime.workers >>= mapConcurrently_ cancel
 runEffect :: Runtime -> Model -> AppEffect -> IO ()
 runEffect runtime model effect = toasting runtime $ case effect of
   OpenDialog kind toMessage -> runtime.shell.openDialog kind toMessage
-  ComputePlan spec -> planWorker runtime wording spec
-  StartJob plan -> startJob runtime wording plan
+  ComputePlan spec -> planWorker runtime spec
+  StartJob plan -> startJob runtime plan
   CancelRunning jobId ->
     readIORef runtime.engine >>= \case
       Just (held, worker)
@@ -234,8 +234,8 @@ reloadCatalogue runtime =
     Left err -> toastFailure runtime err
     Right catalogue -> runtime.shell.post (CatalogueLoaded catalogue)
 
-startJob :: Runtime -> Wording -> Plan -> IO ()
-startJob runtime wording plan = do
+startJob :: Runtime -> Plan -> IO ()
+startJob runtime plan = do
   let spec = plan.spec
   host <- run runtime getHostName
   let sink event = runtime.shell.post (EngineEvent spec.id event)
@@ -260,7 +260,7 @@ startJob runtime wording plan = do
             emitted ev = logLine ev >> liftIO (sink ev)
         if Plan.blocked plan
           then Emit.runWith emitted (Plugins.runNone (Engine.execute host plan))
-          else Session.with (pluginConfig wording setup.ready reported) Session.RunStage plan $ \session ->
+          else Session.with (pluginConfig setup.ready reported) Session.RunStage plan $ \session ->
             Plugins.runSession session (Emit.runWith (inject . emitted) (Engine.execute host plan))
 
 loadHistory :: Runtime -> Wording -> JobId -> OsPath -> IO ()
@@ -271,14 +271,14 @@ loadHistory runtime wording jobId folder = void $ counted runtime $ do
     Right Nothing -> runtime.shell.post (ShowToast (noHistoryText wording folder))
     Right (Just hist) -> runtime.shell.post (HistoryLoaded jobId hist)
 
-planWorker :: Runtime -> Wording -> JobSpec -> IO ()
-planWorker runtime wording spec = do
+planWorker :: Runtime -> JobSpec -> IO ()
+planWorker runtime spec = do
   worker <- tracked runtime (\_ -> pure ()) (\_ -> pure ()) $ do
     attempt <- guarded $ do
       plan <- run runtime (Planner.plan spec)
       setup <- run runtime Setup.load
       forM_ setup.grantsProblem (runtime.shell.post . ShowToast)
-      run runtime (Session.inspectPlan (pluginConfig wording setup.ready (logAttention_ . display)) plan)
+      run runtime (Session.inspectPlan (pluginConfig setup.ready (logAttention_ . display)) plan)
     case attempt of
       Left err -> runtime.shell.post (PlanComputed spec (Left (T.pack (displayException err))))
       Right plan -> runtime.shell.post (PlanComputed spec (Right plan))
@@ -288,11 +288,11 @@ planWorker runtime wording spec = do
 run :: Runtime -> Eff AppStack a -> IO a
 run Runtime {runner = Runner through} = through
 
-pluginConfig :: Wording -> Vector Plugin.Ready -> (PluginReport -> Eff AppStack ()) -> Session.Config AppStack
-pluginConfig wording plugins report =
+pluginConfig :: Vector Plugin.Ready -> (PluginReport -> Eff AppStack ()) -> Session.Config AppStack
+pluginConfig plugins report =
   Session.Config
     { plugins
-    , locale = languageCode wording.language
+    , locale = languageCode English
     , report
     }
 

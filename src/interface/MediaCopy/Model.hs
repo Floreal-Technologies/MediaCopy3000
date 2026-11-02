@@ -74,6 +74,7 @@ data Model = Model
   , now :: UTCTime
   , closeConfirm :: Bool
   , wording :: Wording
+  , reloaded :: Map SupportedLanguage Wording
   , plugins :: PluginCatalogue
   , pluginToasts :: Set (JobId, Text)
   , palette :: Maybe Text
@@ -82,6 +83,10 @@ data Model = Model
 
 initialWording :: Wording
 initialWording = embeddedWording English
+
+wordingFor :: SupportedLanguage -> Model -> Wording
+wordingFor language model =
+  Map.findWithDefault (embeddedWording language) language model.reloaded
 
 initialModel :: UTCTime -> PaletteMode -> Accent -> Model
 initialModel t desktop accent =
@@ -101,6 +106,7 @@ initialModel t desktop accent =
     , now = t
     , closeConfirm = False
     , wording = initialWording
+    , reloaded = Map.empty
     , plugins = PluginCatalogue.empty
     , pluginToasts = Set.empty
     , palette = Nothing
@@ -219,7 +225,7 @@ update msg model = case msg of
         (model & #draft % _Just % #destinations %~ (\dests -> dests <> [p]), [])
   ReportTargetPicked jid p -> case Map.lookup jid model.jobs of
     Nothing -> (model, [])
-    Just entry -> (model, [WriteFile p (renderReport (embeddedWording English) entry.state entry.plan entry.history)])
+    Just entry -> (model, [WriteFile p (renderReport (wordingFor English model) entry.state entry.plan entry.history)])
   PlanTargetPicked plan p -> (model, [WriteFile p (renderPlanText plan.spec plan)])
   RequestPlan job ->
     let jid = model.nextId
@@ -253,7 +259,7 @@ update msg model = case msg of
     | otherwise -> (model {desktopBase = wanted}, [])
   DesktopAccent wanted -> (model {desktopAccent = wanted}, [])
   ShowToast message -> (model {toast = Just message}, [])
-  WordingReloaded wording -> (model {wording}, [])
+  WordingReloaded wording -> (model {wording, reloaded = Map.insert wording.language wording model.reloaded}, [])
   CatalogueLoaded catalogue -> (model & #plugins .~ catalogue, [])
 
 updateUi :: UiMessage -> Model -> (Model, List AppEffect)
@@ -264,7 +270,7 @@ updateUi msg model = case msg of
   CloseOffloadDialog -> (model {draft = Nothing}, [])
   SetBase wanted -> (model {appearance = model.appearance {base = wanted}}, [])
   SetAccent wanted -> (model {appearance = model.appearance {accent = wanted}}, [])
-  SetLanguage language -> (model {wording = embeddedWording language}, [])
+  SetLanguage language -> (model {wording = wordingFor language model}, [])
   ReviewPlan -> reviewPlan model
   SetSealFirst choice -> replanIfChanged (\oj -> oj.sealFirst /= choice) (\oj -> oj {Offload.sealFirst = choice}) model
   SetExistingCopy choice -> replanIfChanged (\oj -> oj.existingCopy /= Just choice) (\oj -> oj {Offload.existingCopy = Just choice}) model

@@ -68,20 +68,20 @@ data AppearanceRows = AppearanceRows
 newLanguageRow :: (UiMessage -> IO ()) -> IO (Adw.ComboRow, SupportedLanguage -> IO ())
 newLanguageRow dispatch = do
   row <- new Adw.ComboRow [#title := "Interface"]
-  languages <- choiceRow endonym (minBound :| [succ minBound .. maxBound]) row
+  languages <- choiceRow endonym universe1 row
   paint <- bind languages (dispatch . SetLanguage)
   pure (row, paint)
 
 newAppearanceRows :: Wording -> (UiMessage -> IO ()) -> IO AppearanceRows
 newAppearanceRows wording dispatch = do
   baseRow <- new Adw.ComboRow [#title := "Base"]
-  bases <- relabelingChoiceRow displayBase wording baseValues baseRow
+  bases <- relabelingChoiceRow displayBase wording universe1 baseRow
   accentRow <- new Adw.ActionRow [#title := "Accent"]
   swatches <- newSwatches
   box <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #spacing := 6, #valign := Gtk.AlignCenter]
   forM_ swatches (\(_, button) -> Gtk.boxAppend box button)
   Adw.actionRowAddSuffix accentRow box
-  paintBase <- bind bases (dispatch . SetBase . snd)
+  paintBase <- bind bases (\(_, base) -> base & SetBase & dispatch)
   paintAccent <- bind (toggleRadio swatches) (mapM_ (dispatch . SetAccent))
   swatchLabels <- newCell (\current -> forM_ swatches (\(accent, button) -> labelSwatch current accent button))
   pure AppearanceRows {baseRow, accentRow, paintBase, paintAccent, labelSwatches = renderCell swatchLabels}
@@ -113,5 +113,5 @@ paintAppearance rows wording appearance = do
   rows.labelSwatches wording
   rows.paintAccent (Just appearance.accent)
 
-baseValues :: NonEmpty Base
-baseValues = minBound :| [succ minBound .. maxBound]
+universe1 :: (Bounded a, Enum a) => NonEmpty a
+universe1 = minBound :| drop 1 [minBound .. maxBound]
