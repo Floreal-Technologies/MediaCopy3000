@@ -57,7 +57,6 @@ data HistoryRule = RequireHistory | AllowFresh
 data OffloadFacts = OffloadFacts
   { sourceTree :: Maybe Tree
   , targets :: Vector Destination
-  , originals :: Either HistoryError (Maybe (Map RelPath Hash))
   , sourceHistory :: Either HistoryError (Maybe (Chain, Map RelPath Hash))
   }
 
@@ -76,7 +75,6 @@ data SourceRead = SourceRead
   , chain :: Chain
   , recorded :: Map RelPath Hash
   , byPath :: Map RelPath ChainEntry
-  , expected :: Map RelPath Hash
   , totalBytes :: Int64
   }
 
@@ -91,7 +89,6 @@ readSource facts =
     , chain
     , recorded
     , byPath = chain.entries & V.toList & map (\entry -> (entry.path, entry)) & Map.fromList
-    , expected = HistoryError.readOr Map.empty facts.originals
     , totalBytes = sum (V.map snd files)
     }
   where
@@ -106,7 +103,7 @@ offload spec job facts =
     , execution = Plan.CopyInto Plan.CopyPass {source, generations = plannedDests, carried, sourceWritable = sourceIsWritable == Just True}
     , targets
     , format = settledOf formatResult
-    , originsUsed = originsUsedText sealing src.expected
+    , originsUsed = originsUsedText sealing src.recorded
     , steps
     , totalBytes = src.totalBytes
     , bytesToRead = V.sum (V.map PlanStep.bytesToRead steps) + maybe 0 (.bytes) sealing
@@ -129,14 +126,13 @@ offload spec job facts =
     carried = carriedGenerations src.chain sealing
     destGenerations = destGenerationsOf spec.createdAt src.dirs carried facts.targets
     plannedDests = V.mapMaybe (either (const Nothing) Just) destGenerations
-    formatResult = HashFormat.settle src.expected src.fileSet
+    formatResult = HashFormat.settle src.recorded src.fileSet
     steps = copySteps job destsHeld sealing src
     findings =
       [ Finding.onlyIf (not src.exists) Finding.Finding {severity = Severity.Blocker, code = Finding.SourceMissing, detail = OsPath.toText source}
       , Finding.onlyIf (src.exists && V.null src.files) Finding.Finding {severity = Severity.Warning, code = Finding.SourceEmpty, detail = OsPath.toText source}
       , sealReadOnlyWarning source sourceIsWritable job.sealFirst
       , Finding.blockerFor Finding.historyCode facts.sourceHistory
-      , Finding.blockerFor Finding.historyCode facts.originals
       , Finding.blockerFor Finding.formatCode formatResult
       , sealOverHistoryWarning sealing src.chain
       , targetFindings (V.length dests) steps classified
@@ -188,7 +184,7 @@ copySteps job destsHeld sealing src =
         PlanStep.PlanStep
           { path
           , size
-          , op = PlanStep.Copy (expectationOf sealing src.expected path)
+          , op = PlanStep.Copy (expectationOf sealing src.recorded path)
           , writes = Destination.writes job.existingCopy destsHeld (path, size)
           }
     )

@@ -364,7 +364,7 @@ originsForCopy plan copy = do
         Store.resolveOriginals copy.source >>= \case
           Left e -> throwError (PlanViolation.OriginalsUnresolved e)
           Right Nothing -> throwError (PlanViolation.OriginalsMissingAfterSeal copy.source)
-          Right (Just hs) -> pure hs
+          Right (Just (_, hs)) -> pure hs
       Emit.event (JobEvent.OriginalsResolved (Plan.originsDescription recorded) fmt)
       pure recorded
 

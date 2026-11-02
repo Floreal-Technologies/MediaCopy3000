@@ -176,7 +176,6 @@ offloadFactsReady =
           [ targetFacts shuttle (destinationFacts 812_004_000_000) (Just Tree.Tree {files = V.empty, dirs = V.empty, writable = True})
           , targetFacts archive (destinationFacts 3_010_000_000_000) Nothing
           ]
-    , originals = Right (Just recordedHashes)
     , sourceHistory = Right (Just (sourceChain, recordedHashes))
     }
 

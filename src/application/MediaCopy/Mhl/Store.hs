@@ -86,7 +86,7 @@ historyHashes folder =
 hashesOf :: LoadedHistory -> Map RelPath Hash
 hashesOf loaded = Manifest.latestHashes (V.map snd loaded.manifests)
 
-resolveOriginals :: (FileSystem :> es) => OsPath -> Eff es (Either HistoryError (Maybe (Map RelPath Hash)))
+resolveOriginals :: (FileSystem :> es) => OsPath -> Eff es (Either HistoryError (Maybe (Chain, Map RelPath Hash)))
 resolveOriginals source =
   loadHistory source <&> \case
     Left e -> Left e
@@ -94,7 +94,7 @@ resolveOriginals source =
     Right (Just loaded)
       | V.null loaded.chain.entries ->
           if loaded.chainFilePresent then Left (HistoryError.ChainEmpty (Layout.chainFile source)) else Right Nothing
-      | otherwise -> Right (Just (hashesOf loaded))
+      | otherwise -> Right (Just (loaded.chain, hashesOf loaded))
 
 carryHistory :: (FileSystem :> es) => OsPath -> OsPath -> Eff es (Either HistoryError (Maybe (Vector OsPath)))
 carryHistory source dest =
