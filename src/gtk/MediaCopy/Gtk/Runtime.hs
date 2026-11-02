@@ -23,7 +23,6 @@ import MediaCopy.Gtk.Screenshot (Startup (..), seeded)
 import MediaCopy.Gtk.Theme
 import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
 import MediaCopy.Interface.Translation
-import MediaCopy.Interface.Translation.Embedded
 import MediaCopy.Model
 import MediaCopy.Resources (bundle)
 import MediaCopy.Runtime (Runtime, currentModel, dispatch, newRuntime, perform, replaceModel, stopWorkers)
@@ -56,7 +55,7 @@ activate loopRef environment startup app =
 buildView :: Environment -> Adw.Application -> (UiMessage -> IO ()) -> (UiMessage -> IO ()) -> IO (ThemeAdapter, Widgets)
 buildView environment app dispatchUi postUi = do
   themeAdapter <- newThemeAdapter environment
-  widgets <- buildWidgets app (apply themeAdapter) (embeddedWording English) dispatchUi postUi
+  widgets <- buildWidgets app (apply themeAdapter) initialWording dispatchUi postUi
   loadFonts environment widgets.window
   loadCss environment
   pure (themeAdapter, widgets)

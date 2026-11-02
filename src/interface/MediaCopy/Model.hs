@@ -80,6 +80,9 @@ data Model = Model
   }
   deriving stock (Eq, Generic, Show)
 
+initialWording :: Wording
+initialWording = embeddedWording English
+
 initialModel :: UTCTime -> PaletteMode -> Accent -> Model
 initialModel t desktop accent =
   Model
@@ -97,7 +100,7 @@ initialModel t desktop accent =
     , toast = Nothing
     , now = t
     , closeConfirm = False
-    , wording = embeddedWording English
+    , wording = initialWording
     , plugins = PluginCatalogue.empty
     , pluginToasts = Set.empty
     , palette = Nothing

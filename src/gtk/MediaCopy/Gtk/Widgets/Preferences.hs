@@ -60,7 +60,7 @@ pageName = \case
 data AppearanceRows = AppearanceRows
   { baseRow :: Adw.ComboRow
   , accentRow :: Adw.ActionRow
-  , paintBase :: Base -> IO ()
+  , paintBase :: (Wording, Base) -> IO ()
   , paintAccent :: Maybe (Maybe Accent) -> IO ()
   , labelSwatches :: Wording -> IO ()
   }
@@ -77,7 +77,7 @@ newAppearanceRows wording dispatch = do
   baseRow <- new Adw.ComboRow [#title := "Base"]
   bases <- relabelingChoiceRow displayBase wording baseValues baseRow
   accentRow <- new Adw.ActionRow [#title := "Accent"]
-  swatches <- newSwatches wording
+  swatches <- newSwatches
   box <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #spacing := 6, #valign := Gtk.AlignCenter]
   forM_ swatches (\(_, button) -> Gtk.boxAppend box button)
   Adw.actionRowAddSuffix accentRow box
@@ -92,7 +92,7 @@ newSwatches = do
   icon <- new Gtk.Image [#iconName := "computer-symbolic"]
   Gtk.buttonSetChild desktop (Just icon)
   others <- forM [minBound .. maxBound] $ \accent -> do
-    button <- newSwatch wording (Just accent)
+    button <- newSwatch (Just accent)
     Gtk.toggleButtonSetGroup button (Just desktop)
     pure (Just accent, button)
   pure ((Nothing, desktop) : others)
@@ -107,10 +107,11 @@ labelSwatch wording accent button = do
   set button [#tooltipText := label]
   nameAccessible button label
 
-paintAppearance :: AppearanceRows -> Appearance -> IO ()
-paintAppearance rows appearance = do
-  rows.paintBase appearance.base
+paintAppearance :: AppearanceRows -> Wording -> Appearance -> IO ()
+paintAppearance rows wording appearance = do
+  rows.paintBase (wording, appearance.base)
+  rows.labelSwatches wording
   rows.paintAccent (Just appearance.accent)
 
 baseValues :: NonEmpty Base
-baseValues = minBound :| drop 1 [minBound .. maxBound]
+baseValues = minBound :| [succ minBound .. maxBound]

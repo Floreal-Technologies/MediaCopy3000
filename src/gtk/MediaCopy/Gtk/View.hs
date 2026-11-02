@@ -17,7 +17,7 @@ import GI.Gtk qualified as Gtk
 
 import MediaCopy.Domain.JobId (JobId)
 import MediaCopy.Gtk.Actions (Actions (..), installActions, presentAbout)
-import MediaCopy.Gtk.Widgets.Common (flatNamed)
+import MediaCopy.Gtk.Widgets.Common (nameAccessible)
 import MediaCopy.Gtk.Widgets.JobDetail (JobDetail (..), newJobDetail)
 import MediaCopy.Gtk.Widgets.JobRow (JobRow (..), newJobRow)
 import MediaCopy.Gtk.Widgets.KeyCaps (newKeyCaps)
@@ -48,7 +48,7 @@ buildWidgets
 buildWidgets app applyTheme wording dispatch postUi = do
   window <- newAppWindow app
   actions <- installActions app window dispatch
-  toolbar <- newHeaderToolbar actions wording
+  (toolbar, relabelMenu) <- newHeaderToolbar actions
   toastOverlay <- new Adw.ToastOverlay []
   detail <- newJobDetail actions.button dispatch
   (sidebar, sidebarPage) <- newSidebar dispatch
@@ -59,6 +59,7 @@ buildWidgets app applyTheme wording dispatch postUi = do
   set toastOverlay [#child := toolbar]
   set window [#content := toastOverlay]
   toastCell <- newToastCell toastOverlay postUi
+  menuCell <- newCell relabelMenu
   themeCell <- newCell (\(appearance, desktop, desktopAccent) -> applyTheme appearance desktop desktopAccent)
   offloadDialog <- newOffloadDialog window dispatch
   planSheet <- newPlanSheet window dispatch
@@ -76,6 +77,7 @@ buildWidgets app applyTheme wording dispatch postUi = do
         Gtk.stackSetVisibleChildName contentStack (if isJust selected then "detail" else "empty")
         detail.render current selected
         actions.render current
+        renderCell menuCell current.wording
         renderOffloadDialog offloadDialog current
         renderPlanSheet planSheet current
         preferences.render current
@@ -98,8 +100,8 @@ newAppWindow app =
     , #title := "MediaCopy 3000"
     ]
 
-newHeaderToolbar :: Actions -> Wording -> IO Adw.ToolbarView
-newHeaderToolbar actions wording = do
+newHeaderToolbar :: Actions -> IO (Adw.ToolbarView, Wording -> IO ())
+newHeaderToolbar actions = do
   toolbar <- new Adw.ToolbarView []
   headerBar <- new Adw.HeaderBar []
   actions.button Command.NewOffload ["suggested-action"] >>= Adw.headerBarPackStart headerBar
@@ -109,14 +111,16 @@ newHeaderToolbar actions wording = do
     new
       Gtk.MenuButton
       [ #iconName := "open-menu-symbolic"
-      , #tooltipText := mainMenuLabel wording
       , #primary := True
       , #menuModel := actions.menu
       ]
-  flatNamed menuButton (mainMenuLabel wording)
+  Gtk.widgetAddCssClass menuButton "flat"
   Adw.headerBarPackEnd headerBar menuButton
   Adw.toolbarViewAddTopBar toolbar headerBar
-  pure toolbar
+  let relabel wording = do
+        set menuButton [#tooltipText := mainMenuLabel wording]
+        nameAccessible menuButton (mainMenuLabel wording)
+  pure (toolbar, relabel)
 
 newContentStack :: Actions -> JobDetail -> IO (Gtk.Stack, Adw.NavigationPage)
 newContentStack actions detail = do
