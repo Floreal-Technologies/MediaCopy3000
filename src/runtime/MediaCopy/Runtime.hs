@@ -6,7 +6,6 @@ module MediaCopy.Runtime
   , Runtime
   , newRuntime
   , dispatch
-  , perform
   , currentModel
   , replaceModel
   , inFlight
@@ -128,12 +127,6 @@ step runtime msg = do
   writeIORef runtime.modelRef current
   runtime.shell.render current
   forM_ cmds (runEffect runtime current)
-
--- | Run one effect against the current model.
-perform :: Runtime -> AppEffect -> IO ()
-perform runtime effect = do
-  model <- readIORef runtime.modelRef
-  runEffect runtime model effect
 
 currentModel :: Runtime -> IO Model
 currentModel runtime = readIORef runtime.modelRef

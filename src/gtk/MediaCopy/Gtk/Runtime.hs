@@ -25,7 +25,7 @@ import MediaCopy.Gtk.View (Widgets (..), buildWidgets)
 import MediaCopy.Interface.Translation
 import MediaCopy.Model
 import MediaCopy.Resources (bundle)
-import MediaCopy.Runtime (Runtime, currentModel, dispatch, newRuntime, perform, replaceModel, stopWorkers)
+import MediaCopy.Runtime (Runtime, currentModel, dispatch, newRuntime, replaceModel, stopWorkers)
 
 data Loop = Loop
   { widgets :: Widgets
@@ -83,7 +83,7 @@ buildAndPresent loopRef environment startup app = do
   installTicker environment startup widgets.window dispatchNow
   widgets.render model
   Gtk.windowPresent widgets.window
-  when (isNothing startup) (perform runtime LoadCatalogue)
+  when (isNothing startup) (dispatchNow (Ui ReloadPlugins))
   forM_ startup (seeded environment widgets.window (\command -> command & RunCommand & Ui & dispatchNow) (replaceModel runtime))
 
 installCloseRequest :: Adw.ApplicationWindow -> (Message -> IO ()) -> IO ()
