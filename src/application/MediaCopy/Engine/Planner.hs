@@ -28,9 +28,8 @@ gatherOffload :: (FileSystem :> es) => Offload -> Eff es Preflight.OffloadFacts
 gatherOffload job = do
   sourceTree <- FileSystem.walk job.source
   targets <- V.mapM (gatherTarget job.source) (V.fromList (toList job.destinations))
-  originals <- Store.resolveOriginals job.source
-  sourceHistory <- Store.historyHashes job.source
-  pure Preflight.OffloadFacts {sourceTree, targets, originals, sourceHistory}
+  sourceHistory <- Store.resolveOriginals job.source
+  pure Preflight.OffloadFacts {sourceTree, targets, sourceHistory}
 
 gatherTarget :: (FileSystem :> es) => OsPath -> OsPath -> Eff es Destination
 gatherTarget source parent = do
