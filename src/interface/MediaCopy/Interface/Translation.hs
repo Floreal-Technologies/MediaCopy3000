@@ -7,6 +7,7 @@ module MediaCopy.Interface.Translation
   , getTranslation
   , localeFile
   , languageCode
+  , endonym
   , str
   ) where
 
@@ -32,10 +33,7 @@ data SupportedLanguage
 instance Locale SupportedLanguage where
   fromCode code = Map.lookup code supportedLanguages
   toCode = languageCode
-  displayLanguage namedLanguage _ =
-    case namedLanguage of
-      English -> Just English.languageName
-      French -> Just French.languageName
+  displayLanguage namedLanguage _ = Just (endonym namedLanguage)
   capitalise = \case
     English -> English.capitalise
     French -> French.capitalise
@@ -116,3 +114,8 @@ supportedLanguages :: Map Text SupportedLanguage
 supportedLanguages =
   Map.fromList $
     List.zip (List.map toCode [minBound @SupportedLanguage .. maxBound]) [minBound .. maxBound]
+
+endonym :: SupportedLanguage -> Text
+endonym = \case
+  English -> English.languageName
+  French -> French.languageName

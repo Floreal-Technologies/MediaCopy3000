@@ -6,6 +6,7 @@ module MediaCopy.Gtk.Widgets.Lists
   , renderKeyed
   , keyedSelection
   , choiceRow
+  , relabelingChoiceRow
   ) where
 
 import Data.GI.Base (AttrOp ((:=)), SignalProxy (PropertySet), new, set)
@@ -86,19 +87,36 @@ keyedSelection selection list =
 
 choiceRow :: (Eq a, Typeable a) => (a -> Text) -> NonEmpty a -> Adw.ComboRow -> IO (Control a)
 choiceRow name values row = do
+  control <- relabelingChoiceRow (const name) () values row
+  pure
+    Control
+      { paint = \value -> control.paint ((), value)
+      , connect = \report -> control.connect (\update -> report (\value -> snd (update ((), value))))
+      , current = snd <$> control.current
+      }
+
+relabelingChoiceRow :: (Eq c, Eq a, Typeable a) => (c -> a -> Text) -> c -> NonEmpty a -> Adw.ComboRow -> IO (Control (c, a))
+relabelingChoiceRow name initial values row = do
+  context <- newIORef initial
   store <- newListStore
   replaceItems store (NE.toList values)
   factory <- new Gtk.SignalListItemFactory []
   recycleItems factory newLabel $ \label value -> do
-    set label [#label := name value]
+    shown <- readIORef context
+    set label [#label := name shown value]
     pure (pure ())
   model <- listModel store
   set row [#factory := factory, #model := model]
   pure
     Control
-      { paint = \value -> traverse_ (Adw.comboRowSetSelected row . fromIntegral) (V.elemIndex value options)
-      , connect = \report -> connectSelf row (PropertySet #selected) (\_ -> selectedValue ?self >>= report . const)
-      , current = selectedValue row
+      { paint = \(wanted, value) -> do
+          shown <- readIORef context
+          when (shown /= wanted) $ do
+            writeIORef context wanted
+            replaceItems store (NE.toList values)
+          traverse_ (Adw.comboRowSetSelected row . fromIntegral) (V.elemIndex value options)
+      , connect = \report -> connectSelf row (PropertySet #selected) (\_ -> selectedValue ?self >>= \value -> report (\(shown, _) -> (shown, value)))
+      , current = (,) <$> readIORef context <*> selectedValue row
       }
   where
     options = V.fromList (NE.toList values)

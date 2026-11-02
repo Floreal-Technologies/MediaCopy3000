@@ -3,14 +3,14 @@ module MediaCopy.Gtk.Widgets.Preferences
   , newPreferences
   ) where
 
-import Data.GI.Base (AttrOp ((:=)), new)
+import Data.GI.Base (AttrOp ((:=)), new, set)
 import Floreal.Commons.Gtk.Bind (bind, toggleRadio)
-import Floreal.Commons.Gtk.Common (renderCell)
+import Floreal.Commons.Gtk.Common (newCell, renderCell)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
 import MediaCopy.Gtk.Widgets.Common (nameAccessible)
-import MediaCopy.Gtk.Widgets.Lists (choiceRow)
+import MediaCopy.Gtk.Widgets.Lists (choiceRow, relabelingChoiceRow)
 import MediaCopy.Gtk.Widgets.PluginsPage (PluginsPage (..), newPluginsPage)
 import MediaCopy.Interface.Theme
 import MediaCopy.Interface.Translation
@@ -29,6 +29,10 @@ newPreferences
 newPreferences window wording dispatch = do
   dialog <- new Adw.PreferencesDialog [#title := "Preferences"]
   page <- new Adw.PreferencesPage [#name := "general", #title := "General", #iconName := "preferences-system-symbolic"]
+  languageGroup <- new Adw.PreferencesGroup [#title := "Language", #description := "Applies to this run only"]
+  (languageRow, paintLanguage) <- newLanguageRow dispatch
+  Adw.preferencesGroupAdd languageGroup languageRow
+  Adw.preferencesPageAdd page languageGroup
   group <- new Adw.PreferencesGroup [#title := "Appearance", #description := "Applies to this run only"]
   rows <- newAppearanceRows wording dispatch
   Adw.preferencesGroupAdd group rows.baseRow
@@ -40,7 +44,8 @@ newPreferences window wording dispatch = do
   pure
     Preferences
       { render = \model -> do
-          paintAppearance rows model.appearance
+          paintLanguage model.wording.language
+          paintAppearance rows model.wording model.appearance
           renderCell plugins.cell model.plugins
       , showPage = \wanted -> do
           Adw.preferencesDialogSetVisiblePageName dialog (pageName wanted)
@@ -57,24 +62,33 @@ data AppearanceRows = AppearanceRows
   , accentRow :: Adw.ActionRow
   , paintBase :: Base -> IO ()
   , paintAccent :: Maybe (Maybe Accent) -> IO ()
+  , labelSwatches :: Wording -> IO ()
   }
+
+newLanguageRow :: (UiMessage -> IO ()) -> IO (Adw.ComboRow, SupportedLanguage -> IO ())
+newLanguageRow dispatch = do
+  row <- new Adw.ComboRow [#title := "Interface"]
+  languages <- choiceRow endonym (minBound :| [succ minBound .. maxBound]) row
+  paint <- bind languages (dispatch . SetLanguage)
+  pure (row, paint)
 
 newAppearanceRows :: Wording -> (UiMessage -> IO ()) -> IO AppearanceRows
 newAppearanceRows wording dispatch = do
   baseRow <- new Adw.ComboRow [#title := "Base"]
-  bases <- choiceRow (displayBase wording) baseValues baseRow
+  bases <- relabelingChoiceRow displayBase wording baseValues baseRow
   accentRow <- new Adw.ActionRow [#title := "Accent"]
   swatches <- newSwatches wording
   box <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #spacing := 6, #valign := Gtk.AlignCenter]
   forM_ swatches (\(_, button) -> Gtk.boxAppend box button)
   Adw.actionRowAddSuffix accentRow box
-  paintBase <- bind bases (dispatch . SetBase)
+  paintBase <- bind bases (dispatch . SetBase . snd)
   paintAccent <- bind (toggleRadio swatches) (mapM_ (dispatch . SetAccent))
-  pure AppearanceRows {baseRow, accentRow, paintBase, paintAccent}
+  swatchLabels <- newCell (\current -> forM_ swatches (\(accent, button) -> labelSwatch current accent button))
+  pure AppearanceRows {baseRow, accentRow, paintBase, paintAccent, labelSwatches = renderCell swatchLabels}
 
-newSwatches :: Wording -> IO (List (Maybe Accent, Gtk.ToggleButton))
-newSwatches wording = do
-  desktop <- newSwatch wording Nothing
+newSwatches :: IO (List (Maybe Accent, Gtk.ToggleButton))
+newSwatches = do
+  desktop <- newSwatch Nothing
   icon <- new Gtk.Image [#iconName := "computer-symbolic"]
   Gtk.buttonSetChild desktop (Just icon)
   others <- forM [minBound .. maxBound] $ \accent -> do
@@ -83,15 +97,15 @@ newSwatches wording = do
     pure (Just accent, button)
   pure ((Nothing, desktop) : others)
 
-newSwatch :: Wording -> Maybe Accent -> IO Gtk.ToggleButton
-newSwatch wording accent = do
+newSwatch :: Maybe Accent -> IO Gtk.ToggleButton
+newSwatch accent =
+  new Gtk.ToggleButton [#cssClasses := ["accent-swatch", maybe "desktop" accentName accent], #valign := Gtk.AlignCenter]
+
+labelSwatch :: Wording -> Maybe Accent -> Gtk.ToggleButton -> IO ()
+labelSwatch wording accent button = do
   let label = displayAccent wording accent
-  button <-
-    new
-      Gtk.ToggleButton
-      [#tooltipText := label, #cssClasses := ["accent-swatch", maybe "desktop" accentName accent], #valign := Gtk.AlignCenter]
+  set button [#tooltipText := label]
   nameAccessible button label
-  pure button
 
 paintAppearance :: AppearanceRows -> Appearance -> IO ()
 paintAppearance rows appearance = do
