@@ -34,6 +34,7 @@ import MediaCopy.Domain.FileOutcome qualified as FileOutcome
 import MediaCopy.Domain.FileSize (FileSize)
 import MediaCopy.Domain.FileStatus qualified as FileStatus
 import MediaCopy.Domain.Finding qualified as Finding
+import MediaCopy.Domain.Job qualified as Job
 import MediaCopy.Domain.JobEvent (JobEvent)
 import MediaCopy.Domain.JobEvent qualified as JobEvent
 import MediaCopy.Domain.JobResult (JobResult)
@@ -317,7 +318,7 @@ runPlan
   -> Eff es JobEvent
 runPlan hostname plan = do
   fmt <- maybe (throwError PlanViolation.PlanFormatMissing) pure plan.format
-  forM_ (Plan.raceChecks plan) (\check -> Generation.require (fst check) (snd check))
+  _ <- Generation.require (Job.root plan.spec.job) (plan.generations + 1)
   Emit.event (JobEvent.Planned (JobEvent.PlannedWork (V.map (\step -> (step.path, step.size)) plan.steps) plan.bytesToRead))
   let contributions = plan.plugins.contributions
       creator = Creator.addAuthors contributions.authors (Creator.new plan.spec.createdAt hostname "mediacopy3000" (T.pack (showVersion version)))

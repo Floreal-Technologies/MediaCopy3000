@@ -9,7 +9,6 @@ module MediaCopy.Domain.Plan
   , blockers
   , equivalent
   , plannedGenerations
-  , raceChecks
   , originsDescription
   ) where
 
@@ -25,7 +24,6 @@ import MediaCopy.Domain.JobSpec (JobSpec)
 import MediaCopy.Domain.Offload qualified as Offload
 import MediaCopy.Domain.PlanStep (PlanStep)
 import MediaCopy.Domain.PlannedGeneration (PlannedGeneration)
-import MediaCopy.Domain.PlannedGeneration qualified as PlannedGeneration
 import MediaCopy.Domain.PluginPlan (PluginPlan)
 import MediaCopy.Domain.PluginPlan qualified as PluginPlan
 import MediaCopy.Domain.Prose qualified as Prose
@@ -93,11 +91,6 @@ equivalent :: Plan -> Plan -> Bool
 equivalent a b = blankFree a == blankFree b
   where
     blankFree plan = plan {targets = V.map (\target -> target {Target.freeBytes = Nothing}) plan.targets}
-
-raceChecks :: Plan -> Vector (OsPath, Int)
-raceChecks plan = case plan.execution of
-  RecordAt record -> V.singleton (record.folder, record.generation.number)
-  CopyInto copy -> V.singleton (copy.source, maybe (copy.carried + 1) (.generation.number) plan.sealPass)
 
 plannedGenerations :: Plan -> Vector PlannedGeneration
 plannedGenerations plan = sealed <> executed
