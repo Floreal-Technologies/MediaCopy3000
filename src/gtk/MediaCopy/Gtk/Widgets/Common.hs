@@ -65,41 +65,20 @@ newDialogShell attrs buttons endButtons body = do
   Adw.dialogSetDefaultWidget dialog (Just primaryButton)
   pure DialogShell {dialog, primaryButton}
 
-data Row = Row
-  { title :: Text
-  , subtitle :: Text
-  , cssClass :: Maybe Text
-  , suffix :: Maybe (IO Gtk.Widget)
-  }
-
-plainRow :: Text -> Text -> Row
-plainRow title subtitle = Row {title, subtitle, cssClass = Nothing, suffix = Nothing}
-
-fromView :: RowView -> Row
-fromView view =
-  (plainRow view.title view.subtitle)
-    { cssClass = toneClass <$> view.tone
-    }
-  where
-    toneClass = \case
-      Good -> "success"
-      Warn -> "warning"
-      Bad -> "error"
-
 data RowHost = InGroup Adw.PreferencesGroup | InExpander Adw.ExpanderRow
 
-renderActionRows :: IORef (Vector Adw.ActionRow) -> RowHost -> Vector Row -> IO ()
+renderActionRows :: IORef (Vector Adw.ActionRow) -> RowHost -> Vector (IO Adw.ActionRow) -> IO ()
 renderActionRows rowsRef host wanted = do
   existing <- readIORef rowsRef
   V.mapM_ (removeFrom host) existing
-  fresh <- V.mapM newRow wanted
+  fresh <- V.sequence wanted
   V.mapM_ (addTo host) fresh
   writeIORef rowsRef fresh
 
 newRowsCell :: RowHost -> IO (Cell (Vector RowView))
 newRowsCell host = do
   rows <- newIORef V.empty
-  newCell (renderActionRows rows host . V.map fromView)
+  newCell (renderActionRows rows host . V.map newRow)
 
 removeFrom :: RowHost -> Adw.ActionRow -> IO ()
 removeFrom host row = case host of
@@ -111,10 +90,14 @@ addTo host row = case host of
   InGroup group -> Adw.preferencesGroupAdd group row
   InExpander expander -> Adw.expanderRowAddRow expander row
 
-newRow :: Row -> IO Adw.ActionRow
-newRow row = do
+newRow :: RowView -> IO Adw.ActionRow
+newRow view = do
   built <- new Adw.ActionRow [#useMarkup := False]
-  set built [#title := row.title, #subtitle := row.subtitle]
-  forM_ row.cssClass (Gtk.widgetAddCssClass built)
-  forM_ row.suffix (\build -> build >>= \widget -> Adw.actionRowAddSuffix built widget)
+  set built [#title := view.title, #subtitle := view.subtitle]
+  forM_ view.tone (Gtk.widgetAddCssClass built . toneClass)
   pure built
+  where
+    toneClass = \case
+      Good -> "success"
+      Warn -> "warning"
+      Bad -> "error"

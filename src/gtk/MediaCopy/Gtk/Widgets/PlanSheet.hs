@@ -167,7 +167,7 @@ renderReadyBody body view = do
   renderRows body.targetGroup body.targetRows view.targets
   renderRows body.findingGroup body.findingRows view.findings
   renderRows body.manifestGroup body.manifestRows view.manifest
-  renderActionRows body.scriptRows (InExpander body.scriptExpander) (V.map fromView view.script)
+  renderActionRows body.scriptRows (InExpander body.scriptExpander) (V.map newRow view.script)
   renderSealChoice body.seal view.seal
 
 data SealControls = SealControls
@@ -252,5 +252,5 @@ renderJobFields body dispatch (wanted, given) = do
 
 renderRows :: Adw.PreferencesGroup -> IORef (Vector Adw.ActionRow) -> Vector RowView -> IO ()
 renderRows group rowsRef wanted = do
-  renderActionRows rowsRef (InGroup group) (V.map fromView wanted)
+  renderActionRows rowsRef (InGroup group) (V.map newRow wanted)
   Gtk.widgetSetVisible group (not (V.null wanted))
