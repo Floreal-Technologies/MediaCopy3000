@@ -14,6 +14,7 @@ import GI.Gtk qualified as Gtk
 import System.OsPath (takeFileName)
 
 import MediaCopy.Gtk.Widgets.Common
+import MediaCopy.Interface.View.Row (rowView)
 import MediaCopy.Model (Model (..), OffloadDraft (..), UiMessage (..), draftReady)
 
 data OffloadDialog = OffloadDialog
@@ -104,11 +105,13 @@ renderSourceRow sourceRow = \case
   Nothing -> set sourceRow [#title := "No folder chosen", #subtitle := ""]
   Just folder -> set sourceRow [#title := OsPath.toText (takeFileName folder), #subtitle := OsPath.toText folder]
 
-destRow :: (UiMessage -> IO ()) -> Int -> OsPath -> Row
-destRow dispatch index folder =
-  (plainRow (OsPath.toText (takeFileName folder)) (OsPath.toText folder)) {suffix = Just (removeButton dispatch index folder)}
+destRow :: (UiMessage -> IO ()) -> Int -> OsPath -> IO Adw.ActionRow
+destRow dispatch index folder = do
+  row <- newRow (rowView (OsPath.toText (takeFileName folder)) (OsPath.toText folder))
+  removeButton dispatch index folder >>= Adw.actionRowAddSuffix row
+  pure row
 
-removeButton :: (UiMessage -> IO ()) -> Int -> OsPath -> IO Gtk.Widget
+removeButton :: (UiMessage -> IO ()) -> Int -> OsPath -> IO Gtk.Button
 removeButton dispatch index folder = do
   button <-
     new
@@ -119,7 +122,7 @@ removeButton dispatch index folder = do
       , On #clicked (dispatch (RemoveDestination index))
       ]
   flatNamed button ("Remove " <> OsPath.toText (takeFileName folder))
-  Gtk.toWidget button
+  pure button
 
 renderOffloadDialog :: OffloadDialog -> Model -> IO ()
 renderOffloadDialog widgets current = do
