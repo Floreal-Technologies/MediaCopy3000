@@ -121,9 +121,9 @@ endJob terminal = do
     Left e -> Emit.event (JobEvent.Failed (T.pack (displayException e)))
     Right () -> pure ()
 
-advanceProgress :: (Time :> es, Emit :> es, State JobProgress :> es) => Int64 -> Eff es ()
-advanceProgress n = do
-  modify (\st -> st {readSoFar = st.readSoFar + n})
+advanceProgress :: (Time :> es, Emit :> es, State JobProgress :> es) => ByteString -> Eff es ()
+advanceProgress chunk = do
+  modify (\st -> st {readSoFar = st.readSoFar + fromIntegral (BS.length chunk)})
   st <- get @JobProgress
   t <- currentTime
   when (diffUTCTime t st.lastEmit >= 0.1) $ do
@@ -210,9 +210,9 @@ sourceHashFor
   -> Eff es ()
   -> Eff es (Hash, UTCTime)
 sourceHashFor srcPath writing sealed onFlush
-  | not (V.null writing) = hashVia (FileSystem.writeTemps srcPath writing onFlush) (\bs -> bs & BS.length & fromIntegral & advanceProgress)
+  | not (V.null writing) = hashVia (FileSystem.writeTemps srcPath writing onFlush) advanceProgress
   | Just h <- sealed = FileSystem.mtimeOf srcPath <&> \t -> (h, t)
-  | otherwise = hashOf FileSystem.FromCache srcPath (\bs -> bs & BS.length & fromIntegral & advanceProgress)
+  | otherwise = hashOf FileSystem.FromCache srcPath advanceProgress
 
 reuseOrReplace
   :: (Hashing es)
@@ -232,7 +232,7 @@ reuseOrReplace srcPath reusing rel mtime srcHash written = do
     Just actual -> FileStepResult {outcome = FileOutcome.Replaced (FileOutcome.Mismatch srcHash actual), manifestEntry = written.manifestEntry}
   where
     check w = do
-      (actual, _) <- hashOf FileSystem.FromDevice w.final (\bs -> bs & BS.length & fromIntegral & advanceProgress)
+      (actual, _) <- hashOf FileSystem.FromDevice w.final advanceProgress
       if actual == srcHash
         then pure (Right ())
         else do
@@ -243,7 +243,7 @@ reuseOrReplace srcPath reusing rel mtime srcHash written = do
               srcPath
               demoted
               (Emit.event (JobEvent.FileStatusChanged rel FileStatus.Flushing))
-              (\bs -> bs & BS.length & fromIntegral & advanceProgress)
+              advanceProgress
           readBack <- publishAndVerify rel demoted mtime srcHash
           case readBack of
             FileOutcome.Ok -> pure (Left actual)
@@ -294,7 +294,7 @@ verifyDestinations writes srcHash = go (V.toList writes)
   where
     go [] = pure FileOutcome.Ok
     go (w : ws) = do
-      (actual, _) <- hashOf FileSystem.FromDevice w.final (\bs -> bs & BS.length & fromIntegral & advanceProgress)
+      (actual, _) <- hashOf FileSystem.FromDevice w.final advanceProgress
       if actual == srcHash then go ws else pure (FileOutcome.HashMismatch (FileOutcome.Mismatch srcHash actual))
 
 runPlan
@@ -404,7 +404,7 @@ runStep root recorded step = case step.op of
   where
     path = RelPath.toOsPath root step.path
     hashStep report = runFileStep step (pure Nothing) $ do
-      (actual, mtime) <- hashOf FileSystem.FromDevice path (\bs -> bs & BS.length & fromIntegral & advanceProgress)
+      (actual, mtime) <- hashOf FileSystem.FromDevice path advanceProgress
       flushProgress
       t <- asks @Creator (.creationDate)
       pure (report actual mtime t)
