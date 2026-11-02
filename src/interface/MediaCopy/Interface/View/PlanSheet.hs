@@ -86,12 +86,12 @@ sealChoice sealing anyway
 
 sealSubtitle :: Wording -> Plan.CopyPass -> Plan -> Text
 sealSubtitle wording copy plan = case plan.sealPass of
-  Just pass -> "reads " <> humanBytes wording pass.bytes <> " first, then writes generation " <> count (plan.generations + 1) <> "."
+  Just pass -> "reads " <> humanBytes wording pass.bytes <> " first, then writes generation " <> count (plan.highestGeneration + 1) <> "."
   Nothing
     | V.any (\finding -> finding.code == Finding.SourceMissing) plan.findings -> "the media source cannot be found."
     | not copy.sourceWritable -> "the media source is read-only."
-    | plan.generations == 0 -> "the media source has no history, consider sealing first."
-    | otherwise -> "the media source already holds " <> Prose.plural "generation" plan.generations <> "."
+    | plan.highestGeneration == 0 -> "the media source has no history, consider sealing first."
+    | otherwise -> "the media source already holds " <> Prose.plural "generation" plan.highestGeneration <> "."
 
 data SheetPage = PlanningPage | ReadyPage | ErrorPage
   deriving stock (Eq, Show)

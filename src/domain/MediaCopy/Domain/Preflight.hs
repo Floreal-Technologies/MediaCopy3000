@@ -111,7 +111,7 @@ offload spec job facts =
     , ignorePatterns = Tree.ignorePatterns
     , findings
     , sealPass = sealing
-    , generations = Chain.highestGeneration src.chain
+    , highestGeneration = Chain.highestGeneration src.chain
     , plugins = PluginPlan.empty
     }
   where
@@ -236,7 +236,7 @@ generation spec rule facts =
     , ignorePatterns = Tree.ignorePatterns
     , findings = generationFindings rule folder facts chain formatResult
     , sealPass = Nothing
-    , generations = Chain.highestGeneration chain
+    , highestGeneration = Chain.highestGeneration chain
     , plugins = PluginPlan.empty
     }
   where

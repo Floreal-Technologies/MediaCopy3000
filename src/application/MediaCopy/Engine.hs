@@ -304,7 +304,7 @@ runPlan
   -> Eff es JobEvent
 runPlan hostname plan = do
   fmt <- maybe (throwError PlanViolation.PlanFormatMissing) pure plan.format
-  _ <- Generation.require (Job.root plan.spec.job) (plan.generations + 1)
+  _ <- Generation.require (Job.root plan.spec.job) (plan.highestGeneration + 1)
   Emit.event (JobEvent.Planned (JobEvent.PlannedWork (V.map (\step -> (step.path, step.size)) plan.steps) plan.bytesToRead))
   let contributions = plan.plugins.contributions
       creator = Creator.addAuthors contributions.authors (Creator.new plan.spec.createdAt hostname "mediacopy3000" (T.pack (showVersion version)))

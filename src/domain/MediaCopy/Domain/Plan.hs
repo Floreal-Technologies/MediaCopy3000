@@ -71,7 +71,7 @@ data Plan = Plan
   , ignorePatterns :: Vector Text
   , findings :: Vector Finding
   , sealPass :: Maybe SealPass
-  , generations :: Int
+  , highestGeneration :: Int
   , plugins :: PluginPlan
   }
   deriving stock (Eq, Show)
