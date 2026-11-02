@@ -92,20 +92,6 @@ data FileStepResult = FileStepResult
   , manifestEntry :: Maybe FileEntry
   }
 
-data SealStopped = SealStopped
-  { failed :: Int
-  , total :: Int
-  }
-  deriving stock (Eq, Show)
-
-instance Display SealStopped where
-  displayBuilder stopped =
-    "the seal failed for "
-      <> displayBuilder (T.show stopped.failed)
-      <> " of "
-      <> displayBuilder (T.show stopped.total)
-      <> " files; nothing was copied"
-
 execute
   :: (FileSystem :> es, Hasher :> es, Time :> es, Emit :> es, Plugins :> es)
   => Text
@@ -383,7 +369,8 @@ runSealPass patterns source pass = do
     Offload.CopyAnyway -> pure (Right tally)
     Offload.StopBeforeCopy
       | Set.null tally.failedPaths -> pure (Right tally)
-      | otherwise -> pure (Left (JobEvent.Failed (display SealStopped {failed = Set.size tally.failedPaths, total = V.length pass.steps})))
+      | otherwise ->
+          pure (Left (JobEvent.Failed ("the seal failed for " <> T.show (Set.size tally.failedPaths) <> " of " <> T.show (V.length pass.steps) <> " files; nothing was copied")))
 
 runGenerationPlan
   :: (Pass es)
