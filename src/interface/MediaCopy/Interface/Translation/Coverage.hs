@@ -1,5 +1,6 @@
 module MediaCopy.Interface.Translation.Coverage
   ( wordingFaults
+  , messageShapeFaults
   ) where
 
 import Ascmhl.Algo qualified as Algo
@@ -7,7 +8,9 @@ import Ascmhl.Hash qualified as Hash
 import Control.Exception (evaluate)
 import Data.Containers.ListUtils (nubOrd)
 import Data.List qualified as List
+import Data.Set qualified as Set
 import Data.Text qualified as T
+import Language.Fluent.AST
 import System.OsPath (unsafeEncodeUtf)
 
 import MediaCopy.Domain.FileOutcome qualified as FileOutcome
@@ -67,3 +70,60 @@ fileStatuses =
 
 counts :: List Int
 counts = [0, 1, 3, 1_000_000]
+
+messageShapeFaults :: Resource -> Resource -> List Text
+messageShapeFaults reference translation =
+  concatMap fault (messageShapes reference)
+  where
+    translated = messageShapes translation
+    fault (identifier, expected) = case List.lookup identifier translated of
+      Nothing -> ["missing message: " <> identifier]
+      Just actual ->
+        differ "missing" (Set.difference expected actual)
+          <> differ "unknown" (Set.difference actual expected)
+      where
+        differ label names =
+          [ "message " <> identifier <> ": " <> label <> " variables: " <> T.intercalate ", " (map ("$" <>) (Set.toAscList names))
+          | not (Set.null names)
+          ]
+
+messageShapes :: Resource -> List (Text, Set Text)
+messageShapes resource =
+  mapMaybe
+    ( \case
+        MessageEntry message ->
+          Just (identifierText message.id, foldMap patternVariables message.value <> foldMap (\(Attribute _ pattern') -> patternVariables pattern') message.attributes)
+        _ -> Nothing
+    )
+    resource.entries
+
+patternVariables :: Pattern -> Set Text
+patternVariables (Pattern elements) = foldMap elementVariables elements
+
+elementVariables :: PatternElement -> Set Text
+elementVariables = \case
+  Placeable placeable -> expressionVariables (placeableExpression placeable)
+  InlineText _ -> Set.empty
+  BlockText _ -> Set.empty
+
+expressionVariables :: Expression -> Set Text
+expressionVariables = \case
+  Select (SelectExpression selector (VariantList variants)) ->
+    inlineVariables selector <> foldMap (\variant -> patternVariables variant.value) variants
+  Inline inline -> inlineVariables inline
+
+inlineVariables :: InlineExpression -> Set Text
+inlineVariables = \case
+  VariableReference identifier -> Set.singleton (identifierText identifier)
+  PlaceableExpression expression -> expressionVariables expression
+  FunctionReference _ arguments -> argumentVariables arguments
+  TermReference _ _ arguments -> foldMap argumentVariables arguments
+  StringLiteralExpression _ -> Set.empty
+  NumberLiteralExpression _ -> Set.empty
+  MessageReference _ _ -> Set.empty
+
+argumentVariables :: CallArguments -> Set Text
+argumentVariables (CallArguments arguments) = foldMap (either (const Set.empty) inlineVariables) arguments
+
+identifierText :: Identifier -> Text
+identifierText (Identifier identifier) = identifier

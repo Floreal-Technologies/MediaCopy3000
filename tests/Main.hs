@@ -11,6 +11,7 @@ import MediaCopy.Domain.PluginReportTest qualified as PluginReportTest
 import MediaCopy.Effects.FileSystemTest qualified as FileSystemTest
 import MediaCopy.FlowTest qualified as FlowTest
 import MediaCopy.Interface.PaletteTest qualified as PaletteTest
+import MediaCopy.Interface.Translation.CoverageTest qualified as CoverageTest
 import MediaCopy.Interface.View.PlanSheetTest qualified as PlanSheetTest
 import MediaCopy.Interface.WordingTest qualified as WordingTest
 import MediaCopy.ModelTest qualified as ModelTest
@@ -33,6 +34,7 @@ main =
         , FileSystemTest.tests
         , ModelTest.tests
         , PaletteTest.tests
+        , CoverageTest.tests
         , PlanSheetTest.tests
         , WordingTest.tests
         , CatalogueTest.tests

@@ -45,6 +45,7 @@ common options
 
   default-extensions:
     DuplicateRecordFields
+    MultilineStrings
     NoFieldSelectors
     NoStarIsType
     OrPatterns
@@ -431,6 +432,7 @@ test-suite core-test
     MediaCopy.Effects.FileSystemTest
     MediaCopy.FlowTest
     MediaCopy.Interface.PaletteTest
+    MediaCopy.Interface.Translation.CoverageTest
     MediaCopy.Interface.View.PlanSheetTest
     MediaCopy.Interface.WordingTest
     MediaCopy.ModelTest
