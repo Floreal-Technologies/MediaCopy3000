@@ -3,6 +3,7 @@ module MediaCopy.Gtk.Interpret
   ) where
 
 import Control.Exception (displayException)
+import Control.Monad.Extra (unlessM, whenJustM)
 import Data.GI.Base (AttrOp ((:=)), new, set)
 import Data.GI.Base.GError (catchGErrorJustDomain)
 import Data.Text qualified as T
@@ -12,6 +13,7 @@ import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 import System.OsPath (encodeFS)
 
+import MediaCopy.Domain.JobId (getJobIdNumber)
 import MediaCopy.Gtk.View (Widgets (..))
 import MediaCopy.Model
 import MediaCopy.Runtime (Shell (..))
@@ -27,6 +29,7 @@ gtkShell widgets post =
     , destroyWindow = Gtk.windowDestroy widgets.window
     , showChrome = widgets.present
     , showFolder = showFolder widgets.window post
+    , notify = notify widgets.window
     }
 
 toasting :: (Message -> IO ()) -> IO () -> IO ()
@@ -59,6 +62,22 @@ showFolder window post folder = do
   launcher <- Gtk.fileLauncherNew (Just file)
   Gtk.fileLauncherLaunch launcher (Just window) (Nothing @Gio.Cancellable) $ Just $ \_source result ->
     toasting post (Gtk.fileLauncherLaunchFinish launcher result)
+
+notify :: Adw.ApplicationWindow -> Notification -> IO ()
+notify window notification = do
+  unlessM (Gtk.windowIsActive window) $ whenJustM (Gtk.windowGetApplication window) $ \app -> do
+    notif <- Gio.notificationNew notification.title
+    Gio.notificationSetBody notif (Just notification.body)
+    Gio.notificationSetPriority notif $
+      if notification.isUrgent
+        then Gio.NotificationPriorityUrgent
+        else Gio.NotificationPriorityNormal
+    let notifId =
+          notification.notificationId
+            & getJobIdNumber
+            & T.show
+            & Just
+    Gio.applicationSendNotification app notifId notif
 
 -- | gi-gio versions disagree on whether the picked file is nullable.
 class PickedFile file where
