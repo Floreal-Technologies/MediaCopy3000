@@ -68,6 +68,10 @@ notify window notification = do
   unlessM (Gtk.windowIsActive window) $ whenJustM (Gtk.windowGetApplication window) $ \app -> do
     notif <- Gio.notificationNew notification.title
     Gio.notificationSetBody notif (Just notification.body)
+    Gio.notificationSetPriority notif $
+      if notification.isUrgent
+        then Gio.NotificationPriorityUrgent
+        else Gio.NotificationPriorityNormal
     let notifId =
           notification.notificationId
             & getJobIdNumber

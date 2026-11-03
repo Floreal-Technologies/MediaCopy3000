@@ -253,7 +253,7 @@ update msg model = case msg of
                              jid
                              (fromMaybe "" (terminalJobEventNotifTitle model.wording entry.state.spec.job ev))
                              (fromMaybe "" (toastMessage model.wording entry.state.spec.job ev))
-                             (JobEvent.isFailed ev)
+                             (JobEvent.needsAttention ev)
                        ]
                  in (model2, refresh <> notif <> cmds)
                else (model1, [])
