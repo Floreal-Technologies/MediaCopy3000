@@ -25,6 +25,7 @@ import MediaCopy.Gtk.Widgets.History (HistoryView (..), newHistoryView, renderHi
 import MediaCopy.Gtk.Widgets.Lists (KeyedList (..), newKeyedList, renderKeyed)
 import MediaCopy.Interface.Command qualified as Command
 import MediaCopy.Interface.Translation
+import MediaCopy.Interface.View.FileRow (fileRowView)
 import MediaCopy.Interface.View.JobDetail (DetailView (..), detailView, historyFor, pluginStatusRows)
 import MediaCopy.Model (FileFilter (..), JobEntry (..), Model (..), UiMessage (..))
 
@@ -163,7 +164,7 @@ newFileListPane = do
   rows <-
     newKeyedList
       (newFileRow <&> \fileRow -> (fileRow.row, fileRow))
-      (\wording path entry fileRow -> fileRow.update wording path entry.size entry.status)
+      (\wording path entry fileRow -> fileRow.update (fileRowView wording path entry.size entry.status))
   items <- listModel rows.store
   selection <- new Gtk.NoSelection [#model := items]
   list <- new Gtk.ListView [#model := selection, #factory := rows.factory, #showSeparators := True]

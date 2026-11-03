@@ -206,6 +206,7 @@ library interface
     MediaCopy.Interface.Translation.French
     MediaCopy.Interface.Translation.Messages
     MediaCopy.Interface.Translation.Splice
+    MediaCopy.Interface.View.FileRow
     MediaCopy.Interface.View.JobDetail
     MediaCopy.Interface.View.JobRow
     MediaCopy.Interface.View.PlanSheet

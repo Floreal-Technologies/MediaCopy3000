@@ -22,6 +22,8 @@ data JobRowView = JobRowView
   , fraction :: Double
   , allOk :: Bool
   , bad :: Bool
+  , kindName :: Text
+  , progressName :: Text
   }
   deriving stock (Eq, Show)
 
@@ -36,6 +38,8 @@ jobRowView wording now state =
     , bad = case state.phase of
         (JobState.Finished (JobResult.WithFailures _); JobState.Failed _) -> True
         _ -> False
+    , kindName = jobKindText wording (Job.kind state.spec.job)
+    , progressName = Job.label state.spec.job <> " progress"
     }
 
 phaseText :: Wording -> UTCTime -> JobState -> Text

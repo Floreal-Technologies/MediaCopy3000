@@ -9,14 +9,10 @@ import Floreal.Commons.Gtk.Common (newCell, newLabel, paddedBox, renderCell, tog
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
-import MediaCopy.Domain.Job qualified as Job
-import MediaCopy.Domain.JobSpec qualified as JobSpec
 import MediaCopy.Domain.JobState (JobState)
-import MediaCopy.Domain.JobState qualified as JobState
 import MediaCopy.Gtk.Widgets.Common
 import MediaCopy.Interface.Translation
 import MediaCopy.Interface.View.JobRow (JobRowView (..), jobRowView)
-import MediaCopy.Interface.Wording
 
 data JobRow = JobRow
   { row :: Gtk.Box
@@ -36,9 +32,9 @@ newJobRow = do
   row <- paddedBox Gtk.OrientationHorizontal 10 6
   Gtk.boxAppend row icon
   Gtk.boxAppend row lines'
-  names <- newCell $ \(kind, label) -> do
-    nameAccessible icon kind
-    nameAccessible bar (label <> " progress")
+  names <- newCell $ \(kindName, progressName) -> do
+    nameAccessible icon kindName
+    nameAccessible bar progressName
   cell <- newCell $ \view -> do
     set icon [#iconName := view.icon]
     set name [#label := view.label]
@@ -49,6 +45,7 @@ newJobRow = do
     toggleClass sub "error" view.bad
     toggleClass bar "error" view.bad
   let update wording now current = do
-        renderCell names (jobKindText wording (Job.kind current.spec.job), Job.label current.spec.job)
-        renderCell cell (jobRowView wording now current)
+        let view = jobRowView wording now current
+        renderCell names (view.kindName, view.progressName)
+        renderCell cell view
   pure JobRow {row, update}
