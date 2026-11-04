@@ -16,7 +16,7 @@ On native Windows, the GTK stack comes from MSYS2. Install the `ucrt64` packages
 `pkgconf`, `gobject-introspection`, `gtk4`, `libadwaita` and `ntldd` from the
 `mingw-w64-ucrt-x86_64` prefix.
 
-If cabal has trouble finding libraries, help it by including this in your `cabal.project.local` file:
+If cabal does not find the libraries, add this to `cabal.project.local`:
 
 ```
 package *
@@ -51,12 +51,11 @@ In WSL2, `scripts/package.sh` makes Linux packages. To make the Windows installe
 
 ### macOS
 
-To build MC3K on macOS, `xxhash` and `gobject-introspection` need to be installed from an external package manager.
+On macOS, install the dependencies with Homebrew:
 
 ```
-   brew install gtk4 libadwaita xxhash gobject-introspection pkgconfig
+brew install gtk4 libadwaita xxhash gobject-introspection pkgconfig
 ```
-`
 
 ### Development mode
 
@@ -90,11 +89,136 @@ The repository holds four packages:
 The interface is Model-View-Update, Elm architecture-style:
 
 ```
-Message ──▶ update :: Message -> Model -> (Model, List AppEffect)
+Message ──▶ (update :: Message -> Model -> (Model, List AppEffect))
                                            │           │
                                            ▼           ▼
                                         render     runEffect (IO)
 ```
+
+### Building the interface
+
+The rules for signal handlers, widget state and lists are in [`STYLE_GUIDE.md`](STYLE_GUIDE.md). Please familiarise yourself with them.
+
+#### Layers
+
+In order to avoid GTK considerations creep where they shouldn't, the interface
+is separated into several layers:
+
+The Model handles application state. We use it build Views that represent our
+visual elements, and handle display logic. Lastly, the Views get painted into
+actual GTK widgets, with as less logic as possible.
+
+| Layer       | Task                                        |
+|-------------|---------------------------------------------|
+| Model       | State, message handling, `update`           |
+| View models | Turn the state into interface elements      |
+| Widgets     | Build GTK widgets and paint the view models |
+
+#### The life of a Message
+
+1. A button activates its GAction, from `MediaCopy.Gtk.Actions`.
+2. The action calls `dispatch (Ui (RunCommand c))`.
+3. `MediaCopy.Runtime` runs `update`, then calls `render` in `MediaCopy.Gtk.View`.
+4. That `render` calls the render function of each widget.
+5. The runtime runs the effects.
+
+`UiMessage` comes from the user. Other `Message` constructors come from workers, the clock and the
+desktop. `dispatch` runs on the GLib main loop only. Worker threads use `post` from the `Shell`.
+
+#### A widget
+
+A widget module has two parts:
+
+* `newX` builds the widget tree, connects the handlers, and gives the root and a
+  render function.
+
+* The render function paints a value on the existing widgets. Only lists should add or
+  remove widgets.
+
+Example:
+
+```haskell
+data FileRow = FileRow
+  { row :: Gtk.Box
+  , update :: FileRowView -> IO ()
+  }
+
+newFileRow :: IO FileRow
+newFileRow = do
+  name <- newLabel "" [#xalign := 0, #hexpand := True] []
+  row <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal]
+  Gtk.boxAppend row name
+  cell <- newCell $ \view -> do
+    set name [#label := view.name]
+    toggleClass row "error" view.failed
+  pure FileRow {row, update = renderCell cell}
+```
+
+A handler sends one `UiMessage` through `dispatch`. The new state comes back through the render function.
+
+To add a widget:
+
+1. Write the view model in `Interface/View/`;
+2. Write the widget in `Gtk/Widgets/`;
+3. In `buildWidgets`, call `newX` and call its render function from `render`.
+
+#### Skip the repaint
+
+`render` runs after each message, and the clock sends one `Tick` each second.
+
+A repaint that is not necessary can move the cursor, lose the selection and fire
+signals again, so we need strategies to avoid it:
+
+| The data goes                    | Use                                  |
+|----------------------------------|--------------------------------------|
+| From the model to the widget     | `Cell` (`newCell`, `renderCell`)     |
+| Both ways (the user can edit it) | `Control` with `bind`                |
+| Into rows                        | `KeyedList` or `newRowsCell`         |
+
+`renderCell` skips the paint when the new value is equal to the last one.
+The `Eq` instance is used, and writing it yourself allows you to choose
+which parts of the widget gets compared to trigger re-painting (or not).
+
+#### User-editable Widgets
+
+When you paint a switch, it fires its signal, and the handler dispatches again.
+Use `bind` to stop this feedback loop:
+
+```haskell
+paintLanguage <- bind languages (dispatch . SetLanguage)
+-- in render:
+paintLanguage model.wording.language
+```
+
+The paint function changes the widget only if the value differs, and blocks the
+handlers during the change. The reaction runs only on a user change.
+
+A dialog is a `Control Bool`. `True` means open:
+
+```haskell
+paintOpen <- bind openControl (closing (dispatch CloseOffloadDialog))
+```
+
+`closing` runs its action when the user closes the dialog. `bindQuietly`
+also gives `quietly`, which blocks the handlers during a larger repaint (see
+`renderSidebar`).
+
+#### Lists
+
+* `KeyedList` (in a `Gtk.ListView`): long lists or lists with a selection (sidebar, files). It keeps the
+  rows, the selection and the scroll position, and changes only the keys that changed.
+* `newRowsCell` (in an `Adw.PreferencesGroup` or `Adw.ExpanderRow`): short
+  `RowView` lists (plug-in status, history). Since all the rows are rebuilt,the focus
+  position is lost.
+
+#### Text
+
+Text from `locales/*.ftl` changes with the language. Text in the Haskell source stays in English.
+To add translated text:
+
+1. Add the message to `en.ftl` and `fr.ftl`. If `fr.ftl` does not have it, the build fails.
+2. Add a function in `MediaCopy.Interface.Wording` that reads it.
+3. Call that function from the view model.
 
 ### Commands
 
