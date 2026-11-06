@@ -10,6 +10,7 @@ module MediaCopy.Runtime
   , replaceModel
   , inFlight
   , stopWorkers
+  , toasting
   ) where
 
 import Control.Concurrent.Async
@@ -154,7 +155,7 @@ stopWorkers :: Runtime -> IO ()
 stopWorkers runtime = readIORef runtime.workers >>= mapConcurrently_ cancel
 
 runEffect :: Runtime -> Model -> AppEffect -> IO ()
-runEffect runtime model effect = toasting runtime $ case effect of
+runEffect runtime model effect = toasting runtime.shell.post $ case effect of
   OpenDialog kind toMessage -> runtime.shell.openDialog kind toMessage
   ComputePlan spec -> planWorker runtime spec
   StartJob plan -> startJob runtime plan
@@ -208,17 +209,17 @@ tracked runtime registered after action = mask_ $ do
   where
     ended = atomically (modifyTVar' runtime.threads (subtract 1))
 
-toasting :: Runtime -> IO () -> IO ()
-toasting runtime action = guarded action >>= either (toastFailure runtime) pure
+toasting :: (Message -> IO ()) -> IO () -> IO ()
+toasting post action = guarded action >>= either (toastFailure post) pure
 
-toastFailure :: Runtime -> SomeException -> IO ()
-toastFailure runtime err = runtime.shell.post (ShowToast (T.pack (displayException err)))
+toastFailure :: (Message -> IO ()) -> SomeException -> IO ()
+toastFailure post err = post (ShowToast (T.pack (displayException err)))
 
 changeWorker :: Runtime -> PluginCatalogue.Change -> IO ()
 changeWorker runtime change =
   void $ counted runtime $ withMVar runtime.catalogueLock $ \() -> do
     guarded (run runtime (Catalogue.apply change)) >>= \case
-      Left err -> toastFailure runtime err
+      Left err -> toastFailure runtime.shell.post err
       Right (Left problem) -> runtime.shell.post (ShowToast problem)
       Right (Right ()) -> pure ()
     reloadCatalogue runtime
@@ -226,7 +227,7 @@ changeWorker runtime change =
 reloadCatalogue :: Runtime -> IO ()
 reloadCatalogue runtime =
   guarded (run runtime Catalogue.load) >>= \case
-    Left err -> toastFailure runtime err
+    Left err -> toastFailure runtime.shell.post err
     Right catalogue -> runtime.shell.post (CatalogueLoaded catalogue)
 
 startJob :: Runtime -> Plan -> IO ()
