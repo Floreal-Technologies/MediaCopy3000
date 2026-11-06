@@ -10,7 +10,8 @@ module MediaCopy.Domain.JobState
   , counts
   , fraction
   , rate
-  ) where
+  )
+where
 
 import Ascmhl.Algo (Algo)
 import Ascmhl.RelPath (RelPath)
@@ -127,7 +128,7 @@ apply at ev st = case ev of
         sampled = case st.throughput of
           Nothing -> fresh
           Just previous
-            | elapsed < 0.5 -> previous
+            | elapsed < minJobProgressSamplingInterval -> previous
             | otherwise -> fresh {rate = fromIntegral (bytes - previous.bytes) / elapsed}
             where
               elapsed = realToFrac (diffUTCTime at previous.at) :: Double
@@ -139,6 +140,9 @@ apply at ev st = case ev of
   JobEvent.Finished r -> st {phase = Finished r, doing = Nothing}
   JobEvent.Failed msg -> st {phase = Failed msg, doing = Nothing}
   JobEvent.PluginReported report -> st {plugins = PluginState.apply report st.plugins}
+
+minJobProgressSamplingInterval :: Double
+minJobProgressSamplingInterval = 0.5
 
 isTerminal :: Phase -> Bool
 isTerminal = \case
@@ -161,7 +165,8 @@ counts st = foldr step (Counts 0 0 0 0 0) (Map.elems st.files)
     step fe c = case fe.status of
       (FileStatus.Pending; FileStatus.Hashing; FileStatus.Copying; FileStatus.Flushing; FileStatus.Publishing; FileStatus.Verifying) -> c
       FileStatus.Done FileOutcome.Ok -> c {verified = c.verified + 1}
-      (FileStatus.Done (FileOutcome.HashMismatch _); FileStatus.Done (FileOutcome.IoError _)) -> Counts {verified = c.verified, failed = c.failed + 1, missing = c.missing, new = c.new, replaced = c.replaced}
+      (FileStatus.Done (FileOutcome.HashMismatch _); FileStatus.Done (FileOutcome.IoError _)) ->
+        c {failed = c.failed + 1}
       FileStatus.Done FileOutcome.Missing -> c {missing = c.missing + 1}
       FileStatus.Done FileOutcome.New -> c {new = c.new + 1}
       FileStatus.Done (FileOutcome.Replaced _) -> c {replaced = c.replaced + 1}
