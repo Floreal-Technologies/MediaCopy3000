@@ -32,12 +32,6 @@ gtkShell widgets post =
     , notify = notify widgets.window
     }
 
-toasting :: (Message -> IO ()) -> IO () -> IO ()
-toasting post action = guarded action >>= either (toastFailure post) pure
-
-toastFailure :: (Message -> IO ()) -> SomeException -> IO ()
-toastFailure post err = post (ShowToast (T.pack (displayException err)))
-
 openDialog :: Adw.ApplicationWindow -> (Message -> IO ()) -> DialogKind -> (OsPath -> Message) -> IO ()
 openDialog window post kind toMessage = do
   dialog <- new Gtk.FileDialog []
