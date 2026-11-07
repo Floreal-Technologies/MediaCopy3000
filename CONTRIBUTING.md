@@ -6,14 +6,15 @@
 
 - GHC 9.14.1 and `cabal`
 - GTK 4.20, libadwaita 1.6 and Pango 1.56 or later, with their development files
+- xxHash and GObject Introspection, with their development files
 - [`just`](https://just.systems/) for the recipes
 - Node.js 22 and `npm` for the manual
-- [`uv`](https://docs.astral.sh/uv/), for the conformance tests
+- [`uv`](https://docs.astral.sh/uv/) for the conformance tests
 
 ### Windows
 
-On native Windows, the GTK stack comes from MSYS2. Install the `ucrt64` packages
-`pkgconf`, `gobject-introspection`, `gtk4`, `libadwaita` and `ntldd` from the
+On native Windows, the GTK stack comes from MSYS2. Install the `ucrt64` packages `pkgconf`,
+`gobject-introspection`, `gtk4`, `libadwaita`, `xxhash` and `ntldd` from the
 `mingw-w64-ucrt-x86_64` prefix.
 
 If cabal does not find the libraries, add this to `cabal.project.local`:
@@ -63,30 +64,46 @@ brew install gtk4 libadwaita xxhash gobject-introspection pkgconfig
 MC3K_ENV=dev cabal run mediacopy3000
 ```
 
-With `MC3K_ENV=dev`, the application reads `assets/styles.css` from the
-working directory and loads it again every time the file changes. Otherwise,
-the application reads the installed copy: first the `data-files` directory,
-(`mediacopy3000_datadir` variable), and then `share/mediacopy3000` under the
-installation prefix.
+With `MC3K_ENV=dev`, the application reads `assets/styles.css` from the working directory and loads
+it again every time the file changes. Otherwise, the application reads the installed copy: first
+the `data-files` directory (`mediacopy3000_datadir` variable), and then `share/mediacopy3000` under
+the installation prefix.
+
+### Recipes
+
+We use a [`justfile`](https://just.systems/) to interact with the project.
+Install the [`just`](https://just.systems/man/en/installation.html) command-line tool
+and type `just` in the project repository to see all the available commands.
 
 ## Architecture
 
 The repository holds four packages:
 
-* `ascmhl`, which is the format of the manifests;
-* `plugin-protocol`, which is the format between the application and its plug-ins;
-* `mediacopy3000`, which is the application;
-* `mediacopy3000-credits`, which is the Credits plug-in.
+- `ascmhl`, which is the format of the manifests;
+- `plugin-protocol`, which is the format between the application and its plug-ins;
+- `mediacopy3000-credits`, which is the Credits plug-in;
+- `mediacopy3000`, which is the application.
 
 ### ascmhl
 
 `ascmhl` is a stand-alone library that implements the ASC Media Hash List file format.
 
+### plugin-protocol
+
+`plugin-protocol` holds the types of the messages between the application and its plug-ins. The
+JSON schema `plugin-protocol/schema/protocol-1.schema.json` comes from these types. To write it
+again after a change, run `just schema`.
+
+### mediacopy3000-credits
+
+`mediacopy3000-credits`, in `plugins/credits/`, is a plug-in that puts the crew into each manifest.
+To build and install it, run `just install-credits`.
+
 ### mediacopy3000
 
-#### The Runtime loop
+#### The runtime loop
 
-The interface is Model-View-Update, Elm architecture-style:
+The interface is Model-View-Update, Elm architecture-style. `update` is in `MediaCopy.Model`:
 
 ```
 Message ──▶ (update :: Message -> Model -> (Model, List AppEffect))
@@ -95,132 +112,113 @@ Message ──▶ (update :: Message -> Model -> (Model, List AppEffect))
                                         render     runEffect (IO)
 ```
 
-### Building the interface
+#### Building the interface
 
-The rules for signal handlers, widget state and lists are in [`STYLE_GUIDE.md`](STYLE_GUIDE.md). Please familiarise yourself with them.
+Read [`STYLE_GUIDE.md`](STYLE_GUIDE.md) before you change the interface. It has the rules for GTK
+widgets, signal handlers, widget state, lists and localisation. Its section "MediaCopy 3000" has
+the rules for this application only.
 
-#### Layers
+##### Layers
 
-In order to avoid GTK considerations creep where they shouldn't, the interface
-is separated into several layers:
+The interface has three layers. They keep GTK code out of the model and the view models.
 
-The Model handles application state. We use it build Views that represent our
-visual elements, and handle display logic. Lastly, the Views get painted into
-actual GTK widgets, with as less logic as possible.
+The model holds the application state. The view models come from the model: they represent the
+visual elements and hold the display logic. The widgets paint the view models into GTK widgets,
+with as little logic as possible.
 
 | Layer       | Task                                        |
 |-------------|---------------------------------------------|
-| Model       | State, message handling, `update`           |
+| Model       | State, message handling, Update             |
 | View models | Turn the state into interface elements      |
 | Widgets     | Build GTK widgets and paint the view models |
 
-#### The life of a Message
+##### The life of a Message
 
 1. A button activates its GAction, from `MediaCopy.Gtk.Actions`.
-2. The action calls `dispatch (Ui (RunCommand c))`.
+2. The action calls `dispatch (RunCommand c)`.
 3. `MediaCopy.Runtime` runs `update`, then calls `render` in `MediaCopy.Gtk.View`.
 4. That `render` calls the render function of each widget.
 5. The runtime runs the effects.
 
 `UiMessage` comes from the user. Other `Message` constructors come from workers, the clock and the
-desktop. `dispatch` runs on the GLib main loop only. Worker threads use `post` from the `Shell`.
+desktop.
 
-#### A widget
+There are two `dispatch` functions:
+
+- The runtime `dispatch` in `MediaCopy.Runtime` that takes a `Message`.
+- Widgets and actions get a `dispatch` callback that takes a `UiMessage`.
+  It wraps the message in `Ui` and calls the runtime `dispatch`.
+
+Both run on the GLib main loop only. Worker threads use the field `post` of the
+record `Shell`, in `MediaCopy.Runtime`.
+
+##### A widget
 
 A widget module has two parts:
 
-* `newX` builds the widget tree, connects the handlers, and gives the root and a
-  render function.
-
-* The render function paints a value on the existing widgets. Only lists should add or
-  remove widgets.
+- `newX` builds the widget tree, connects the handlers, and gives the root and a render function.
+  In the example below, the render function is the `update` field of `FileRow`.
+- The render function paints a view model on the existing widgets.
 
 Example:
 
 ```haskell
+import Data.GI.Base (AttrOp ((:=)))
+import Data.GI.Base qualified as GI
+import Floreal.Commons.Gtk.Common qualified as Common
+import GI.Gtk (Box (..), Orientation (..))
+import GI.Gtk qualified as Gtk
+
 data FileRow = FileRow
-  { row :: Gtk.Box
+  { row :: Box
   , update :: FileRowView -> IO ()
   }
 
 newFileRow :: IO FileRow
 newFileRow = do
-  name <- newLabel "" [#xalign := 0, #hexpand := True] []
-  row <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal]
+  name <- Common.newLabel "" [#xalign := 0, #hexpand := True] []
+  row <- GI.new Box [#orientation := OrientationHorizontal]
   Gtk.boxAppend row name
-  cell <- newCell $ \view -> do
-    set name [#label := view.name]
-    toggleClass row "error" view.failed
-  pure FileRow {row, update = renderCell cell}
+  cell <- Common.newCell $ \view -> do
+    GI.set name [#label := view.name]
+    Common.toggleClass row "error" view.failed
+  pure FileRow {row, update = Common.renderCell cell}
 ```
-
-A handler sends one `UiMessage` through `dispatch`. The new state comes back through the render function.
 
 To add a widget:
 
-1. Write the view model in `Interface/View/`;
-2. Write the widget in `Gtk/Widgets/`;
-3. In `buildWidgets`, call `newX` and call its render function from `render`.
+1. Write the view model in a module under `MediaCopy.Interface.View`.
+2. Write the widget in a module under `MediaCopy.Gtk.Widgets`.
+3. In `buildWidgets`, in `MediaCopy.Gtk.View`, call `newX`. Call its render function from
+   `render`.
 
-#### Skip the repaint
+##### Skip the repaint
 
 `render` runs after each message, and the clock sends one `Tick` each second.
 
-A repaint that is not necessary can move the cursor, lose the selection and fire
-signals again, so we need strategies to avoid it:
+A repaint that is not necessary can move the cursor, lose the selection and fire signals again.
+Use these tools to skip it:
 
-| The data goes                    | Use                                  |
-|----------------------------------|--------------------------------------|
-| From the model to the widget     | `Cell` (`newCell`, `renderCell`)     |
-| Both ways (the user can edit it) | `Control` with `bind`                |
-| Into rows                        | `KeyedList` or `newRowsCell`         |
+| The data goes                    | Use                              |
+|----------------------------------|----------------------------------|
+| From the model to the widget     | `Cell` (`newCell`, `renderCell`) |
+| Both ways (the user can edit it) | `Control` with `bind`            |
+| Into rows                        | `KeyedList` or `newRowsCell`     |
 
-`renderCell` skips the paint when the new value is equal to the last one.
-The `Eq` instance is used, and writing it yourself allows you to choose
-which parts of the widget gets compared to trigger re-painting (or not).
+`renderCell` skips the paint when the new view model is equal to the last one. It uses the `Eq`
+instance of the view model. If you write that instance yourself, you choose which parts of the view
+model cause a repaint.
 
-#### User-editable Widgets
+##### Text
 
-When you paint a switch, it fires its signal, and the handler dispatches again.
-Use `bind` to stop this feedback loop:
-
-```haskell
-paintLanguage <- bind languages (dispatch . SetLanguage)
--- in render:
-paintLanguage model.wording.language
-```
-
-The paint function changes the widget only if the value differs, and blocks the
-handlers during the change. The reaction runs only on a user change.
-
-A dialog is a `Control Bool`. `True` means open:
-
-```haskell
-paintOpen <- bind openControl (closing (dispatch CloseOffloadDialog))
-```
-
-`closing` runs its action when the user closes the dialog. `bindQuietly`
-also gives `quietly`, which blocks the handlers during a larger repaint (see
-`renderSidebar`).
-
-#### Lists
-
-* `KeyedList` (in a `Gtk.ListView`): long lists or lists with a selection (sidebar, files). It keeps the
-  rows, the selection and the scroll position, and changes only the keys that changed.
-* `newRowsCell` (in an `Adw.PreferencesGroup` or `Adw.ExpanderRow`): short
-  `RowView` lists (plug-in status, history). Since all the rows are rebuilt,the focus
-  position is lost.
-
-#### Text
-
-Text from `locales/*.ftl` changes with the language. Text in the Haskell source stays in English.
 To add translated text:
 
-1. Add the message to `en.ftl` and `fr.ftl`. If `fr.ftl` does not have it, the build fails.
+1. Add the message to `locales/en.ftl` and `locales/fr.ftl`. If `fr.ftl` does not have it, the
+   build fails.
 2. Add a function in `MediaCopy.Interface.Wording` that reads it.
 3. Call that function from the view model.
 
-### Commands
+#### Commands
 
 `MediaCopy.Interface.Command` is the catalogue of commands. Commands have
 a kebab-case id and a Fluent label (`command-<id>` in `locales/*.ftl`).
@@ -229,51 +227,53 @@ shortcuts-window section. The header buttons, the detail-pane buttons, the main
 menu, the shortcuts window and the command palette all read this catalogue.
 `MediaCopy.Interface.Palette` matches and ranks the commands for the palette.
 
-A command reaches the model as the message `RunCommand`. `update` runs it only when the command is
-enabled.
+A command reaches the model as the message `RunCommand`. The `update` function
+runs it only when the command is enabled.
 
 To add a command:
 
-1. Add the constructor and its id in `Command.hs`.
-2. Add the two Fluent keys.
-3. Add one row in `commandSpec` in `Model.hs`.
-4. Add one branch in `runCommand` in `Model.hs`.
+1. Add the constructor and its id in `MediaCopy.Interface.Command`.
+2. Add the label `command-<id>` to `locales/en.ftl` and to `locales/fr.ftl`.
+3. Add one row in `commandSpec`, in `MediaCopy.Model`.
+4. Add one branch in `runCommand`, in `MediaCopy.Model`.
 
-### The two phases of a job
+#### The two phases of a job
 
-#### Planning
+##### Planning
 
-The planning phase reads and computes a `JobPlan`.
-`MediaCopy.Engine.Planner` gathers the facts from the disk,
- and `MediaCopy.Domain.Preflight` turns the facts into the plan.
+The planning phase reads the disk and computes a `Plan` (`MediaCopy.Domain.Plan`).
+`MediaCopy.Engine.Planner` gathers the facts from the disk, and `MediaCopy.Domain.Preflight` turns
+the facts into the plan.
 
-#### Execution
-Once the user approves the plan, `MediaCopy.Engine` runs it. The plan names its
-steps, its targets, its hash format and its findings.
+##### Execution
 
-A queued job is planned again when its turn comes. `planEquivalent` compares the two plans. A plan
-that moved sends its job to `NeedsReview` and goes back for review.
+Once the user approves the plan, `MediaCopy.Engine` runs it. The plan names its steps, its targets,
+its hash format and its findings.
+
+A queued job is planned again when its turn comes. `MediaCopy.Domain.Plan.equivalent` compares the
+approved plan with the new plan. If they are equivalent, the job starts. If not, the job goes to
+`NeedsReview`, the next job in the queue starts, and the user must review the new plan.
 
 ## Packaging
 
 ### Packages
 
 ```
-scripts/package.sh -v head [deb|rpm|pacman|flatpak|tarball|osxpkg]
+./scripts/package.sh -v head [deb|rpm|pacman|flatpak|tarball|osxpkg]
 ```
 
 The `-v` flag sets the version label. Use `head` for a development build, or a version number such
-as `1.2.3`. The format argument is optional. Without it, the script builds the native formats of the
-host operating system. `flatpak` is built only when you name it.
+as `1.2.3`. The format argument is optional. Without it, the script builds the native formats of
+the host operating system. `flatpak` is built only when you name it.
 
 The Flatpak build compiles nothing inside the sandbox. The script builds the application on the
 host, then stages it under `dist-package/root/usr`. The manifest
 `packaging/flatpak/tech.floreal.MediaCopy3000.yaml` copies that tree into `/app`. It names the
-`org.gnome.Platform` runtime, version 51. `flatpak-builder` pulls the runtime from Flathub, so
-the first build needs a network.
+`org.gnome.Platform` runtime, version 51. `flatpak-builder` pulls the runtime from Flathub, so the
+first build needs a network.
 
-The script then compares the glibc version of the binary against the version in the runtime. If
-the binary needs a newer glibc, the script stops and tells you to build on an older host.
+The script then compares the glibc version of the binary against the version in the runtime. If the
+binary needs a newer glibc, the script stops and tells you to build on an older host.
 
 ### The Windows installer
 
@@ -284,7 +284,8 @@ the binary needs a newer glibc, the script stops and tells you to build on an ol
 ```
 
 The script stages `mediacopy3000.exe` with the libraries and the data files it needs. `ntldd` finds
-the libraries. The script then builds an MSI with WiX 7, which it installs as a .NET tool.
+the libraries. The script then builds an MSI with WiX 7, which it installs as a .NET tool. You need
+the .NET SDK for this step.
 
 The installer writes to the local application data of the user. It asks for no administrator, so a
 person can install the application on a machine they do not own.
