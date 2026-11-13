@@ -2,12 +2,10 @@ module MediaCopy.Gtk.Interpret
   ( gtkShell
   ) where
 
-import Control.Exception (displayException)
 import Control.Monad.Extra (unlessM, whenJustM)
 import Data.GI.Base (AttrOp ((:=)), new, set)
 import Data.GI.Base.GError (catchGErrorJustDomain)
 import Data.Text qualified as T
-import Floreal.Commons.Exception (guarded)
 import GI.Adw qualified as Adw
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
@@ -16,7 +14,7 @@ import System.OsPath (encodeFS)
 import MediaCopy.Domain.JobId (getJobIdNumber)
 import MediaCopy.Gtk.View (Widgets (..))
 import MediaCopy.Model
-import MediaCopy.Runtime (Shell (..))
+import MediaCopy.Runtime (Shell (..), toasting)
 
 -- | The window side of the runtime. The second argument hands a message to the loop from any
 -- thread.
@@ -31,12 +29,6 @@ gtkShell widgets post =
     , showFolder = showFolder widgets.window post
     , notify = notify widgets.window
     }
-
-toasting :: (Message -> IO ()) -> IO () -> IO ()
-toasting post action = guarded action >>= either (toastFailure post) pure
-
-toastFailure :: (Message -> IO ()) -> SomeException -> IO ()
-toastFailure post err = post (ShowToast (T.pack (displayException err)))
 
 openDialog :: Adw.ApplicationWindow -> (Message -> IO ()) -> DialogKind -> (OsPath -> Message) -> IO ()
 openDialog window post kind toMessage = do
