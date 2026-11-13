@@ -23,7 +23,7 @@ constraints: aeson-pretty +lib-only
 source-repository-package
   type: git
   location: https://github.com/Floreal-Technologies/floreal-commons
-  tag: a2ca71ac6951540405bfd3eafd500fe5c42a0e40
+  tag: c2b5e0efd88613e62c10d970b3a2f02de3bf1448
   subdir:
     ./floreal-prelude
     ./floreal-commons
