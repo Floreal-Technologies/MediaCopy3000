@@ -14,6 +14,7 @@ import Data.Aeson.Types (parseJSON, parseMaybe)
 import Data.ByteString.Lazy qualified as LBS
 import Data.Either (fromRight)
 import Data.Map.Strict qualified as Map
+import Data.Map.Strict (Map)
 import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8Lenient)
@@ -53,7 +54,7 @@ load = do
       , problem = setup.grantsProblem
       }
 
-entryOf :: Map.Map Plugin.Id Plugin.Grant -> Plugin.Installed -> PluginCatalogue.Entry
+entryOf :: Map Plugin.Id Plugin.Grant -> Plugin.Installed -> PluginCatalogue.Entry
 entryOf grantMap installed =
   PluginCatalogue.Entry
     { plugin = Wire.pluginRef installed
@@ -84,7 +85,7 @@ entryOf grantMap installed =
     labelOf key = maybe key (.label) (V.find (\field -> field.key == key) manifest.settings)
     unset = either (\key -> Just ("needs a valid value for " <> labelOf key)) (const Nothing) (Fields.values manifest.settings stored)
 
-settingView :: Map.Map Text Value -> Plugin.Field -> FieldView
+settingView :: Map Text Value -> Plugin.Field -> FieldView
 settingView stored field = viewOf field $ case field.kind of
   Field.AuthorsField -> maybe FieldView.NoValue FieldView.AuthorList (Map.lookup field.key stored >>= parseMaybe parseJSON)
   _ -> maybe FieldView.NoValue (FieldView.Value . valueText) (Map.lookup field.key stored <|> field.defaultValue)

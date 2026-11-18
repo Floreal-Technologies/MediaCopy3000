@@ -7,6 +7,7 @@ module MediaCopy.Gtk.Widgets.PlanSheet
 import Control.Monad (zipWithM_)
 import Data.GI.Base
 import Data.Map.Strict qualified as Map
+import Data.Map.Strict (Map)
 import Data.Vector qualified as V
 import Floreal.Commons.Gtk.Bind (bind, checkRadio, closing, dialog, pair, switchRow)
 import Floreal.Commons.Gtk.Common (Cell, newCell, paddedBox, renderCell)
@@ -30,7 +31,7 @@ import MediaCopy.Model
 data PlanSheet = PlanSheet
   { phaseCell :: Cell (Maybe PhaseView)
   , paintOpen :: Bool -> IO ()
-  , fieldsCell :: Cell (Vector (PluginRef, Vector FieldView), Map.Map Text (Map.Map Text Text))
+  , fieldsCell :: Cell (Vector (PluginRef, Vector FieldView), Map Text (Map Text Text))
   }
 
 newPlanSheet :: Adw.ApplicationWindow -> (UiMessage -> IO ()) -> IO PlanSheet
@@ -218,7 +219,7 @@ renderPlanSheet widgets current = do
   let given = foldMap (.pluginFields) (planningSpec current)
   renderCell widgets.fieldsCell (PluginCatalogue.enabledJobFields current.plugins, given)
 
-renderJobFields :: ReadyBody -> (UiMessage -> IO ()) -> (Vector (PluginRef, Vector FieldView), Map.Map Text (Map.Map Text Text)) -> IO ()
+renderJobFields :: ReadyBody -> (UiMessage -> IO ()) -> (Vector (PluginRef, Vector FieldView), Map Text (Map Text Text)) -> IO ()
 renderJobFields body dispatch (wanted, given) = do
   let fields = [(ref, field) | (ref, plugin) <- V.toList wanted, field <- V.toList plugin]
       layout = [(ref, withValue field FieldView.NoValue) | (ref, field) <- fields]
